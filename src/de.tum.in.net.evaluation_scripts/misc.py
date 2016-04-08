@@ -1,0 +1,232 @@
+#!/usr/bin/env python3.5
+
+import json
+
+
+# file=open('ip_results_m.json', 'r')
+# for line in file:
+#     es = json.loads(line)
+#     for e in es:
+#         count = count + 1
+#         if e['blacklisted']:
+#             blacklisted = blacklisted + 1
+#         elif e['rtt']['munich'] is None:
+#             countN = countN + 1
+#         else:
+#             if e['rtt']['munich'] > 10000:
+#                 print(e)
+#                 continue
+#             sum = sum + e['rtt']['munich']
+#
+#
+# def extract_coords(loc_file):
+#     locs = json.load(loc_file)
+#     coords = []
+#     for loc in locs.values():
+#         codes = 1
+#         if loc['locode'] is not None:
+#             codes = codes + len(loc['locode']['placeCodes'])
+#         codes = codes + len(loc['alternateNames'])
+#         codes = codes + len(loc['clli'])
+#         if loc['airportInfo'] is not None:
+#             if len(loc['airportInfo']['iataCode']) > 0:
+#                 codes = codes + len(loc['airportInfo']['iataCode'])
+#             if len(loc['airportInfo']['icaoCode']) > 0:
+#                 codes = codes + len(loc['airportInfo']['icaoCode'])
+#             if len(loc['airportInfo']['faaCode']) > 0:
+#                 codes = codes + len(loc['airportInfo']['faaCode'])
+#         coords.append({'id': loc['id'], 'lat': loc['lat'], 'lng': loc['lon'], 'amount_codes': codes})
+#     with open('google_coords.json', 'w') as gFile:
+#         json.dump(coords, gFile)
+#
+# def ana_codes(locs):
+#     anz3 = 0
+#     anz4 = 0
+#     codes = {}
+#     def update_anzs(code):
+#         nonlocal anz3
+#         nonlocal anz4
+#         if code is None:
+#             return
+#         if code not in codes.keys():
+#             codes[code] = 1
+#             if len(code) == 3:
+#                 anz3 = anz3 + 1
+#             elif len(code) == 4:
+#                 anz4 = anz4 + 1
+#         else:
+#             codes[code] = codes[code] + 1
+#     for loc in locs.values():
+#         if loc['locode'] is not None:
+#             for c in loc['locode']['placeCodes']:
+#                 update_anzs(c)
+#         for c in loc['alternateNames']:
+#             update_anzs(c)
+#         for c in loc['clli']:
+#             update_anzs(c)
+#         update_anzs(loc['cityName'])
+#         if loc['airportInfo'] is not None:
+#             if len(loc['airportInfo']['iataCode']) > 0:
+#                 for c in loc['airportInfo']['iataCode']:
+#                     update_anzs(c)
+#             if len(loc['airportInfo']['icaoCode']) > 0:
+#                 for c in loc['airportInfo']['icaoCode']:
+#                     update_anzs(c)
+#             if len(loc['airportInfo']['faaCode']) > 0:
+#                 for c in loc['airportInfo']['faaCode']:
+#                     update_anzs(c)
+#     print('3', anz3, '4', anz4)
+#     return codes
+#
+#
+def collect_find_loc(file_proto):
+    loc_id_dict = {}
+    def inc_type(loc_id, m_type):
+        if loc_id not in loc_id_dict.keys():
+            loc_id_dict[loc_id] = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
+                                   'locode': 0}
+        loc_id_dict[loc_id][m_type] = loc_id_dict[loc_id][m_type] + 1
+    for index in range(0, 8):
+        find_file = open(file_proto.format(index), 'r')
+        for line in find_file:
+            find_domains = json.loads(line)
+            for domain in find_domains:
+                for key, label_dict in domain['domainLabels'].items():
+                    if key == 'tld':
+                        continue
+                    for match in label_dict['matches']:
+                        inc_type(match['location_id'], match['type'])
+    with open('loc_find_eval_type.json', 'w') as locFile:
+        json.dump(loc_id_dict, locFile)
+    # loc_s = sorted(list(loc_id_dict.items()), key=lambda am: am[1], reverse=True)
+    # for i in range(0, 20):
+    #     print(loc_s[i])
+#
+# f1.close()
+# f2.close()
+# f3.close()
+# f1 = open('ip_results_m.json', 'r')
+# f2 = open('ip_results_s.json', 'r')
+# f3 = open('ip_results_d.json', 'r')
+#
+#
+# def merge_rtt_measures(file1, file2, file3):
+#     tomerge = {}
+#     final = {}
+#     blacklisted = {}
+#     def merge(items):
+#         for i in items:
+#             if i['blacklisted']:
+#                 blacklisted[i['ip']] = i
+#             elif i['ip'] not in tomerge.keys():
+#                 tomerge[i['ip']] = i
+#             else:
+#                 tomerge[i['ip']]['rtt'].update(i['rtt'])
+#                 if len(tomerge[i['ip']]['rtt']) == 3:
+#                     final[i['ip']] = tomerge.pop(i['ip'], None)
+#     for line in file1:
+#         merge(json.loads(line))
+#         while len(tomerge) > 10**4:
+#             merge(json.loads(file2.readline()))
+#             merge(json.loads(file3.readline()))
+#     line2 = file2.readline()
+#     while len(line2) > 0:
+#         merge(json.loads(line2))
+#         line2 = file2.readline()
+#     line3 = file3.readline()
+#     while len(line3) > 0:
+#         merge(json.loads(line3))
+#         line3 = file3.readline()
+#     with open('merged_rtts.json', 'w') as rttFile:
+#         print(len(tomerge))
+#         final.update(blacklisted)
+#         json.dump(final, rttFile)
+#     with open('n_merged_rtts.json', 'w') as nrttFile:
+#         json.dump(tomerge, nrttFile)
+#
+#
+# def sep_rtts(rttfile, file_proto):
+#     rtts = json.load(rttfile)
+#     for i in range(0, 8):
+#         dFile = open(file_proto.format(i), 'r')
+#         results = {}
+#         for line in dFile:
+#             domain_locations = json.loads(line)
+#             for domain in domain_locations:
+#                 if domain['ip'] in rtts.keys():
+#                     results[domain['ip']] = rtts[domain['ip']]
+#                 else:
+#                     print(domain['ip'])
+#         with open(file_proto.format(str(i) + '-ips'), 'w') as rFile:
+#             json.dump(results, rFile)
+#
+# sep_rtts(rrtsf, 'rdns_10m_find/20150902-rdns-{}_found.json')
+#
+# file_proto = '20150902-rdns-{}_found.json'
+# for i in range(0, 8):
+#     ofile = open(file_proto.format(i), 'r')
+#     nfile = open('../' + file_proto.format(str(i) + '-t'), 'w')
+#     for line in ofile:
+#         els = json.loads(line)
+#         for j in range(0, (len(els)//1000) + 1):
+#             json.dump(els[(j * 1000):((j + 1) * 1000)], nfile)
+#             nfile.write('\n')
+#     nfile.close()
+#     ofile.close()
+
+file_proto = '20150902-rdns-{}.cor'
+total = 0
+for i in range(0, 8):
+    ofile = open(file_proto.format(i), 'r')
+    for line in ofile:
+        ds = json.loads(line)
+        total = total + len(ds)
+    ofile.close()
+
+
+# def get_data(file):
+#     cor = 0
+#     wrong = 0
+#     blacklisted = 0
+#     total_len = 0
+#     type_count = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0}
+#     for line in file:
+#         elems = json.loads(line)
+#         total_len = total_len + len(elems['not_responding']) + len(elems['correct']) + \
+#             len(elems['no_location']) + len(elems['blacklisted'])
+#         cor = cor + len(elems['correct'])
+#         for e in elems['correct']:
+#             type_count[e['correctMatch']['type']] = type_count[e['correctMatch']['type']] + 1
+#         wrong = wrong + len(elems['no_location'])
+#         blacklisted = blacklisted + len(elems['blacklisted'])
+#     return (total_len, cor, wrong, blacklisted, type_count)
+#
+#
+# def get_all_data():
+#     for i in range(0, 8):
+#         data_file = open('check_domains_output_{}.json'.format(i))
+#         print(i, get_data(data_file))
+
+
+# def get_measurements(ip_addr):
+#     max_age = int(time.time()) - 60*60*24*350
+#     params = {'status': '2,4,5',
+#               'target_ip': ip_addr,
+#               'type': 'ping',
+#               'stop_time__gte': max_age}
+#     measurements = MeasurementRequest(**params)
+#     skip = 0
+#     if measurements.total_count > 200:
+#         skip = ceil(measurements.total_count / 100) - 2
+#         measurements.next_batch()
+#         for _ in range(0, skip):
+#             measurements.next_batch()
+#     return measurements
+
+# wfile = open('net_results.txt', 'w')
+# for i in range(0,8):
+#     f = open('20150902-rdns-{}.cor'.format(i))
+#     for line in f:
+#         elems = json.loads(line)
+#         nets = [x for x in elems if 'net' in x['domainLabels'].values()]
+#         json.dump(nets, wfile, indent=2)

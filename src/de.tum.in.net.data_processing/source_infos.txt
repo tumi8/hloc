@@ -1,0 +1,19 @@
+IATA codes:
+    - Wikipedia
+        * Staat und Stadt
+        * ohne lon und lat
+        * icao codes
+        * keine api von Wikipedia parsen für jeden Buchstaben
+    - developer.aero
+        * Staat und Stadt
+        * lon und la aber
+        * keine icao
+        * in json Format
+    - world-airport-codes.com
+        * Staat und Stadt
+        * lon und lat nur über weiteren http call der über das parsen herausgefunden wird möglich
+        * icao codes + FAA code
+        * keine api -> parsen
+
+        42.457 verschiedene locations in collectedData.json gespeichert
+        TODO statistiken erstellen
