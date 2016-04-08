@@ -12,9 +12,10 @@ import json
 import time
 import re
 import argparse
+import util
+from util import Location, AirportInfo, LocodeInfo
 from string import ascii_lowercase
 from string import printable
-from math import radians, cos, sin, asin, sqrt
 from time import sleep
 try:
     from html.parser import HTMLParser
@@ -25,7 +26,6 @@ from threading import Semaphore
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 30
-LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371)**2
 THREADS_SEMA = None
 LOCATION_CODES_SEMA = Semaphore(1)
 AIRPORT_LOCATION_CODES = []
@@ -259,7 +259,7 @@ def get_locode_locations(locodeFilename):
     Parses the locode information from a locode csv file and stores the
     locations into the LOCATION_CODES array
     """
-    i = 0
+    # i = 0
     with open(locodeFilename, 'r', encoding='ISO-8859-1') as locodeFile:
         currentState = {'state': None, 'stateCode': None}
         for line in locodeFile:
@@ -365,19 +365,19 @@ def get_clli_codes():
             CLLI_LOCATION_CODES.append(newClliInfo)
 
 
+# 1: name               : name of geographical point (utf8) varchar(200)
+# 2. asciiname          : name of geographical point in plain ascii characters, varchar(200)
+# 3: alternatenames     : alternatenames, comma separated,
+#                         convenience attribute from alternatename table, varchar(10000)
+# 4: latitude           : latitude in decimal degrees (wgs84)
+# 5: longitude          : longitude in decimal degrees (wgs84)
+# 8: country code       : ISO-3166 2-letter country code, 2 characters
+# 9: cc2                : alternate country codes, comma separated, ISO-3166 2-letter
+#                         country code, 200 characters
+# 14: population        : bigint (8 byte int)
 def get_geo_names():
     """Get the geo names from file ./collectedData/allCountries.txt"""
 
-    # 1: name               : name of geographical point (utf8) varchar(200)
-    # 2. asciiname          : name of geographical point in plain ascii characters, varchar(200)
-    # 3: alternatenames     : alternatenames, comma separated,
-    #                         convenience attribute from alternatename table, varchar(10000)
-    # 4: latitude           : latitude in decimal degrees (wgs84)
-    # 5: longitude          : longitude in decimal degrees (wgs84)
-    # 8: country code       : ISO-3166 2-letter country code, 2 characters
-    # 9: cc2                : alternate country codes, comma separated, ISO-3166 2-letter
-    #                         country code, 200 characters
-    # 14: population        : bigint (8 byte int)
     with open('collectedData/cities1000.txt', 'r') as clliFile:
         for line in clliFile:
             # [0:-1] remove last character \n and extract the information
@@ -412,39 +412,6 @@ def get_geo_names():
                     newGeoNamesInfo['alternateNames'].append(maxname.lower())
 
             GEONAMES_LOCATION_CODES.append(newGeoNamesInfo)
-
-
-def gps_distance_haversine(location1, location2):
-    """
-    Calculate the distance (km) between two points
-    on the earth (specified in decimal degrees)
-    """
-    # convert decimal degrees to radians
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2['lon']))
-    lat2 = radians(float(location2['lat']))
-    # haversine formula
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * asin(sqrt(a))
-    # Radius of earth in kilometers. Use 3956 for miles
-    return c * 6371
-
-
-def is_in_radius(location1, location2):
-    """
-    Calculate the distance (km) between two points
-    using the equirectangular distance approximation
-    """
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2['lon']))
-    lat2 = radians(float(location2['lat']))
-    # Radius of earth in kilometers. Use 3956 for miles
-    return LOCATION_RADIUS_PRECOMPUTED >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 +
-                                           (lat2 - lat1)**2)
 
 
 def location_merge(location1, location2):
@@ -485,7 +452,7 @@ def merge_locations_to_location(location, locations, start=0):
     nearLocations = []
 
     for j in range(start, len(locations)):
-        if is_in_radius(location, locations[j]):
+        if util.is_in_radius(location, locations[j], LOCATION_RADIUS):
             nearLocations.append(locations[j])
 
     for mloc in nearLocations:
@@ -557,7 +524,7 @@ def parse_airport_codes(args):
     print('Finished airport codes parsing')
 
 
-def parse_locode_codes(args):
+def parse_locode_codes():
     """Parses the locode codes from the files"""
     threads = []
     locodeFile1 = 'collectedData/locodePart1.csv'
@@ -647,7 +614,7 @@ def parse_codes(args):
         parse_airport_codes(args)
 
     if args.locode:
-        parse_locode_codes(args)
+        parse_locode_codes()
 
     if args.clli:
         get_clli_codes()
