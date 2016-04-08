@@ -13,7 +13,7 @@ import time
 import re
 import argparse
 import util
-from util import Location, AirportInfo, LocodeInfo
+from util import Location
 from string import ascii_lowercase
 from string import printable
 from time import sleep
@@ -35,37 +35,6 @@ GEONAMES_LOCATION_CODES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
 NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
-# STATE_CODES = ['AL', 'LA', 'OH', 'AK', 'ME', 'OK', 'AS', 'MH', 'OR', 'AZ', 'MD', 'PW', 'AR',
-#                'MA', 'PA', 'CA', 'MI', 'RI', 'CO', 'FM', 'SC', 'CT', 'MN', 'SD', 'DE', 'MS',
-#                'TN', 'DC', 'MO', 'TX', 'FL', 'MT', 'UT', 'GA', 'NE', 'VT', 'GU', 'NV', 'VI',
-#                'HI', 'NH', 'VA', 'ID', 'NJ', 'WA', 'IL', 'NM', 'WV', 'IN', 'NY', 'WI', 'IA',
-#                'NC', 'WY', 'KS', 'ND', 'KY', 'MP']
-
-
-def get_standard_location_info():
-    """Creates a standardized dict to store location information and returns it"""
-    return {
-        'cityName': None, 'state': None, 'lat': None, 'lon': None,
-        'airportInfo': None, 'locode': None, 'clli': [], 'alternateNames': [],
-        'stateCode': None, 'population': 0
-        }
-
-
-def get_standard_locairport_info():
-    """Creates a standardized dict to store locations with an airport and returns it"""
-    ret = get_standard_location_info()
-    ret['airportInfo'] = get_standard_airport_info()
-    return ret
-
-
-def get_standard_airport_info():
-    """Creates a standardized dict to store airport information and returns it"""
-    return {'iataCode': [], 'icaoCode': [], 'faaCode': []}
-
-
-def get_standard_locode_info():
-    """Creates a standardized dict to store locode information and returns it"""
-    return {'placeCodes': [], 'subdivisionCode': None}
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -73,7 +42,7 @@ class WorldAirportCodesParser(HTMLParser):
     A Parser which extends the standard Python HTMLParser
     to parse the airport detailed information side
     """
-    airportInfo = get_standard_locairport_info()
+    airportInfo = Location(None, None)
     __currentKey = None
     __th = False
 
@@ -90,6 +59,7 @@ class WorldAirportCodesParser(HTMLParser):
             self.__currentKey = None
 
     def handle_data(self, data):
+        self.airportInfo.add_airport_info()
         if self.__th:
             if 'IATA' in data:
                 self.__currentKey = 'iataCode'
@@ -108,33 +78,32 @@ class WorldAirportCodesParser(HTMLParser):
             splitIndex = data.find(',')
             cityName = data[:splitIndex]
             stateString = data[splitIndex + 2:]
-
-            self.airportInfo['cityName'] = cityName.lower()
-            if NORMAL_CHARS_REGEX.search(self.airportInfo['cityName']) is None:
-                self.airportInfo['cityName'] = None
+            self.airportInfo.city_name = cityName.lower()
+            if NORMAL_CHARS_REGEX.search(self.airportInfo.city_name) is None:
+                self.airportInfo.city_name = None
             stateCodeIndexS = stateString.find('(') + 1
             stateCodeIndexE = stateString.find(')')
             if stateCodeIndexS > 0 and stateCodeIndexE > 0:
-                self.airportInfo['state'] = stateString[:(stateCodeIndexS - 1)].strip().lower()
-                self.airportInfo['stateCode'] = stateString[stateCodeIndexS:stateCodeIndexE].lower()
+                self.airportInfo.state = stateString[:(stateCodeIndexS - 1)].strip().lower()
+                self.airportInfo.state_code = stateString[stateCodeIndexS:stateCodeIndexE].lower()
             else:
-                self.airportInfo['state'] = stateString.strip().lower()
+                self.airportInfo.state = stateString.strip().lower()
         elif self.__currentKey == 'iataCode':
-            self.airportInfo['airportInfo']['iataCode'].append(data.lower())
+            self.airportInfo.airport_info.iata_codes.append(data.lower())
         elif self.__currentKey == 'icaoCode':
-            self.airportInfo['airportInfo']['icaoCode'].append(data.lower())
+            self.airportInfo.airport_info.icao_codes.append(data.lower())
         elif self.__currentKey == 'faaCode':
-            self.airportInfo['airportInfo']['faaCode'].append(data.lower())
+            self.airportInfo.airport_info.faa_codes.append(data.lower())
         elif self.__currentKey == 'lat':
-            self.airportInfo['lat'] = float(data)
+            self.airportInfo.lat = float(data)
         elif self.__currentKey == 'lon':
-            self.airportInfo['lon'] = float(data)
+            self.airportInfo.lon = float(data)
         self.__currentKey = None
 
     def reset(self):
         self.__currentKey = None
         self.__th = False
-        self.airportInfo = get_standard_locairport_info()
+        self.airportInfo = Location(None, None)
         return HTMLParser.reset(self)
 
 
@@ -241,9 +210,9 @@ def parse_airport_specific_page(pageText):
     codeToParse = pageText[cityStartIndex:cityEndIndex]
     parser = WorldAirportCodesParser()
     parser.feed(codeToParse)
-    if parser.airportInfo['cityName'] is not None:
+    if parser.airportInfo.city_name is not None:
         LOCATION_CODES_SEMA.acquire()
-        AIRPORT_LOCATION_CODES.append(parser.airportInfo)
+        AIRPORT_LOCATION_CODES.append(parser.get_Location_class())
         LOCATION_CODES_SEMA.release()
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
@@ -261,7 +230,7 @@ def get_locode_locations(locodeFilename):
     """
     # i = 0
     with open(locodeFilename, 'r', encoding='ISO-8859-1') as locodeFile:
-        currentState = {'state': None, 'stateCode': None}
+        currentState = {'state': None, 'state_code': None}
         for line in locodeFile:
             lineElements = line.split(',')
             # normally there are exactly 12 elements
@@ -275,7 +244,7 @@ def get_locode_locations(locodeFilename):
             # if no place code is provided the line is a state definition line
             if len(lineElements[2]) == 0:
                 currentState['state'] = normalize_locode_info(lineElements[3])[1:]
-                currentState['stateCode'] = normalize_locode_info(lineElements[1])
+                currentState['state_code'] = normalize_locode_info(lineElements[1])
                 continue
 
             if len(lineElements[6]) < 4:
@@ -285,21 +254,22 @@ def get_locode_locations(locodeFilename):
                 continue
 
             # create new entry
-            airportInfo = get_standard_location_info()
-            airportInfo['locode'] = get_standard_locode_info()
-            airportInfo['stateCode'] = currentState['stateCode'].lower()
-            airportInfo['locode']['placeCodes'].append(normalize_locode_info(
+            location_dict = get_location_from_locode_text(normalize_locode_info(lineElements[10]))
+            airportInfo = Location(**location_dict)
+            airportInfo.add_locode_info()
+            airportInfo.state_code = currentState['state_code'].lower()
+            airportInfo.locode.place_codes.append(normalize_locode_info(
                 lineElements[2]).lower())
-            airportInfo['locode']['subdivisionCode'] = normalize_locode_info(
+            airportInfo.locode.subdivisionCode = normalize_locode_info(
                 lineElements[5]).lower()
             locodeName = get_locode_name(normalize_locode_info(lineElements[4]))
             if locodeName is None:
                 continue
-            airportInfo['cityName'] = locodeName.lower()
-            airportInfo['state'] = currentState['state'].lower()
+            airportInfo.city_name = locodeName.lower()
+            airportInfo.state = currentState['state'].lower()
 
-            set_locode_location(airportInfo, normalize_locode_info(lineElements[10]))
-            if airportInfo['lat'] == 'NaN' or airportInfo['lon'] == 'NaN':
+            # set_locode_location(airportInfo, normalize_locode_info(lineElements[10]))
+            if airportInfo.lat == 'NaN' or airportInfo.lon == 'NaN':
                 continue
             LOCATION_CODES_SEMA.acquire()
             LOCODE_LOCATION_CODES.append(airportInfo)
@@ -319,15 +289,15 @@ def normalize_locode_info(text):
     return ret
 
 
-def set_locode_location(infoDict, locationtext):
-    """set the location from a locode location text in the infoDict"""
-    if len(locationtext) == 12:
-        location = get_location_from_locode_text(locationtext)
-        infoDict['lat'] = location['lat']
-        infoDict['lon'] = location['lon']
-    else:
-        infoDict['lat'] = 'NaN'
-        infoDict['lon'] = 'NaN'
+# def set_locode_location(infoDict, locationtext):
+#     """set the location from a locode location text in the infoDict"""
+#     if len(locationtext) == 12:
+#         location = get_location_from_locode_text(locationtext)
+#         infoDict['lat'] = location['lat']
+#         infoDict['lon'] = location['lon']
+#     else:
+#         infoDict['lat'] = 'NaN'
+#         infoDict['lon'] = 'NaN'
 
 
 def get_location_from_locode_text(locationtext):
@@ -343,13 +313,13 @@ def get_location_from_locode_text(locationtext):
     return {'lat': lat, 'lon': lon}
 
 
-def get_locode_name(cityName):
+def get_locode_name(city_name):
     """if there is a '=' in the name extract the first part of the name"""
-    if NORMAL_CHARS_REGEX.search(cityName) is None:
+    if NORMAL_CHARS_REGEX.search(city_name) is None:
         return None
-    if '=' in cityName:
-        cityName = cityName.split('=')[0].strip()
-    return cityName
+    if '=' in city_name:
+        city_name = city_name.split('=')[0].strip()
+    return city_name
 
 
 def get_clli_codes():
@@ -358,10 +328,8 @@ def get_clli_codes():
         for line in clliFile:
             # [0:-1] remove last character \n and extract the information
             clli, lat, lon = line[0:-1].split('\t')
-            newClliInfo = get_standard_location_info()
-            newClliInfo['clli'].append(clli[0:6])
-            newClliInfo['lat'] = float(lat)
-            newClliInfo['lon'] = float(lon)
+            newClliInfo = Location(lat=float(lat), lon=float(lon))
+            newClliInfo.clli.append(clli[0:6])
             CLLI_LOCATION_CODES.append(newClliInfo)
 
 
@@ -390,18 +358,18 @@ def get_geo_names():
 
             # name = columns[1]
             alternatenames = columns[3].split(',')
-            newGeoNamesInfo = get_standard_location_info()
-            newGeoNamesInfo['cityName'] = columns[2].lower()
-            if NORMAL_CHARS_REGEX.search(newGeoNamesInfo['cityName']) is None:
+            newGeoNamesInfo = Location(lat=float(columns[4]), lon=float(columns[5]))
+            newGeoNamesInfo.city_name = columns[2].lower()
+            if NORMAL_CHARS_REGEX.search(newGeoNamesInfo.city_name) is None:
                 continue
-            newGeoNamesInfo['lat'] = float(columns[4])
-            newGeoNamesInfo['lon'] = float(columns[5])
+
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
                     columns[9] = columns[9].split(',')[0]
-                newGeoNamesInfo['stateCode'] = columns[9].lower()
+                newGeoNamesInfo.state_code = columns[9].lower()
+
             if len(columns[14]) > 0:
-                newGeoNamesInfo['population'] = int(columns[14])
+                newGeoNamesInfo.population = int(columns[14])
 
             for name in alternatenames:
                 maxname = max(name.split(' '), key=len)
@@ -409,7 +377,7 @@ def get_geo_names():
                 if NORMAL_CHARS_REGEX.search(maxname) is None:
                     continue
                 if len(maxname) > 0:
-                    newGeoNamesInfo['alternateNames'].append(maxname.lower())
+                    newGeoNamesInfo.alternate_names.append(maxname.lower())
 
             GEONAMES_LOCATION_CODES.append(newGeoNamesInfo)
 
@@ -419,32 +387,32 @@ def location_merge(location1, location2):
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
     """
-    if location2['stateCode'] is None:
-        location2['stateCode'] = location1['stateCode']
+    if location2.state_code is None:
+        location2.state_code = location1.state_code
 
-    if location1['stateCode'] is None:
-        location1['stateCode'] = location2['stateCode']
+    if location1.state_code is None:
+        location1.state_code = location2.state_code
 
     # if location['stateCode'] is not None and loc['stateCode'] != location['stateCode']:
     #     # print('This locations states do not match:\n', location, '\n', loc)
     #     continue
 
-    if location1['locode'] is None:
-        location1['locode'] = location2['locode']
+    if location1.locode is None:
+        location1.locode = location2.locode
     else:
-        if location2['locode'] is not None:
-            location1['locode']['placeCodes'].extend(location2['locode']['placeCodes'])
+        if location2.locode is not None:
+            location1.locode.place_codes.extend(location2.locode.place_codes)
 
-    location1['clli'].extend(location2['clli'])
+    location1.clli.extend(location2.clli)
 
-    if location2['airportInfo'] is not None:
-        if location1['airportInfo'] is None:
-            location1['airportInfo'] = location2['airportInfo']
+    if location2.airport_info is not None:
+        if location1.airport_info is None:
+            location1.airport_info = location2.airport_info
         else:
-            location1['airportInfo']['iataCode'].extend(location2['airportInfo']['iataCode'])
-            location1['airportInfo']['icaoCode'].extend(location2['airportInfo']['icaoCode'])
-            location1['airportInfo']['faaCode'].extend(location2['airportInfo']['faaCode'])
-    location1['alternateNames'].extend(location2['alternateNames'])
+            location1.airport_info.iata_codes.extend(location2.airport_info.iata_codes)
+            location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
+            location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
+    location1.alternate_names.extend(location2.alternate_names)
 
 
 def merge_locations_to_location(location, locations, start=0):
@@ -484,10 +452,10 @@ def merge_locations_by_gps(locations):
     while i < len(locations):
         location = locations[i]
 
-        if location['cityName'] != 'Munich'.lower():
+        if location.city_name != 'Munich'.lower():
             continue
         i = i + 1
-        if location['lat'] is None or location['lon'] is None:
+        if location.lat is None or location.lon is None:
             continue
 
         merge_locations_to_location(location, locations, start=i)
@@ -497,7 +465,7 @@ def idfy_codes(codes):
     """Assign a unique id to every location in the array and return a dict with id to location"""
     ret_dict = {}
     for index in range(0, len(codes)):
-        codes[index]['id'] = str(index)
+        codes[index].id = str(index)
         ret_dict[str(index)] = codes[index]
 
     return ret_dict
@@ -559,9 +527,9 @@ def merge_location_codes(args):
         # geo_codes = sorted(GEONAMES_LOCATION_CODES,
         #                    key=lambda location: location['population'],
         #                    reverse=True)
-        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location['cityName'])
-        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location['cityName'])
-        clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location['clli'][0])
+        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
+        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
+        clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])
         # add_locations(location_codes, geo_codes)
 
         print('geonames merged: ', len(location_codes))
@@ -590,17 +558,17 @@ def print_stats(location_codes):
     clli_codes = 0
     geonames = 0
     for location in location_codes:
-        if location['locode'] is not None:
-            locode_codes = locode_codes + len(location['locode']['placeCodes'])
-        geonames = geonames + len(location['alternateNames'])
-        clli_codes = clli_codes + len(location['clli'])
-        if location['airportInfo'] is not None:
-            if len(location['airportInfo']['iataCode']) > 0:
-                iata_codes = iata_codes + len(location['airportInfo']['iataCode'])
-            if len(location['airportInfo']['icaoCode']) > 0:
-                icao_codes = icao_codes + len(location['airportInfo']['icaoCode'])
-            if len(location['airportInfo']['faaCode']) > 0:
-                faa_codes = faa_codes + len(location['airportInfo']['faaCode'])
+        if location.locode is not None:
+            locode_codes = locode_codes + len(location.locode.place_codes)
+        geonames = geonames + len(location.alternate_names)
+        clli_codes = clli_codes + len(location.clli)
+        if location.airport_info is not None:
+            if len(location.airport_info.iata_codes) > 0:
+                iata_codes = iata_codes + len(location.airport_info.iata_codes)
+            if len(location.airport_info.icao_codes) > 0:
+                icao_codes = icao_codes + len(location.airport_info.icao_codes)
+            if len(location.airport_info.faa_codes) > 0:
+                faa_codes = faa_codes + len(location.airport_info.faa_codes)
 
     print('iata: {0} icao: {1} faa: {2} locode: {3} clli: {4} geonames: {5}'
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
@@ -628,7 +596,7 @@ def parse_codes(args):
 
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')
-    json.dump(locations, characterCodesFile, indent=4)
+    json.dump(locations, characterCodesFile, default=util.location_encoding_func, indent=4)
     characterCodesFile.close()
     endTime = time.clock()
     endRTime = time.time()

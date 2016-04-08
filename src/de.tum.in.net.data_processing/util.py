@@ -72,6 +72,7 @@ class Location(GPSLocation):
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None, population=0):
         """init"""
+        self.id = None
         self.city_name = city_name
         self.state = state
         self.state_code = state_code
@@ -81,6 +82,14 @@ class Location(GPSLocation):
         self.clli = []
         self.alternate_names = []
         super().__init__(lat, lon)
+
+    def add_airport_info(self):
+        if self.airport_info is None:
+            self.airport_info = AirportInfo()
+
+    def add_locode_info(self):
+        if self.locode is None:
+            self.locode = LocodeInfo()
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
