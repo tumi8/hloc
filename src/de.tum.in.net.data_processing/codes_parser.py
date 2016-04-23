@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Get airport locations form world-airport-codes.com, the UN/LOCODE codes from files
 in ./collectedData/locodePart{1,2,3}.csv and save it to ./collectedData.json
@@ -7,22 +7,20 @@ population sortieren
 die clli bei 6 abschneiden
 """
 from __future__ import print_function
-import requests
 import json
-import time
 import re
 import argparse
-import util
-from util import Location
 from string import ascii_lowercase
 from string import printable
+import time
 from time import sleep
-try:
-    from html.parser import HTMLParser
-except ImportError:
-    from HTMLParser import HTMLParser
+from html.parser import HTMLParser
 from threading import Thread
 from threading import Semaphore
+import requests
+
+import util
+from util import Location
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 30
@@ -45,6 +43,9 @@ class WorldAirportCodesParser(HTMLParser):
     airportInfo = Location(None, None)
     __currentKey = None
     __th = False
+
+    def error(self, var1):
+        raise NotImplementedError
 
     def handle_starttag(self, tag, attrs):
         if tag == 'h3':
@@ -212,7 +213,7 @@ def parse_airport_specific_page(pageText):
     parser.feed(codeToParse)
     if parser.airportInfo.city_name is not None:
         LOCATION_CODES_SEMA.acquire()
-        AIRPORT_LOCATION_CODES.append(parser.get_Location_class())
+        AIRPORT_LOCATION_CODES.append(parser.airportInfo)
         LOCATION_CODES_SEMA.release()
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
@@ -430,17 +431,14 @@ def merge_locations_to_location(location, locations, start=0):
 
 def add_locations(locations, addLocations):
     """
-    The first argument is a list which will not be condesed but the items
+    The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in addLocations
     list will be added to list 1
     """
-    i = 0
-    while i < len(locations):
-        location = locations[i]
-        i = i + 1
+    for i, location in enumerate(locations):
         merge_locations_to_location(location, addLocations)
-    # merge_locations_by_gps(addLocations)
-    # locations.extend(addLocations)
+    merge_locations_by_gps(addLocations)
+    locations.extend(addLocations)
 
 
 def merge_locations_by_gps(locations):
@@ -448,14 +446,10 @@ def merge_locations_by_gps(locations):
     this method starts at the beginning and matches all locations which are in a
     range of 30 kilometers
     """
-    i = 0
-    while i < len(locations):
-        location = locations[i]
-
-        if location.city_name != 'Munich'.lower():
-            continue
-        i = i + 1
-        if location.lat is None or location.lon is None:
+    for i, location in enumerate(locations):
+        lat_is_none = location.lat is None
+        lon_is_none = location.lon is None
+        if lat_is_none or lon_is_none:
             continue
 
         merge_locations_to_location(location, locations, start=i)
@@ -522,11 +516,12 @@ def merge_location_codes(args):
         print('locode length: ', len(LOCODE_LOCATION_CODES))
         print('air length: ', len(AIRPORT_LOCATION_CODES))
         print('clli length: ', len(CLLI_LOCATION_CODES))
-        location_codes = GEONAMES_LOCATION_CODES
+        # location_codes = GEONAMES_LOCATION_CODES
+        location_codes = sorted(GEONAMES_LOCATION_CODES,
+                           key=lambda location: location['population'],
+                           reverse=True)
         merge_locations_by_gps(location_codes)
-        # geo_codes = sorted(GEONAMES_LOCATION_CODES,
-        #                    key=lambda location: location['population'],
-        #                    reverse=True)
+
         locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
         airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
         clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Some utility functions"""
+from __future__ import print_function
 from math import radians, cos, sin, asin, sqrt
-import json
+from subprocess import check_output
+from string import printable
 
+ACCEPTED_CHARACTER = '{0},.-_'.format(printable[0:62])
 
 def gps_distance_haversine(location1, location2):
     """
@@ -17,10 +20,10 @@ def gps_distance_haversine(location1, location2):
     # haversine formula
     dlon = lon2 - lon1
     dlat = lat2 - lat1
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * asin(sqrt(a))
+    tmp = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    ftmp = 2 * asin(sqrt(tmp))
     # Radius of earth in kilometers. Use 3956 for miles
-    return c * 6371
+    return ftmp * 6371
 
 
 def is_in_radius(location1, location2, radius):
@@ -38,10 +41,33 @@ def is_in_radius(location1, location2, radius):
 
 def location_encoding_func(obj):
     """Overrides the default method from the JSONEncoder"""
-    if isinstance(obj, Location):
+    if isinstance(obj, Location) or isinstance(obj, Domain):
         return {'__class__': 'Location'}.update(obj.dict_representation())
 
     raise TypeError('Object not handled by the JSON encoding function')
+
+
+def count_lines(filename):
+    """"Opens the file at filename than counts and returns the number of lines"""
+    count = check_output(['wc', '-l', filename])
+    lineCount = int(str(count, encoding='utf-8').split(' ')[0])
+
+    print('Linecount for file: {0}'.format(lineCount))
+    return lineCount
+
+
+def get_path_filename(path):
+    """Extracts the filename from a path string"""
+    if path[-1] == '/':
+        raise NameError('The path leads to a directory')
+    fileIndex = path.find('/')
+    filename = path[:]
+
+    while fileIndex >= 0:
+        filename = filename[fileIndex + 1:]
+        fileIndex = filename.find('/')
+
+    return filename
 
 
 class GPSLocation(object):
@@ -84,10 +110,12 @@ class Location(GPSLocation):
         super().__init__(lat, lon)
 
     def add_airport_info(self):
+        """Creates and sets a new empty AirportInfo object"""
         if self.airport_info is None:
             self.airport_info = AirportInfo()
 
     def add_locode_info(self):
+        """Creates and sets a new empty """
         if self.locode is None:
             self.locode = LocodeInfo()
 
@@ -96,18 +124,20 @@ class Location(GPSLocation):
         airport_dict = None
         if self.airport_info:
             airport_dict = self.airport_info.dict_representation()
+
         locode_dict = None
         if self.locode:
             locode_dict = self.locode.dict_representation()
+
         return {
-                'city_name': self.city_name,
-                'state': self.state,
-                'state_code': self.state_code,
-                'population': self.population,
-                'airport_info': airport_dict,
-                'locode': locode_dict,
-                'clli': self.clli,
-                'alternate_names': self.alternate_names
+            'city_name': self.city_name,
+            'state': self.state,
+            'state_code': self.state_code,
+            'population': self.population,
+            'airport_info': airport_dict,
+            'locode': locode_dict,
+            'clli': self.clli,
+            'alternate_names': self.alternate_names
         }
 
 
@@ -123,9 +153,9 @@ class AirportInfo(object):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-                'iata_codes': self.iata_codes,
-                'icao_codes': self.icao_codes,
-                'faa_codes': self.faa_codes
+            'iata_codes': self.iata_codes,
+            'icao_codes': self.icao_codes,
+            'faa_codes': self.faa_codes
         }
 
 
@@ -140,6 +170,23 @@ class LocodeInfo(object):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-                'place_codes': self.place_codes,
-                'subdivision_codes': self.subdivision_codes
+            'place_codes': self.place_codes,
+            'subdivision_codes': self.subdivision_codes
+        }
+
+class Domain(object):
+    """Holds the information for one domain"""
+
+    def __init__(self, domain_name, ip_address=None, ipv6_address=None):
+        """init"""
+        self.domain_name = domain_name
+        self.ip_address = ip_address
+        self.ipv6_address = ipv6_address
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        return {
+            'domain_name': self.domain_name,
+            'ip_address': self.ip_address,
+            'ipv6_address': self.ipv6_address
         }
