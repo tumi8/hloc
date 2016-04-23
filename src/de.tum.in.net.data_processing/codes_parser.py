@@ -7,7 +7,7 @@ population sortieren
 die clli bei 6 abschneiden
 """
 from __future__ import print_function
-import json
+import ujson as json
 import re
 import argparse
 from string import ascii_lowercase
@@ -591,7 +591,7 @@ def parse_codes(args):
 
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')
-    json.dump(locations, characterCodesFile, default=util.location_encoding_func, indent=4)
+    util.json_dump(locations, characterCodesFile, indent=4)
     characterCodesFile.close()
     endTime = time.clock()
     endRTime = time.time()

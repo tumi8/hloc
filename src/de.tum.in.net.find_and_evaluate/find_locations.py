@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import json
+import ujson as json
 import pickle
 import argparse
 import cProfile

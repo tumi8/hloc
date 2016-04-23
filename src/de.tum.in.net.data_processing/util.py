@@ -4,8 +4,11 @@ from __future__ import print_function
 from math import radians, cos, sin, asin, sqrt
 from subprocess import check_output
 from string import printable
+import re
+import json
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(printable[0:62])
+DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 
 def gps_distance_haversine(location1, location2):
     """
@@ -39,14 +42,6 @@ def is_in_radius(location1, location2, radius):
     return (radius / 6371)**2 >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)
 
 
-def location_encoding_func(obj):
-    """Overrides the default method from the JSONEncoder"""
-    if isinstance(obj, Location) or isinstance(obj, Domain):
-        return {'__class__': 'Location'}.update(obj.dict_representation())
-
-    raise TypeError('Object not handled by the JSON encoding function')
-
-
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
@@ -54,6 +49,32 @@ def count_lines(filename):
 
     print('Linecount for file: {0}'.format(lineCount))
     return lineCount
+
+
+def seek_lines(seeking_file, seek_until_line):
+    """Read number of lines definded in the seekPoint"""
+    if seek_until_line < 0:
+        return
+    i = 0
+    for _ in seeking_file:
+        i = i + 1
+        if i == seek_until_line:
+            break
+
+
+def hex_for_ip(ip_address):
+    """Returns the hexadecimal code for the ip address"""
+    ip_blocks = ip_address.split('.')
+    hexdata = ''
+    for block in ip_blocks:
+        hexdata = hexdata + hex(int(block))[2:].zfill(2)
+    return hexdata.upper()
+
+def is_ip_hex_encoded_simple(ipAddress, domain):
+    """check if the ip address is encoded in hex format in the domain"""
+    hex_ip = hex_for_ip(ipAddress)
+
+    return hex_ip.upper() in domain.upper()
 
 
 def get_path_filename(path):
@@ -68,6 +89,31 @@ def get_path_filename(path):
         fileIndex = filename.find('/')
 
     return filename
+
+
+def json_object_encoding(obj):
+    """Overrides the default method from the JSONEncoder"""
+    if isinstance(obj, JSONBase):
+        return {'__class__': 'Location'}.update(obj.dict_representation())
+
+    raise TypeError('Object not handled by the JSON encoding function')
+
+
+def json_dump(encoding_var, file_ptr, indent=0):
+    """
+    Dumps the encoding_var to the file in file_ptr with the
+    json_object_encoding function
+    """
+    json.dump(encoding_var, file_ptr, default=util.json_encoding_func, indent=indent)
+
+
+class JSONBase(object):
+    """
+    The Base class to JSON encode your object with json_encoding_func
+    """
+
+    def dict_representation(selfs):
+        raise NotImplementedError("JSONBase: Should have implemented this")
 
 
 class GPSLocation(object):
@@ -90,7 +136,7 @@ class GPSLocation(object):
         return (radius / 6371)**2 >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)
 
 
-class Location(GPSLocation):
+class Location(JSONBase, GPSLocation):
     """
     A location object with the location name, coordinates and location codes
     Additionally information like the population can be saved
@@ -141,7 +187,7 @@ class Location(GPSLocation):
         }
 
 
-class AirportInfo(object):
+class AirportInfo(JSONBase):
     """Holds a list of the differen airport codes"""
 
     def __init__(self):
@@ -159,7 +205,7 @@ class AirportInfo(object):
         }
 
 
-class LocodeInfo(object):
+class LocodeInfo(JSONBase):
     """Holds a list of locode codes"""
 
     def __init__(self):
@@ -174,7 +220,7 @@ class LocodeInfo(object):
             'subdivision_codes': self.subdivision_codes
         }
 
-class Domain(object):
+class Domain(JSONBase):
     """Holds the information for one domain"""
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
@@ -190,3 +236,13 @@ class Domain(object):
             'ip_address': self.ip_address,
             'ipv6_address': self.ipv6_address
         }
+
+    @property
+    def domain_labels(self):
+        """Split domain in to the different levels and save them in a dict"""
+        domainLabels = {}
+        levels = self.domain_name.split('.')[::-1]
+        domainLabels['tld'] = levels[0]
+        for levelNumber in range(1, len(levels)):
+            domainLabels['{0}'.format(levelNumber - 1)] = levels[levelNumber]
+        return domainLabels
