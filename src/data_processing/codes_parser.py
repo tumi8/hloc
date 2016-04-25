@@ -254,8 +254,12 @@ def get_locode_locations(locodeFilename):
             if lineElements[6][0] == '0' or lineElements[6][0:4] == '----':
                 continue
 
-            # create new entry
-            location_dict = get_location_from_locode_text(normalize_locode_info(lineElements[10]))
+            try:
+                location_dict = get_location_from_locode_text(normalize_locode_info(lineElements[10]))
+            except ValueError:
+                continue
+
+            # create a new entry
             airportInfo = Location(**location_dict)
             airportInfo.add_locode_info()
             airportInfo.state_code = currentState['state_code'].lower()
@@ -302,8 +306,9 @@ def normalize_locode_info(text):
 
 
 def get_location_from_locode_text(locationtext):
-    # 48.15 11.583
     """converts the location text as found in the locode csv files into a LatLon object"""
+    if len(locationtext) != 12:
+        raise ValueError('The locationtext has to be exactly 12 characters long!')
     lat = int(locationtext[:2]) + float(locationtext[2:4])/60
     if locationtext[4] == 'S':
         lat = -lat
