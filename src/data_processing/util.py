@@ -14,38 +14,6 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 #######################################
 ##    Different utility functions    ##
 #######################################
-def gps_distance_haversine(location1, location2):
-    """
-    Calculate the distance (km) between two points
-    on the earth (specified in decimal degrees)
-    """
-    # convert decimal degrees to radians
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2['lon']))
-    lat2 = radians(float(location2['lat']))
-    # haversine formula
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    tmp = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    ftmp = 2 * asin(sqrt(tmp))
-    # Radius of earth in kilometers. Use 3956 for miles
-    return ftmp * 6371
-
-
-def is_in_radius(location1, location2, radius):
-    """
-    Calculate the distance (km) between two points
-    using the equirectangular distance approximation
-    """
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2['lon']))
-    lat2 = radians(float(location2['lat']))
-    # Radius of earth in kilometers. Use 3956 for miles
-    return (radius / 6371)**2 >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)
-
-
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
@@ -216,6 +184,37 @@ class Location(JSONBase, GPSLocation):
         """Creates and sets a new empty """
         if self.locode is None:
             self.locode = LocodeInfo()
+
+    def is_in_radius(self, location2, radius):
+        """
+        Calculate the distance (km) between two points
+        using the equirectangular distance approximation
+        """
+        lon1 = radians(float(self.lon))
+        lat1 = radians(float(self.lat))
+        lon2 = radians(float(location2.lon))
+        lat2 = radians(float(location2.lat))
+        # Radius of earth in kilometers. Use 3956 for miles
+        return (radius / 6371) ** 2 >= (
+        ((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (lat2 - lat1) ** 2)
+
+    def gps_distance_haversine(self, location2):
+        """
+        Calculate the distance (km) between two points
+        on the earth (specified in decimal degrees)
+        """
+        # convert decimal degrees to radians
+        lon1 = radians(float(self.lon))
+        lat1 = radians(float(self.lat))
+        lon2 = radians(float(location2.lon))
+        lat2 = radians(float(location2.lat))
+        # haversine formula
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        tmp = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        ftmp = 2 * asin(sqrt(tmp))
+        # Radius of earth in kilometers. Use 3956 for miles
+        return ftmp * 6371
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""

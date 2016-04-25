@@ -426,7 +426,7 @@ def merge_locations_to_location(location, locations, start=0):
     nearLocations = []
 
     for j in range(start, len(locations)):
-        if util.is_in_radius(location, locations[j], LOCATION_RADIUS):
+        if location.is_in_radius(locations[j], LOCATION_RADIUS):
             nearLocations.append(locations[j])
 
     for mloc in nearLocations:
