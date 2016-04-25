@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import ujson as json
+# import ujson as json
 import pickle
 import argparse
 import cProfile
@@ -8,32 +8,41 @@ import time
 import os
 from multiprocessing import Process
 
+from ..data_processing import util
+from ..data_processing.util import DomainLabel, DomainLabelMatch
 
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser()
+
+def __create_parser_arguments(parser):
+    """Creates the arguments for the parser"""
     parser.add_argument('doaminfilename_proto', type=str,
                         help='The path to the files with {} instead of the filenumber'
-                        ' in the name so it is possible to format the string')
+                             ' in the name so it is possible to format the string')
     parser.add_argument('regexpickle', type=str,
                         help='The path to the pickle file with the regexes from the'
                              'create_location_regex.py script')
     parser.add_argument('-n', '--file-count', type=int, default=8, dest='fileCount',
                         help='number of files from preprocessing')
-    parser.add_argument('-a', '--amount-dns-entries', type=int, default=0, dest='amount',
+    parser.add_argument('-a', '--amount-dns-entries', type=int, default=0,
+                        dest='amount',
                         help='Specify the amount of dns entries which should be searched'
                              ' per Process. Default is 0 which means all dns entries')
-    parser.add_argument('-d', '--load-popular-domain-labels', type=str, dest='popular_labels_l',
+    parser.add_argument('-d', '--load-popular-domain-labels', type=str,
+                        dest='popular_labels_l',
                         help='Specify a pickle file where the results for popular labels'
-                        ' are saved')
-    parser.add_argument('-p', '--save-popular-domain-labels', type=str, dest='popular_labels_s',
+                             ' are saved')
+    parser.add_argument('-p', '--save-popular-domain-labels', type=str,
+                        dest='popular_labels_s',
                         help='Specify a pickle file where popular domain labels'
-                        ' are saved and the scripts generates a pickle output file with the'
-                        ' results saved')
+                             ' are saved and the scripts generates a pickle output file with the'
+                             ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
                         dest='profile', action='store_true')
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    regexes = []
 
     with open(args.regexpickle, 'rb') as locationRegexFile:
         regexes = pickle.load(locationRegexFile)
@@ -107,77 +116,69 @@ def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
     label_length = 0
     sublabel_count = 0
 
+    def save_entrie(entrie, entries, entrie_file, new_line=True):
+        entries.append(entrie)
+        if len(entries) >= 10 ** 4:
+            util.json_dump(entries, entrie_file)
+            if new_line:
+                entrie_file.write('\n')
+            entries[:] = []
+
+
     with open(filename, 'r') as dnsFile:
         no_location_found = []
         location_found = []
         for line in dnsFile:
-            dns_entries = json.loads(line)
+            dns_entries = util.json_loads(line)
 
             for domain in dns_entries:
                 loc_found = False
-                for key in domain['domainLabels'].keys():
-                    if key == 'tld':
+                for i, o_label in enumerate(domain.domain_labels):
+                    if i == 0:
                         continue
                     label_count = label_count + 1
-                    o_label = domain['domainLabels'][key]
-                    labels = o_label.split('-')
-                    domain['domainLabels'][key] = {'label': o_label, 'matches': []}
                     label_loc_found = False
                     is_popular = o_label in popular_labels.keys()
                     label_length = label_length + len(o_label)
 
-                    if is_popular and popular_labels[o_label]['matches'] is not None:
+                    if is_popular and popular_labels[o_label.label]['matches'] is not None:
                         popular_count = popular_count + 1
-                        domain['domainLabels'][key]['matches'] = \
-                            popular_labels[o_label]['matches'][:]
-                        label_loc_found = len(domain['domainLabels'][key]['matches']) > 0
+                        domain.domain_labels[i].matches = popular_labels[o_label]['matches'][:]
+                        label_loc_found = len(domain.domain_labels[key]['matches']) > 0
                         for key in match_count.keys():
                             match_count[key] = match_count[key] + \
                                                popular_labels[o_label]['counts'][key]
                     else:
                         pm_count = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
                                     'locode': 0}
-                        for label in labels:
-                            sublabel_count = sublabel_count + 1
-                            for location_id, regex in regexes:
-                                matches = regex.search(label)
-                                if matches is not None:
-                                    label_loc_found = True
-                                    group_dict = matches.groupdict()
-                                    loc_found = True
-                                    group = None
-                                    for group_key, code in group_dict.items():
-                                        if code is not None:
-                                            match_count[group_key] = match_count[group_key] + 1
-                                            pm_count[group_key] = pm_count[group_key] + 1
-                                            group = group_key
-                                            break
 
-                                    domain['domainLabels'][key]['matches'] \
-                                        .append({'location_id': str(location_id), 'type': group})
+                        temp_count, temp_gr_count, matches = search_in_label(o_label, regexes)
+                        sublabel_count = sublabel_count + temp_count
+
+                        for key, value in temp_gr_count.items():
+                            match_count[key] = match_count[key] + value
+                            pm_count[key] = pm_count[key] + value
+
+                        if len(matches) > 0:
+                            label_loc_found = True
+                            loc_found = True
+
+                        domain.domain_labels[i].matches = matches
 
                         if is_popular:
                             popular_count = popular_count + 1
-                            popular_labels[o_label] = \
-                                {'matches': domain['domainLabels'][key]['matches'][:],
+                            popular_labels[o_label.label] = \
+                                {'matches': domain.domain_labels[key]['matches'][:],
                                  'counts': pm_count}
 
                     if label_loc_found:
                         label_wl_count = label_wl_count + 1
 
                 if not loc_found:
-                    no_location_found.append(domain)
-                    if len(no_location_found) >= 10**4:
-                        json.dump(no_location_found, locnFoundFile)
-                        locnFoundFile.write('\n')
-                        no_location_found = []
+                    save_entrie(domain, no_location_found, locnFoundFile)
                 else:
                     entries_wl_count = entries_wl_count + 1
-                    location_found.append(domain)
-                    if len(location_found) >= 10**4:
-                        json.dump(location_found, locFoundFile)
-                        locFoundFile.write('\n')
-                        location_found = []
+                    save_entrie(domain, location_found, locFoundFile)
 
                 entries_count = entries_count + 1
                 # if entries_count % 200 == 0:
@@ -188,8 +189,8 @@ def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
             if entries_count == amount:
                 break
 
-        json.dump(location_found, locFoundFile)
-        json.dump(no_location_found, locnFoundFile)
+        util.json_dump(location_found, locFoundFile)
+        util.json_dump(no_location_found, locnFoundFile)
 
     locFoundFile.close()
     locnFoundFile.close()
@@ -203,6 +204,31 @@ def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
     print('index', index, 'label with location found:', label_wl_count)
     print('index', index, 'matches:', sum(match_count.values()))
     print('index', index, 'match count:\n', match_count)
+
+
+def search_in_label(o_label, regexes):
+    """returns all matches for this label"""
+    labels = o_label.label.split('-')
+    matches = []
+    type_count = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
+                  'locode': 0}
+    count = 0
+    for label in labels:
+        count = count + 1
+        for location_id, regex in regexes:
+            reg_matches = regex.search(label)
+            if reg_matches is not None:
+                group_dict = reg_matches.groupdict()
+                group = None
+                for group_key, code in group_dict.items():
+                    if code is not None:
+                        type_count[group_key] = type_count[group_key] + 1
+                        group = group_key
+                        break
+
+                matches.append(DomainLabelMatch(location_id, group, domain_label=o_label))
+
+    return (count, type_count, matches)
 
 if __name__ == '__main__':
     main()

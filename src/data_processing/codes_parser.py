@@ -417,7 +417,7 @@ def location_merge(location1, location2):
 
 
 def merge_locations_to_location(location, locations, start=0):
-    """Merge all locations from the locations list to the location if they are near enaugh"""
+    """Merge all locations from the locations list to the location if they are near enough"""
     nearLocations = []
 
     for j in range(start, len(locations)):
@@ -429,16 +429,20 @@ def merge_locations_to_location(location, locations, start=0):
         locations.remove(mloc)
 
 
-def add_locations(locations, addLocations):
+def add_locations(locations, addLocations, create_new_locations=True):
     """
     The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in addLocations
     list will be added to list 1
+    :param create_new_locations: Set false if the addLocations are not allowed to
+        create new location objects Default is true
     """
     for i, location in enumerate(locations):
         merge_locations_to_location(location, addLocations)
-    merge_locations_by_gps(addLocations)
-    locations.extend(addLocations)
+
+    if create_new_locations:
+        merge_locations_by_gps(addLocations)
+        locations.extend(addLocations)
 
 
 def merge_locations_by_gps(locations):
@@ -528,7 +532,7 @@ def merge_location_codes(args):
         # add_locations(location_codes, geo_codes)
 
         print('geonames merged: ', len(location_codes))
-        add_locations(location_codes, locodes)
+        add_locations(location_codes, locodes, create_new_locations=False)
         print('locode merged', len(location_codes))
         add_locations(location_codes, airport_codes)
         print('air merged', len(location_codes))

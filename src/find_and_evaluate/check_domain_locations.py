@@ -23,6 +23,8 @@ from ripe.atlas.cousteau import (
     Ping, AtlasSource, AtlasCreateRequest, AtlasResultsRequest,
     MeasurementRequest, Measurement)
 
+from ..data_processing import util
+
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
 MAX_RTT = 9
