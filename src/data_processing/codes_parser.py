@@ -527,7 +527,7 @@ def merge_location_codes(args):
         print('clli length: ', len(CLLI_LOCATION_CODES))
         # location_codes = GEONAMES_LOCATION_CODES
         location_codes = sorted(GEONAMES_LOCATION_CODES,
-                           key=lambda location: location['population'],
+                           key=lambda location: location.population,
                            reverse=True)
         merge_locations_by_gps(location_codes)
 
