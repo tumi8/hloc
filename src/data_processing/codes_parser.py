@@ -23,7 +23,7 @@ import util
 from util import Location
 
 CODE_SEPARATOR = '#################'
-LOCATION_RADIUS = 30
+LOCATION_RADIUS = 100
 THREADS_SEMA = None
 LOCATION_CODES_SEMA = Semaphore(1)
 AIRPORT_LOCATION_CODES = []
@@ -455,7 +455,10 @@ def merge_locations_by_gps(locations):
     this method starts at the beginning and matches all locations which are in a
     range of 30 kilometers
     """
-    for i, location in enumerate(locations):
+    i = 0
+    while i < len(locations):
+        location = locations[i]
+        i = i + 1
         lat_is_none = location.lat is None
         lon_is_none = location.lon is None
         if lat_is_none or lon_is_none:
