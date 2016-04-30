@@ -349,7 +349,7 @@ def get_clli_codes():
 # 9: cc2                : alternate country codes, comma separated, ISO-3166 2-letter
 #                         country code, 200 characters
 # 14: population        : bigint (8 byte int)
-def get_geo_names():
+def get_geo_names(min_population):
     """Get the geo names from file ./collectedData/allCountries.txt"""
 
     with open('collectedData/cities1000.txt', 'r') as clliFile:
@@ -374,7 +374,7 @@ def get_geo_names():
                     columns[9] = columns[9].split(',')[0]
                 newGeoNamesInfo.state_code = columns[9].lower()
 
-            if len(columns[14]) > 0:
+            if len(columns[14]) > 0 and int(columns[14]) >= min_population:
                 newGeoNamesInfo.population = int(columns[14])
 
             for name in alternatenames:
@@ -596,7 +596,7 @@ def parse_codes(args):
         print('Finished clli parsing')
 
     if args.geonames:
-        get_geo_names()
+        get_geo_names(args.min_population)
         print('Finished geonames parsing')
 
     location_codes = merge_location_codes(args)
@@ -633,6 +633,8 @@ def main():
                         help='Try to merge locations by gps')
     parser.add_argument('-t', '--max-threads', default=16, type=int, dest='maxThreads',
                         help='Specify the maximal amount of threads')
+    parser.add_argument('-p', '--min-population', default=10, type=int, dest='min_population',
+                        help='Specify the allowed minimum population for locations')
     parser.add_argument('-f', '--output-filename', type=str, default='collectedData.json',
                         dest='filename', help='Specify the output filename')
     # parser.add_argument('-f', '--add-to-file', type=str, dest='file',

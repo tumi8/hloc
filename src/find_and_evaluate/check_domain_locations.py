@@ -21,9 +21,10 @@ from threading import Thread, Semaphore, Lock
 from math import radians, cos, sqrt, ceil
 from ripe.atlas.cousteau import (
     Ping, AtlasSource, AtlasCreateRequest, AtlasResultsRequest,
-    MeasurementRequest, Measurement)
+    MeasurementRequest, Measurement, ProbeRequest)
 
 from ..data_processing import util
+from ..data_processing.util import GPSLocation, LocationResult, DomainLabelMatch
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
@@ -35,25 +36,27 @@ MEASUREMENT_URL = ATLAS_URL + API_MEASUREMENT_POINT + '/'
 
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371)**2
+DISTANCE_METHOD = GPSLocation.gps_distance_equirectangular
 MUNICH_ID = 'munich'
 DALLAS_ID = 'dallas'
 SINGAPORE_ID = 'singapore'
-COORDS = {MUNICH_ID: {'lat': 48.137357, 'lon': 11.575288},
-          DALLAS_ID: {'lat': 32.776664, 'lon': -96.796988},
-          SINGAPORE_ID: {'lat': 1.352083, 'lon': 103.874949}}
+COORDS = {
+    MUNICH_ID: {'gps_coords': GPSLocation(lat=48.137357, lon= 11.575288)}, #{'lat': 48.137357, 'lon': 11.575288},
+    DALLAS_ID: {'gps_coords': GPSLocation(lat=32.776664, lon= -96.796988)}, #{'lat': 32.776664, 'lon': -96.796988},
+    SINGAPORE_ID: {'gps_coords': GPSLocation(lat=1.352083, lon= 103.874949)} #{'lat': 1.352083, 'lon': 103.874949}}
+}
 
 
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser()
+def __create_parser_arguments(parser):
+    """Creates the arguments for the parser"""
     parser.add_argument('filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
-                        ' in the name so it is possible to format the string')
+                             ' in the name so it is possible to format the string')
     parser.add_argument('-f', '--file-count', type=int, default=8, dest='fileCount',
                         help='number of files from preprocessing')
     parser.add_argument('-l', '--location-file-name', required=True, type=str,
                         dest='locationFile', help='The path to the location file.'
-                        ' The output file from the codes_parser')
+                                                  ' The output file from the codes_parser')
     parser.add_argument('-m', '--method', type=str, dest='verifingMethod',
                         choices=['geoip', 'ip2location', 'ripe'], default='ripe',
                         help='Specify the method with wich the locations should be checked')
@@ -62,80 +65,90 @@ def main():
     #                     ' a ripe probe and the suspected location.')
     parser.add_argument('-g', '--geoip-database', type=str, dest='geoipFile',
                         help='If you choose the geoip method you have to'
-                        ' specify the path to the database in this argument')
+                             ' specify the path to the database in this argument')
     parser.add_argument('-i', '--ip2location-database', type=str, dest='ip2locFile',
                         help='If you choose the ip2location as method you have to'
-                        ' specify the path to the database in this argument.\n'
-                        'Currently not tested, because no database is available')
+                             ' specify the path to the database in this argument.\n'
+                             'Currently not tested, because no database is available')
     parser.add_argument('-r', '--rtt-file-proto', type=str, dest='rtt_proto',
                         help='If specified the rtt times will be read from the file '
-                        'prototype for every input file. It must '
-                        'contain a rtt for every ip in the input files')
-    parser.add_argument('-q', '--ripe-request-limit', type=int, dest='ripeRequestLimit',
+                             'prototype for every input file. It must '
+                             'contain a rtt for every ip in the input files')
+    parser.add_argument('-q', '--ripe-request-limit', type=int,
+                        dest='ripeRequestLimit',
                         help='How many request should normally be allowed per second '
-                        'to the ripe server', default=10)
-    parser.add_argument('-b', '--ripe-request-burst-limit', type=int, dest='ripeRequestBurstLimit',
+                             'to the ripe server', default=10)
+    parser.add_argument('-b', '--ripe-request-burst-limit', type=int,
+                        dest='ripeRequestBurstLimit',
                         help='How many request should at maximum be allowed per second'
-                        ' to the ripe server', default=15)
+                             ' to the ripe server', default=15)
 
-    args = parser.parse_args()
+
+def __check_args(args):
+    """Checks arguments validity"""
     if args.filename_proto.find('{}') < 0:
-        print(r'Wrong format for the filename! It must be formatable with the {}-brackets'
-              ' where the numbers have to be inserted.', file=sys.stderr)
+        raise ValueError(
+            'Wrong format for the filename! It must be formatable with the '
+            '{}-brackets where the numbers have to be inserted.')
 
     if args.verifingMethod == 'geoip':
         if args.geoipFile is None:
-            print('Please specify the file location of the geoip database!', file=sys.stderr)
-            return 1
+            raise ValueError('Please specify the file location of the geoip database!')
         if not os.path.isfile(args.geoipFile):
-            print('Path to geoip database does not exist!', file=sys.stderr)
-            return 1
+            raise ValueError('Path to geoip database does not exist!')
 
     if args.verifingMethod == 'ip2location':
         if args.ip2locFile is None:
-            print('Please specify the file location of the ip2lcation database!', file=sys.stderr)
-            return 1
+            raise ValueError('Please specify the file location of the ip2lcation database!')
         if not os.path.isfile(args.ip2locFile):
-            print('Path to ip2location database does not exist!', file=sys.stderr)
-            return 1
+            raise ValueError('Path to ip2location database does not exist!')
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser()
+    __create_parser_arguments(parser)
+    args = parser.parse_args()
+    __check_args(args)
 
     startTime = time.time()
     locations = None
     with open(args.locationFile, 'r') as locationFile:
-        locations = json.load(locationFile)
+        locations = util.json_load(locationFile)
 
     if args.verifingMethod == 'ripe':
         ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
         ripe_create_sema = mp.Semaphore(100)
-        generator_thread = Thread(target=generate_ripe_request_tokens, args=(ripe_slow_down_sema,
-                                                                             args.ripeRequestLimit))
+        generator_thread = Thread(target=generate_ripe_request_tokens,
+                                  args=(ripe_slow_down_sema, args.ripeRequestLimit))
         generator_thread.deamon = True
-        if 'near_nodes' not in next(iter(locations.values())).keys():
-            for key in locations.keys():
-                nodes, available_nodes = get_nearest_ripe_nodes(locations[key], 1000)
-                locations[key]['nodes'] = nodes
-                locations[key]['near_nodes'] = available_nodes
+
+        if next(iter(locations.values())).nodes is None:
+            for location in locations.values():
+                nodes, available_nodes = get_nearest_ripe_nodes(location, 1000)
+                location.nodes = nodes
+                location.available_nodes = available_nodes
             with open(args.locationFile, 'w') as locationFile:
-                json.dump(locations, locationFile)
+                util.json_dump(locations, locationFile)
 
         null_locations = []
         for location in locations.values():
-            if len(location['near_nodes']) == 0:
+            if len(location.near_nodes) == 0:
                 null_locations.append(location)
 
         with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
-            json.dump(null_locations, loc_wo_nodes_file)
+            util.json_dump(null_locations, loc_wo_nodes_file)
 
         COORDS[MUNICH_ID]['distances'] = {}
         COORDS[DALLAS_ID]['distances'] = {}
         COORDS[SINGAPORE_ID]['distances'] = {}
         for location in locations.values():
-            COORDS[MUNICH_ID]['distances'][str(location['id'])] = get_location_distance(
-                location, COORDS[MUNICH_ID])
-            COORDS[DALLAS_ID]['distances'][str(location['id'])] = get_location_distance(
-                location, COORDS[DALLAS_ID])
-            COORDS[SINGAPORE_ID]['distances'][str(location['id'])] = get_location_distance(
-                location, COORDS[SINGAPORE_ID])
+            COORDS[MUNICH_ID]['distances'][str(location['id'])] = \
+                DISTANCE_METHOD(location, COORDS[MUNICH_ID])
+            COORDS[DALLAS_ID]['distances'][str(location['id'])] = \
+                DISTANCE_METHOD(location, COORDS[DALLAS_ID])
+            COORDS[SINGAPORE_ID]['distances'][str(location['id'])] = \
+                DISTANCE_METHOD(location, COORDS[SINGAPORE_ID])
 
     print('finished ripe after {}'.format((time.time() - startTime)), flush=True)
 
@@ -209,38 +222,36 @@ def ip2location_check_for_list(filename_proto, pid, locations, ip2locations_file
         domain_file_mm = mmap.mmap(domainFile.fileno(), 0, prot=mmap.PROT_READ)
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
-            domain_location_list = json.loads(line)
+            domain_location_list = util.json_loads(line)
             correct_locs = []
             wrong_locs = []
-            for index in range(0, len(domain_location_list)):
-                matching_location = ip2loc_get_domain_location(domain_location_list[index],
-                                                               ip2loc_obj,
-                                                               locations,
-                                                               correct_count)
-                if matching_location is not None:
-                    domain_location_list[index]['location'] = matching_location
-                    correct_locs.append(domain_location_list[index])
+            for domain in domain_location_list:
+                location_label_match = ip2loc_get_domain_location(domain,
+                                                                  ip2loc_obj,
+                                                                  locations,
+                                                                  correct_count)
+                if location_label_match is not None:
+                    domain.location_match = location_label_match
+                    correct_locs.append(domain)
                 else:
-                    wrong_locs.append(domain_location_list[index])
-            json.dump(correct_locs, locationDomainFile, indent=4)
+                    wrong_locs.append(domain)
+            util.json_dump(correct_locs, locationDomainFile, indent=4)
             locationDomainFile.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
 
 def ip2loc_get_domain_location(domain, ip2loc_reader, locations, correct_count):
     """checks the domains locations with the geoipreader"""
-    ipLocation = ip2loc_reader.get_all(domain['ip'])
-    for key, labelDict in domain['domainLabels'].items():
-        if key == 'tld':
+    ipLocation = ip2loc_reader.get_all(domain.ip_address)
+    for i, label in enumerate(domain.domain_labels):
+        if i == 0:
+            # skip if tld
             continue
-        # label = labelDict['label']
-        for match in labelDict['matches']:
-            if ipLocation.country_short == locations[str(match['location_id'])]['stateCode']:
-                correct_count[match['type']] = correct_count[match['type']] + 1
-                return {'location': locations[str(match['location_id'])], 'type': match['type']}
-            # if is_in_radius(locations[str(match['location_id'])], ipLocation.location):
-            #     correct_count[match['type']] = correct_count[match['type']] + 1
-            #     return {'location': locations[str(match['location_id'])], 'type': match['type']}
+
+        for match in label.matches:
+            if ipLocation.country_short == locations[str(match.location_id)].stateCode:
+                correct_count[match.code_type] = correct_count[match.code_type] + 1
+                return match
 
     return None
 
@@ -256,20 +267,20 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
         domain_file_mm = mmap.mmap(domainFile.fileno(), 0, prot=mmap.PROT_READ)
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
-            domain_location_list = json.loads(line)
+            domain_location_list = util.json_loads(line)
             correct_locs = []
             wrong_locs = []
-            for index in range(0, len(domain_location_list)):
-                matching_location = geoip_get_domain_location(domain_location_list[index],
+            for domain in domain_location_list:
+                matching_location = geoip_get_domain_location(domain,
                                                               geoipreader,
                                                               locations,
                                                               correct_count)
                 if matching_location is not None:
-                    domain_location_list[index]['location'] = matching_location
-                    correct_locs.append(domain_location_list[index])
+                    domain.location_match = matching_location
+                    correct_locs.append(domain)
                 else:
-                    wrong_locs.append(domain_location_list[index])
-            json.dump(correct_locs, locationDomainFile, indent=4)
+                    wrong_locs.append(domain)
+            util.json_dump(correct_locs, locationDomainFile, indent=4)
             locationDomainFile.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
@@ -284,47 +295,48 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
     if (geoipLocation.location is None or geoipLocation.location.longitude is None or
             geoipLocation.location.latitude is None):
         return None
-    for key, labelDict in domain['domainLabels'].items():
-        if key == 'tld':
+    for i, label in enumerate(domain.domainLabels):
+        if i == 0:
+            # skip if tld
             continue
 
         for match in labelDict['matches']:
             if is_in_radius(locations[str(match['location_id'])], geoipLocation.location):
                 correct_count[match['type']] = correct_count[match['type']] + 1
-                return {'location': locations[str(match['location_id'])], 'type': match['type']}
+                return match
 
     return None
 
 
-def is_in_radius(location1, location2):
-    """
-    Calculate the distance (km) between two points
-    using the equirectangular distance approximation
-    location1 is the location saved in our way
-    location2 is the location object from geoip2
-    """
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2.longitude))
-    lat2 = radians(float(location2.latitude))
-    # Radius of earth in kilometers. Use 3956 for miles
-    return LOCATION_RADIUS_PRECOMPUTED >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 +
-                                           (lat2 - lat1)**2)
+# def is_in_radius(location1, location2):
+#     """
+#     Calculate the distance (km) between two points
+#     using the equirectangular distance approximation
+#     location1 is the location saved in our way
+#     location2 is the location object from geoip2
+#     """
+#     lon1 = radians(float(location1['lon']))
+#     lat1 = radians(float(location1['lat']))
+#     lon2 = radians(float(location2.longitude))
+#     lat2 = radians(float(location2.latitude))
+#     # Radius of earth in kilometers. Use 3956 for miles
+#     return LOCATION_RADIUS_PRECOMPUTED >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 +
+#                                            (lat2 - lat1)**2)
 
 
-def get_location_distance(location1, location2):
-    """
-    Calculate the distance (km) between two points
-    using the equirectangular distance approximation
-    location1 is the location saved in our way
-    location2 is the location saved in our dict
-    """
-    lon1 = radians(float(location1['lon']))
-    lat1 = radians(float(location1['lat']))
-    lon2 = radians(float(location2['lon']))
-    lat2 = radians(float(location2['lat']))
-
-    return sqrt(((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2) * 6371
+# def get_location_distance(location1, location2):
+#     """
+#     Calculate the distance (km) between two points
+#     using the equirectangular distance approximation
+#     location1 is the location saved in our way
+#     location2 is the location saved in our dict
+#     """
+#     lon1 = radians(float(location1['lon']))
+#     lat1 = radians(float(location1['lat']))
+#     lon2 = radians(float(location2['lon']))
+#     lat2 = radians(float(location2['lat']))
+#
+#     return sqrt(((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2) * 6371
 
 
 def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
@@ -335,11 +347,6 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
 
     count_lock = Lock()
     correct_count = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0}
-
-    def update_count_for_type(ctype):
-        """acquires lock and increments in count the type property"""
-        with count_lock:
-            correct_count[ctype] = correct_count[ctype] + 1
 
     chair_server_locks = {'m': Lock(), 's': Lock(), 'd': Lock()}
     rtts = None
@@ -353,7 +360,11 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
 
     domain_output_file = open('check_domains_output_{}.json'.format(pid), 'w', buffering=1)
 
-    # @profile
+    def update_count_for_type(ctype):
+        """acquires lock and increments in count the type property"""
+        with count_lock:
+            correct_count[ctype] = correct_count[ctype] + 1
+
     def dump_domain_list():
         """Write all domains in the buffer to the file and empty the lists"""
         print('pid', pid, 'correct', len(domains[CORRECT_TYPE]),
@@ -429,21 +440,6 @@ NO_LOCATION_TYPE = 'no_location'
 BLACKLISTED_TYPE = 'blacklisted'
 
 
-class Locationresult(object):
-    """Stores the result for a location"""
-
-    def __init__(self, location_id, lat, lon, rtt):
-        super(Locationresult, self).__init__()
-        self.location_id = location_id
-        self.lat = lat
-        self.lon = lon
-        self.rtt = rtt
-
-    def location_dict(self):
-        """Returns a dict with the location like {'lat': lat, 'lon': lon}"""
-        return {'lat': self.lat, 'lon': self.lon}
-
-
 def check_domain_location_ripe(pid, domain, update_domains, update_count_for_type,
                                sema, locations, chair_server_locks,
                                rtts, ripe_create_sema, ripe_slow_down_sema):
@@ -458,18 +454,15 @@ def check_domain_location_ripe(pid, domain, update_domains, update_count_for_typ
                 return
 
             results = []
-            results.append(Locationresult(MUNICH_ID,
-                                          COORDS[MUNICH_ID]['lat'],
-                                          COORDS[MUNICH_ID]['lon'],
-                                          rtts[domain['ip']]['rtt'][MUNICH_ID]))
-            results.append(Locationresult(SINGAPORE_ID,
-                                          COORDS[SINGAPORE_ID]['lat'],
-                                          COORDS[MUNICH_ID]['lon'],
-                                          rtts[domain['ip']]['rtt'][SINGAPORE_ID]))
-            results.append(Locationresult(DALLAS_ID,
-                                          COORDS[DALLAS_ID]['lat'],
-                                          COORDS[MUNICH_ID]['lon'],
-                                          rtts[domain['ip']]['rtt'][DALLAS_ID]))
+            results.append(LocationResult(MUNICH_ID,
+                                          rtts[domain['ip']]['rtt'][MUNICH_ID],
+                                          COORDS[MUNICH_ID]['gps_coords']))
+            results.append(LocationResult(SINGAPORE_ID,
+                                          rtts[domain['ip']]['rtt'][SINGAPORE_ID],
+                                          COORDS[SINGAPORE_ID]['gps_coords']))
+            results.append(LocationResult(DALLAS_ID,
+                                          rtts[domain['ip']]['rtt'][DALLAS_ID],
+                                          COORDS[DALLAS_ID]['gps_coords']))
         else:
             results = test_netsec_server(domain['ip'], chair_server_locks)
         if results is None or len([res for res in results if res.rtt is not None]) == 0:
@@ -552,8 +545,7 @@ def check_domain_location_ripe(pid, domain, update_domains, update_count_for_typ
                         update_domains(domain, CORRECT_TYPE)
                         break
                     else:
-                        n_res = Locationresult(location['id'], location['lat'],
-                                               location['lon'], chk_res)
+                        n_res = LocationResult(location['id'], chk_res, location)
                         results.append(n_res)
                 elif chk_m < (MAX_RTT + node_location_dist / 100):
                     # print('measurements fetched', flush=True)
@@ -565,8 +557,7 @@ def check_domain_location_ripe(pid, domain, update_domains, update_count_for_typ
                     break
                 else:
                     # print('measurements fetched', flush=True)
-                    n_res = Locationresult(location['id'], location['lat'], location['lon'],
-                                           chk_m)
+                    n_res = LocationResult(location['id'], chk_m, location)
                     results.append(n_res)
 
                 matches.remove(next_match)
@@ -627,17 +618,19 @@ def test_netsec_server(ip_address, chair_server_locks):
                       's': {'user': 'root', 'port': None, 'server': '139.162.29.117'},
                       'd': {'user': 'root', 'port': None, 'server': '45.33.5.55'}}
     chair_server_locks['m'].acquire()
-    ret.append(Locationresult(MUNICH_ID, COORDS[MUNICH_ID]['lat'], COORDS[MUNICH_ID]['lon'],
-                              get_min_rtt(ssh_ping(server_configs['m'], ip_address))))
+    ret.append(LocationResult(MUNICH_ID,
+                              get_min_rtt(ssh_ping(server_configs['m'], ip_address)),
+                              COORDS[MUNICH_ID]['gps_coords']))
     chair_server_locks['m'].release()
     chair_server_locks['s'].acquire()
-    ret.append(Locationresult(SINGAPORE_ID, COORDS[SINGAPORE_ID]['lat'],
-                              COORDS[SINGAPORE_ID]['lon'],
-                              get_min_rtt(ssh_ping(server_configs['s'], ip_address))))
+    ret.append(LocationResult(SINGAPORE_ID,
+                              get_min_rtt(ssh_ping(server_configs['s'], ip_address)),
+                              COORDS[SINGAPORE_ID]['gps_coords']))
     chair_server_locks['s'].release()
     chair_server_locks['d'].acquire()
-    ret.append(Locationresult(DALLAS_ID, COORDS[DALLAS_ID]['lat'], COORDS[DALLAS_ID]['lon'],
-                              get_min_rtt(ssh_ping(server_configs['d'], ip_address))))
+    ret.append(LocationResult(DALLAS_ID,
+                              get_min_rtt(ssh_ping(server_configs['d'], ip_address)),
+                              COORDS[DALLAS_ID]['gps_coords']))
     chair_server_locks['d'].release()
     if ret[0].rtt is None and ret[1].rtt is None and ret[2].rtt is None:
         return None
@@ -957,8 +950,7 @@ def check_measurements_for_nodes(measurements, location, results, ripe_slow_down
                 node_n = next((near_node for near_node in location['nodes']
                                if near_node['id'] == result['prb_id']), None)
                 check_n = check_res
-                results.append(Locationresult(location['id'], location['lat'],
-                                              location['lon'], check_res))
+                results.append(LocationResult(location['id'], check_res, code_location=location))
 
     if check_n is not None:
         return (check_n, node_n)
@@ -1013,7 +1005,6 @@ def get_nearest_ripe_nodes(location, max_distance):
         distances.append(max_distance)
         distances.sort()
 
-    response_dict = {}
     for distance in distances:
         if distance > max_distance:
             break
@@ -1021,16 +1012,15 @@ def get_nearest_ripe_nodes(location, max_distance):
                   'distance': str(distance)}
 
         # TODO use wrapper class
-        response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
-                                                 None, params=params)
-        if response_dict is not None and response_dict['meta']['total_count'] > 0:
-            # FIXME load all nodes
-            results = response_dict['objects']
-            available_probes = [node for node in response_dict['objects']
-                                if (node['status_name'] == 'Connected' and
-                                    'system-ipv4-works' in node['tags'] and
-                                    'system-ipv4-capable' in node['tags'])]
-            if len(results) > 0:
+        nodes = ProbeRequest(**params)
+
+        if nodes.total_count > 0:
+            results = [node for node in nodes]
+            available_probes = [node for node in results
+                                if (node.status_name == 'Connected' and
+                                    'system-ipv4-works' in node.tags and
+                                    'system-ipv4-capable' in node.tags)]
+            if len(available_probes) > 0:
                 return (results, available_probes)
     return ([], [])
 

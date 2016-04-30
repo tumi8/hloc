@@ -69,7 +69,7 @@ def get_path_filename(path):
 def json_object_encoding(obj):
     """Overrides the default method from the JSONEncoder"""
     if isinstance(obj, JSONBase):
-        return {'__class__': 'Location'}.update(obj.dict_representation())
+        return obj.dict_representation()
 
     raise TypeError('Object not handled by the JSON encoding function')
 
@@ -82,12 +82,16 @@ def json_object_decoding(dct):
         return AirportInfo.create_object_from_dict(dct)
     if '__locodeInfo__' in dct:
         return LocodeInfo.create_object_from_dict(dct)
+    if '__location_result__' in dct:
+        return LocationResult.create_object_from_dict(dct)
     if '__domain__' in dct:
         return Domain.create_object_from_dict(dct)
     if '__domain_label__' in dct:
         return DomainLabel.create_object_from_dict(dct)
     if '__domain_label_match__' in dct:
         return DomainLabelMatch.create_object_from_dict(dct)
+    if '__gps_location__' in dct:
+        return GPSLocation.create_object_from_dict(dct)
     return dct
 
 
@@ -136,18 +140,19 @@ class JSONBase(object):
         raise NotImplementedError("JSONBase: Should have implemented this")
 
 
-class GPSLocation(object):
+class GPSLocation(JSONBase):
     """holds the coordinates"""
     lat = None
     lon = None
 
     def __init__(self, lat, lon):
         """init"""
+        self.id = None
         self.lat = lat
         self.lon = lon
 
-    def is_near(self, location, radius):
-        """Returns a True if the location is within the radius"""
+    def is_in_radius(self, location, radius):
+        """Returns a True if the location is within the radius with the equirectangular method"""
         lon1 = radians(float(self.lon))
         lat1 = radians(float(self.lat))
         lon2 = radians(float(location.lon))
@@ -155,48 +160,14 @@ class GPSLocation(object):
         # Radius of earth in kilometers. Use 3956 for miles
         return (radius / 6371)**2 >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)
 
-
-class Location(JSONBase, GPSLocation):
-    """
-    A location object with the location name, coordinates and location codes
-    Additionally information like the population can be saved
-    """
-
-    def __init__(self, lat, lon, city_name=None, state=None, state_code=None, population=0):
-        """init"""
-        self.id = None
-        self.city_name = city_name
-        self.state = state
-        self.state_code = state_code
-        self.population = population
-        self.airport_info = None
-        self.locode = None
-        self.clli = []
-        self.alternate_names = []
-        super().__init__(lat, lon)
-
-    def add_airport_info(self):
-        """Creates and sets a new empty AirportInfo object"""
-        if self.airport_info is None:
-            self.airport_info = AirportInfo()
-
-    def add_locode_info(self):
-        """Creates and sets a new empty """
-        if self.locode is None:
-            self.locode = LocodeInfo()
-
-    def is_in_radius(self, location2, radius):
-        """
-        Calculate the distance (km) between two points
-        using the equirectangular distance approximation
-        """
+    def gps_distance_equirectangular(self, location):
+        """Return the distance between the two locations using the equirectangular method"""
         lon1 = radians(float(self.lon))
         lat1 = radians(float(self.lat))
-        lon2 = radians(float(location2.lon))
-        lat2 = radians(float(location2.lat))
-        # Radius of earth in kilometers. Use 3956 for miles
-        return (radius / 6371) ** 2 >= (
-        ((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (lat2 - lat1) ** 2)
+        lon2 = radians(float(location.lon))
+        lat2 = radians(float(location.lat))
+
+        return sqrt((((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)) * 6371
 
     def gps_distance_haversine(self, location2):
         """
@@ -218,33 +189,88 @@ class Location(JSONBase, GPSLocation):
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
-        airport_dict = None
-        if self.airport_info:
-            airport_dict = self.airport_info.dict_representation()
-
-        locode_dict = None
-        if self.locode:
-            locode_dict = self.locode.dict_representation()
-
-        return {
-            '__location__': True,
-            'city_name': self.city_name,
-            'state': self.state,
-            'state_code': self.state_code,
-            'population': self.population,
-            'airport_info': airport_dict,
-            'locode': locode_dict,
-            'clli': self.clli,
-            'alternate_names': self.alternate_names
+        ret_dict = {
+            '__gps_location__': True,
+            'lat': self.lat,
+            'lon': self.lon
         }
+        if self.id:
+            ret_dict['id'] = self.id
+
+        return ret_dict
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
         obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
                        dct['state_code'], dct['population'])
-        obj.airport_info = json_object_decoding(dct['airport_info'])
-        obj.locode = json_object_decoding(dct['locode'])
+        if 'airport_info' in dct:
+            obj.airport_info = json_object_decoding(dct['airport_info'])
+        if 'locode' in dct:
+            obj.locode = json_object_decoding(dct['locode'])
+        return obj
+
+
+class Location(GPSLocation):
+    """
+    A location object with the location name, coordinates and location codes
+    Additionally information like the population can be saved
+    """
+
+    def __init__(self, lat, lon, city_name=None, state=None, state_code=None, population=0):
+        """init"""
+        self.city_name = city_name
+        self.state = state
+        self.state_code = state_code
+        self.population = population
+        self.airport_info = None
+        self.locode = None
+        self.clli = []
+        self.alternate_names = []
+        self.nodes = None
+        self.available_nodes = None
+        super().__init__(lat, lon)
+
+    def add_airport_info(self):
+        """Creates and sets a new empty AirportInfo object"""
+        if self.airport_info is None:
+            self.airport_info = AirportInfo()
+
+    def add_locode_info(self):
+        """Creates and sets a new empty """
+        if self.locode is None:
+            self.locode = LocodeInfo()
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        ret_dict = super().dict_representation()
+        del ret_dict['__gps_location__']
+        ret_dict.update({
+            '__location__': True,
+            'city_name': self.city_name,
+            'state': self.state,
+            'state_code': self.state_code,
+            'population': self.population,
+            'clli': self.clli,
+            'alternate_names': self.alternate_names
+        })
+        if self.airport_info:
+            ret_dict['airport_info'] = self.airport_info.dict_representation()
+
+        if self.locode:
+            ret_dict['locode'] = self.locode.dict_representation()
+
+        return ret_dict
+
+    @staticmethod
+    def create_object_from_dict(dct):
+        """Creates a Location object from a dictionary"""
+        obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
+                       dct['state_code'], dct['population'])
+        if 'airport_info' in dct:
+            obj.airport_info = json_object_decoding(dct['airport_info'])
+        if 'locode' in dct:
+            obj.locode = json_object_decoding(dct['locode'])
         return obj
 
 class AirportInfo(JSONBase):
@@ -317,17 +343,21 @@ class Domain(JSONBase):
         self.domain_name = domain_name
         self.ip_address = ip_address
         self.ipv6_address = ipv6_address
-        self.domain_labels =create_labels()
+        self.domain_labels = create_labels()
+        self.location = None
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
-        return {
+        ret_dict = {
             '__domain__': True,
             'domain_name': self.domain_name,
             'ip_address': self.ip_address,
             'ipv6_address': self.ipv6_address,
             'domain_labels': [label.dict_representation() for label in self.domain_labels]
         }
+        if self.location:
+            ret_dict['location'] = self.location.id
+        return ret_dict
 
     @staticmethod
     def create_object_from_dict(dct):
@@ -383,16 +413,43 @@ class DomainLabelMatch(JSONBase):
         self.domain_label = domain_label
         self.location_id = location_id
         self.code_type = code_type
+        self.matching = False
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
             '__domain_label_match__': True,
             'location_id': self.location_id,
-            'code_type': self.code_type
+            'code_type': self.code_type,
+            'matching': self.matching
         }
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        return DomainLabelMatch(dct['location_id'], dct['code_type'])
+        obj = DomainLabelMatch(dct['location_id'], dct['code_type'])
+        obj.matching = dct['matching']
+        return obj
+
+
+class LocationResult(JSONBase):
+    """Stores the result for a location"""
+
+    def __init__(self, code_location_id, rtt, code_location=None):
+        """init"""
+        self.code_location_id = code_location_id
+        self.code_location = code_location
+        self.rtt = rtt
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        return {
+            '__location_result__': True,
+            'code_location_id': self.code_location_id,
+            'rtt': self.rtt
+        }
+
+    @staticmethod
+    def create_object_from_dict(dct):
+        """Creates a LocationResult object from a dictionary"""
+        return LocationResult(dct['code_location_id'], dct['rtt'])

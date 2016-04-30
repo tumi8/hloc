@@ -27,6 +27,7 @@ def main():
 
     ax = plt.axes(aspect=1)
     codes = [5776, 9837, 15183, 30842, 56627, 103602]
+    # iata: 5776 icao: 9837 faa: 15183 locode: 54016 clli: 30842 geonames: 103399
     code_sum = sum(codes)
     codes_per = [x/code_sum for x in codes]
     codes_labels = ['iata (HOU)', 'icao (KHOU)', 'faa (04TE)', 'clli (HSTNTXMOCG0)', 'locode\n(US HOU)', 'geonames\n(Chiouston, Hiustonas, ...)']
