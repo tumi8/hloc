@@ -649,6 +649,7 @@ def __create_parser_arguments(parser):
 def main():
     """Main function"""
     parser = argparse.ArgumentParser()
+    __create_parser_arguments(parser)
     args = parser.parse_args()
     global THREADS_SEMA
     THREADS_SEMA = Semaphore(args.maxThreads)
