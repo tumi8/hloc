@@ -376,6 +376,8 @@ def get_geo_names(min_population):
 
             if len(columns[14]) > 0 and int(columns[14]) >= min_population:
                 newGeoNamesInfo.population = int(columns[14])
+            else:
+                continue
 
             for name in alternatenames:
                 maxname = max(name.split(' '), key=len)
@@ -615,13 +617,14 @@ def parse_codes(args):
     print_stats(location_codes)
 
 
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--load-airport-codes', action='store_true', dest='airport_codes',
+def __create_parser_arguments(parser):
+    """Creates the arguments for the parser"""
+    parser.add_argument('-a', '--load-airport-codes', action='store_true',
+                        dest='airport_codes',
                         help='load airport_codes from world-airport-codes.com')
-    parser.add_argument('-o', '--load-offline-airport-codes', type=str, help='Do not load'
-                        ' the website but use the local files in the stated folder',
+    parser.add_argument('-o', '--load-offline-airport-codes', type=str,
+                        help='Do not load'
+                             ' the website but use the local files in the stated folder',
                         dest='offline_airportcodes')
     parser.add_argument('-l', '--locode', action='store_true', dest='locode',
                         help='Load locode codes from ./collectedData/locodePart{1,2,3}.csv')
@@ -629,16 +632,23 @@ def main():
                         help='Load clli codes from ./collectedData/clli-lat-lon.txt')
     parser.add_argument('-g', '--geo-names', action='store_true', dest='geonames',
                         help='Load geonames from ./collectedData/allCountries.txt')
-    parser.add_argument('-m', '--merge-locations', action='store_true', dest='merge',
+    parser.add_argument('-m', '--merge-locations', action='store_true',
+                        dest='merge',
                         help='Try to merge locations by gps')
-    parser.add_argument('-t', '--max-threads', default=16, type=int, dest='maxThreads',
+    parser.add_argument('-t', '--max-threads', default=16, type=int,
+                        dest='maxThreads',
                         help='Specify the maximal amount of threads')
-    parser.add_argument('-p', '--min-population', default=10, type=int, dest='min_population',
+    parser.add_argument('-p', '--min-population', default=10000, type=int,
+                        dest='min_population',
                         help='Specify the allowed minimum population for locations')
-    parser.add_argument('-f', '--output-filename', type=str, default='collectedData.json',
+    parser.add_argument('-f', '--output-filename', type=str,
+                        default='collectedData.json',
                         dest='filename', help='Specify the output filename')
-    # parser.add_argument('-f', '--add-to-file', type=str, dest='file',
-    #                     help='Specify a file where to add the location information')
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser()
     args = parser.parse_args()
     global THREADS_SEMA
     THREADS_SEMA = Semaphore(args.maxThreads)
