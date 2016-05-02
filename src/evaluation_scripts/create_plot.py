@@ -27,7 +27,7 @@ def main():
 
     ax = plt.axes(aspect=1)
     codes = [5776, 9837, 15183, 30842, 56627, 103602]
-    # iata: 5776 icao: 9837 faa: 15183 locode: 54016 clli: 30842 geonames: 103399
+
     code_sum = sum(codes)
     codes_per = [x/code_sum for x in codes]
     codes_labels = ['iata (HOU)', 'icao (KHOU)', 'faa (04TE)', 'clli (HSTNTXMOCG0)', 'locode\n(US HOU)', 'geonames\n(Chiouston, Hiustonas, ...)']
@@ -76,6 +76,18 @@ def main():
     # ax.get_xaxis().get_major_formatter().set_scientific(False)
     plt.show()
     # plt.savefig('myfig', format='pdf')
+
+
+# def _create_type_to_population():
+    #   1m: locode: 12006 geonames: 6305
+    # 500k: locode: 20316 geonames: 11543
+    # 200k: locode: 33951 geonames: 22218
+    # 150k: locode: 37865 geonames: 27087
+    # 100k: locode: 43786 geonames: 35077
+    #  50k: locode: 48437 geonames: 53594
+    #  30k: locode: 51262 geonames: 67884
+    #  20k: locode: 52319 geonames: 80749
+    #  10k: locode: 54016 geonames: 103399
 
 
 if __name__ == '__main__':

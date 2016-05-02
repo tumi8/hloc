@@ -76,22 +76,23 @@ def json_object_encoding(obj):
 
 def json_object_decoding(dct):
     """Decodes the dictionary to an object if it is one"""
-    if '__location__' in dct:
-        return Location.create_object_from_dict(dct)
-    if '__airportInfo__' in dct:
-        return AirportInfo.create_object_from_dict(dct)
-    if '__locodeInfo__' in dct:
-        return LocodeInfo.create_object_from_dict(dct)
-    if '__location_result__' in dct:
-        return LocationResult.create_object_from_dict(dct)
-    if '__domain__' in dct:
-        return Domain.create_object_from_dict(dct)
-    if '__domain_label__' in dct:
-        return DomainLabel.create_object_from_dict(dct)
-    if '__domain_label_match__' in dct:
-        return DomainLabelMatch.create_object_from_dict(dct)
-    if '__gps_location__' in dct:
-        return GPSLocation.create_object_from_dict(dct)
+    if '__class__' in dct:
+        if dct['__class__'] == '__location__':
+            return Location.create_object_from_dict(dct)
+        if dct['__class__'] == '__airport_info__':
+            return AirportInfo.create_object_from_dict(dct)
+        if dct['__class__'] == '__locode_info__':
+            return LocodeInfo.create_object_from_dict(dct)
+        if dct['__class__'] == '__location_result__':
+            return LocationResult.create_object_from_dict(dct)
+        if dct['__class__'] == '__domain__':
+            return Domain.create_object_from_dict(dct)
+        if dct['__class__'] == '__domain_label__':
+            return DomainLabel.create_object_from_dict(dct)
+        if dct['__class__'] == '__domain_label_match__':
+            return DomainLabelMatch.create_object_from_dict(dct)
+        if dct['__class__'] == '__gps_location__':
+            return GPSLocation.create_object_from_dict(dct)
     return dct
 
 
@@ -132,6 +133,8 @@ class JSONBase(object):
     The Base class to JSON encode your object with json_encoding_func
     """
 
+    __slots__ = []
+
     def dict_representation(self):
         raise NotImplementedError("JSONBase: Should have implemented this")
 
@@ -142,8 +145,8 @@ class JSONBase(object):
 
 class GPSLocation(JSONBase):
     """holds the coordinates"""
-    lat = None
-    lon = None
+
+    __slots__ = ['lat', 'lon']
 
     def __init__(self, lat, lon):
         """init"""
@@ -217,6 +220,10 @@ class Location(GPSLocation):
     Additionally information like the population can be saved
     """
 
+    __slots__ = ['lat', 'lon', 'city_name', 'state', 'state_code', 'population',
+                 'airport_info', 'locode', 'clli', 'alternate_names', 'nodes',
+                 'available_nodes']
+
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None, population=0):
         """init"""
         self.city_name = city_name
@@ -246,7 +253,7 @@ class Location(GPSLocation):
         ret_dict = super().dict_representation()
         del ret_dict['__gps_location__']
         ret_dict.update({
-            '__location__': True,
+            '__class__': '__location__',
             'city_name': self.city_name,
             'state': self.state,
             'state_code': self.state_code,
@@ -276,6 +283,8 @@ class Location(GPSLocation):
 class AirportInfo(JSONBase):
     """Holds a list of the differen airport codes"""
 
+    __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
+
     def __init__(self):
         """init"""
         self.iata_codes = []
@@ -285,7 +294,7 @@ class AirportInfo(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__airportInfo__': True,
+            '__class__': '__airport_info__',
             'iata_codes': self.iata_codes,
             'icao_codes': self.icao_codes,
             'faa_codes': self.faa_codes
@@ -304,6 +313,8 @@ class AirportInfo(JSONBase):
 class LocodeInfo(JSONBase):
     """Holds a list of locode codes"""
 
+    __slots__ = ['place_codes', 'subdivision_codes']
+
     def __init__(self):
         """init"""
         self.place_codes = []
@@ -312,7 +323,7 @@ class LocodeInfo(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__locodeInfo__': True,
+            '__class__': '__locode_info__',
             'place_codes': self.place_codes,
             'subdivision_codes': self.subdivision_codes
         }
@@ -332,6 +343,8 @@ class Domain(JSONBase):
     DO NOT SET the DOMAIN NAME after calling the constructor!
     """
 
+    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location']
+
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
         def create_labels():
@@ -349,7 +362,7 @@ class Domain(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
-            '__domain__': True,
+            '__class__': '__domain__',
             'domain_name': self.domain_name,
             'ip_address': self.ip_address,
             'ipv6_address': self.ipv6_address,
@@ -375,6 +388,8 @@ class Domain(JSONBase):
 class DomainLabel(JSONBase):
     """The model for a domain name label"""
 
+    __slots__ = ['label', 'domain', 'matches']
+
     def __init__(self, label, domain=None):
         """
         init
@@ -387,7 +402,7 @@ class DomainLabel(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__domain_label__': True,
+            '__class__': '__domain_label__',
             'label': self.label,
             'matches': [match.dict_representation() for match in self.matches]
         }
@@ -408,17 +423,20 @@ class DomainLabel(JSONBase):
 class DomainLabelMatch(JSONBase):
     """The model for a Match between a domain name label and a location code"""
 
-    def __init__(self, location_id, code_type, domain_label=None):
+    __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
+
+    def __init__(self, location_id, code_type, domain_label=None, code=None):
         """init"""
         self.domain_label = domain_label
         self.location_id = location_id
         self.code_type = code_type
+        self.code = code
         self.matching = False
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__domain_label_match__': True,
+            '__class__': '__domain_label_match__',
             'location_id': self.location_id,
             'code_type': self.code_type,
             'matching': self.matching
@@ -435,21 +453,23 @@ class DomainLabelMatch(JSONBase):
 class LocationResult(JSONBase):
     """Stores the result for a location"""
 
-    def __init__(self, code_location_id, rtt, code_location=None):
+    __slots__ = ['location_id', 'rtt', 'location']
+
+    def __init__(self, location_id, rtt, location=None):
         """init"""
-        self.code_location_id = code_location_id
-        self.code_location = code_location
+        self.location_id = location_id
+        self.location = location
         self.rtt = rtt
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__location_result__': True,
-            'code_location_id': self.code_location_id,
+            '__class__': '__location_result__',
+            'location_id': self.location_id,
             'rtt': self.rtt
         }
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a LocationResult object from a dictionary"""
-        return LocationResult(dct['code_location_id'], dct['rtt'])
+        return LocationResult(dct['location_id'], dct['rtt'])
