@@ -17,10 +17,10 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
-    lineCount = int(str(count, encoding='utf-8').split(' ')[0])
+    line_count = int(str(count).split(' ')[0])
 
-    print('Linecount for file: {0}'.format(lineCount))
-    return lineCount
+    print('Linecount for file: {0}'.format(line_count))
+    return line_count
 
 
 def seek_lines(seeking_file, seek_until_line):
@@ -29,7 +29,7 @@ def seek_lines(seeking_file, seek_until_line):
         return
     i = 0
     for _ in seeking_file:
-        i = i + 1
+        i += 1
         if i == seek_until_line:
             break
 
@@ -39,12 +39,13 @@ def hex_for_ip(ip_address):
     ip_blocks = ip_address.split('.')
     hexdata = ''
     for block in ip_blocks:
-        hexdata = hexdata + hex(int(block))[2:].zfill(2)
+        hexdata += hex(int(block))[2:].zfill(2)
     return hexdata.upper()
 
-def is_ip_hex_encoded_simple(ipAddress, domain):
+
+def is_ip_hex_encoded_simple(ip_address, domain):
     """check if the ip address is encoded in hex format in the domain"""
-    hex_ip = hex_for_ip(ipAddress)
+    hex_ip = hex_for_ip(ip_address)
 
     return hex_ip.upper() in domain.upper()
 
@@ -53,12 +54,12 @@ def get_path_filename(path):
     """Extracts the filename from a path string"""
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
-    fileIndex = path.find('/')
+    file_index = path.find('/')
     filename = path[:]
 
-    while fileIndex >= 0:
-        filename = filename[fileIndex + 1:]
-        fileIndex = filename.find('/')
+    while file_index >= 0:
+        filename = filename[file_index + 1:]
+        file_index = filename.find('/')
 
     return filename
 
@@ -102,9 +103,11 @@ def json_dump(encoding_var, file_ptr, indent=0):
     json_object_encoding function
     :param encoding_var: the variable you want to encode in json
     :param file_ptr: the file where the
+    :param indent: the indent for the dump call
     :return: None
     """
-    json.dump(encoding_var, file_ptr, default=json_object_encoding, indent=indent)
+    json.dump(encoding_var, file_ptr, default=json_object_encoding,
+              indent=indent)
 
 
 def json_load(file_ptr):
@@ -146,7 +149,7 @@ class JSONBase(object):
 class GPSLocation(JSONBase):
     """holds the coordinates"""
 
-    __slots__ = ['lat', 'lon']
+    __slots__ = ['id', 'lat', 'lon']
 
     def __init__(self, lat, lon):
         """init"""
@@ -161,7 +164,8 @@ class GPSLocation(JSONBase):
         lon2 = radians(float(location.lon))
         lat2 = radians(float(location.lat))
         # Radius of earth in kilometers. Use 3956 for miles
-        return (radius / 6371)**2 >= (((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)
+        return (((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (
+            lat2 - lat1) ** 2) <= (radius / 6371) ** 2
 
     def gps_distance_equirectangular(self, location):
         """Return the distance between the two locations using the equirectangular method"""
@@ -170,7 +174,8 @@ class GPSLocation(JSONBase):
         lon2 = radians(float(location.lon))
         lat2 = radians(float(location.lat))
 
-        return sqrt((((lon2 - lon1) * cos(0.5*(lat2+lat1)))**2 + (lat2 - lat1)**2)) * 6371
+        return sqrt((((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (
+            lat2 - lat1) ** 2)) * 6371
 
     def gps_distance_haversine(self, location2):
         """
@@ -224,7 +229,8 @@ class Location(GPSLocation):
                  'airport_info', 'locode', 'clli', 'alternate_names', 'nodes',
                  'available_nodes']
 
-    def __init__(self, lat, lon, city_name=None, state=None, state_code=None, population=0):
+    def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
+                 population=0):
         """init"""
         self.city_name = city_name
         self.state = state
@@ -269,6 +275,28 @@ class Location(GPSLocation):
 
         return ret_dict
 
+    def code_id_tuples(self):
+        """
+        Creates a list with all codes in a tuple with the location id
+        :rtype: list(tuple)
+        """
+        ret_list = [(self.city_name, (self.id,))]
+        for code in self.clli:
+            ret_list.append((code, (self.id,)))
+        for name in self.alternate_names:
+            ret_list.append((name, (self.id,)))
+        if self.locode:
+            for code in self.locode.place_codes:
+                ret_list.append((code, (self.id,)))
+        if self.airport_info:
+            for code in self.airport_info.iata_codes:
+                ret_list.append((code, (self.id,)))
+            for code in self.airport_info.icao_codes:
+                ret_list.append((code, (self.id,)))
+            for code in self.airport_info.faa_codes:
+                ret_list.append((code, (self.id,)))
+        return ret_list
+
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
@@ -279,6 +307,7 @@ class Location(GPSLocation):
         if 'locode' in dct:
             obj.locode = json_object_decoding(dct['locode'])
         return obj
+
 
 class AirportInfo(JSONBase):
     """Holds a list of the differen airport codes"""
@@ -343,10 +372,12 @@ class Domain(JSONBase):
     DO NOT SET the DOMAIN NAME after calling the constructor!
     """
 
-    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location']
+    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
+                 'location']
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
+
         def create_labels():
             labels = []
             for label in domain_name.split('.')[::-1]:
@@ -366,7 +397,8 @@ class Domain(JSONBase):
             'domain_name': self.domain_name,
             'ip_address': self.ip_address,
             'ipv6_address': self.ipv6_address,
-            'domain_labels': [label.dict_representation() for label in self.domain_labels]
+            'domain_labels': [label.dict_representation() for label in
+                              self.domain_labels]
         }
         if self.location:
             ret_dict['location'] = self.location.id
