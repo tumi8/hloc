@@ -8,8 +8,8 @@ import time
 import os
 from multiprocessing import Process
 
-from src.data_processing import util
-from src.data_processing.util import DomainLabelMatch
+from ..data_processing import util
+from ..data_processing.util import DomainLabelMatch
 
 
 def __create_parser_arguments(parser):

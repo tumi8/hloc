@@ -4,7 +4,7 @@ import pickle
 import argparse
 
 from marisa_trie import RecordTrie
-from src.data_processing import util
+from ..data_processing import util
 
 
 def main():
