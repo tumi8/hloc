@@ -19,8 +19,8 @@ from threading import Thread
 from threading import Semaphore
 import requests
 
-import util
-from util import Location
+from . import util
+from .util import Location
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100

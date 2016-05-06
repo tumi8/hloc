@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 sanitizing and classification of the domain names
 saves results in the folder ./rdns_results
@@ -17,8 +17,8 @@ import time
 import os
 from multiprocessing import Process
 
-import util
-from util import Domain
+from . import util
+from .util import Domain
 
 
 def __create_parser_arguments(parser):

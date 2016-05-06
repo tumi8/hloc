@@ -34,3 +34,6 @@ def create_trie(locations):
         code_id_tuples.extend(location.code_id_tuples())
 
     return RecordTrie('<H', code_id_tuples)
+
+if __name__ == '__main__':
+    main()

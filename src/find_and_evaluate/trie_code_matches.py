@@ -45,3 +45,6 @@ def main():
     pprint(loc_id_count)
     with open(args.filename + '.eval', 'wb') as eval_file:
         pickle.dump(matches, eval_file)
+
+if __name__ == '__main__':
+    main()
