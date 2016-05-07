@@ -30,7 +30,7 @@ def create_trie(locations):
     :rtype: RecordTrie
     """
     code_id_tuples = []
-    for location in locations:
+    for location in locations.values():
         code_id_tuples.extend(location.code_id_tuples())
 
     return RecordTrie('<H', code_id_tuples)
