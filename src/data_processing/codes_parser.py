@@ -265,8 +265,8 @@ def get_locode_locations(locodeFilename):
             airportInfo.state_code = currentState['state_code'].lower()
             airportInfo.locode.place_codes.append(normalize_locode_info(
                 lineElements[2]).lower())
-            airportInfo.locode.subdivisionCode = normalize_locode_info(
-                lineElements[5]).lower()
+            # airportInfo.locode.subdivisionCode = normalize_locode_info(
+            #     lineElements[5]).lower()
             locodeName = get_locode_name(normalize_locode_info(lineElements[4]))
             if locodeName is None:
                 continue
