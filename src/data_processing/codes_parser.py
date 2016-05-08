@@ -328,9 +328,9 @@ def get_locode_name(city_name):
     return city_name
 
 
-def get_clli_codes():
+def get_clli_codes(file_path):
     """Get the clli codes from file ./collectedData/clli-lat-lon.txt"""
-    with open('collectedData/clli-lat-lon.txt', 'r') as clliFile:
+    with open(file_path) as clliFile:
         for line in clliFile:
             # [0:-1] remove last character \n and extract the information
             clli, lat, lon = line[0:-1].split('\t')
@@ -349,10 +349,10 @@ def get_clli_codes():
 # 9: cc2                : alternate country codes, comma separated, ISO-3166 2-letter
 #                         country code, 200 characters
 # 14: population        : bigint (8 byte int)
-def get_geo_names(min_population):
-    """Get the geo names from file ./collectedData/allCountries.txt"""
+def get_geo_names(file_path, min_population):
+    """Get the geo names from file ./collectedData/cities1000.txt"""
 
-    with open('collectedData/cities1000.txt', 'r') as clliFile:
+    with open(file_path) as clliFile:
         for line in clliFile:
             # [0:-1] remove last character \n and extract the information
             columns = line[0:-1].split('\t')
@@ -500,12 +500,12 @@ def parse_airport_codes(args):
     print('Finished airport codes parsing')
 
 
-def parse_locode_codes():
+def parse_locode_codes(path):
     """Parses the locode codes from the files"""
     threads = []
-    locodeFile1 = 'collectedData/locodePart1.csv'
-    locodeFile2 = 'collectedData/locodePart2.csv'
-    locodeFile3 = 'collectedData/locodePart3.csv'
+    locodeFile1 = path.format(1)
+    locodeFile2 = path.format(2)
+    locodeFile3 = path.format(3)
     threads.append(Thread(target=get_locode_locations, args=(locodeFile1,)))
     threads.append(Thread(target=get_locode_locations, args=(locodeFile2,)))
     threads.append(Thread(target=get_locode_locations, args=(locodeFile3,)))
@@ -591,14 +591,14 @@ def parse_codes(args):
         parse_airport_codes(args)
 
     if args.locode:
-        parse_locode_codes()
+        parse_locode_codes(args.locode)
 
     if args.clli:
-        get_clli_codes()
+        get_clli_codes(args.clli)
         print('Finished clli parsing')
 
     if args.geonames:
-        get_geo_names(args.min_population)
+        get_geo_names(args.geonames, args.min_population)
         print('Finished geonames parsing')
 
     location_codes = merge_location_codes(args)
@@ -626,12 +626,13 @@ def __create_parser_arguments(parser):
                         help='Do not load'
                              ' the website but use the local files in the stated folder',
                         dest='offline_airportcodes')
-    parser.add_argument('-l', '--locode', action='store_true', dest='locode',
-                        help='Load locode codes from ./collectedData/locodePart{1,2,3}.csv')
-    parser.add_argument('-c', '--clli', action='store_true', dest='clli',
-                        help='Load clli codes from ./collectedData/clli-lat-lon.txt')
-    parser.add_argument('-g', '--geo-names', action='store_true', dest='geonames',
-                        help='Load geonames from ./collectedData/allCountries.txt')
+    parser.add_argument('-l', '--locode', dest='locode', type=str,
+                        help='Load locode codes from the 3 files: for example '
+                        'collectedData/locodePart{}.csv {} is replaced with 1, 2, and 3')
+    parser.add_argument('-c', '--clli', dest='clli', type=str,
+                        help='Load clli codes from the path')
+    parser.add_argument('-g', '--geo-names', type=str, dest='geonames',
+                        help='Load geonames from the given path')
     parser.add_argument('-m', '--merge-locations', action='store_true',
                         dest='merge',
                         help='Try to merge locations by gps')
