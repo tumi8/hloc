@@ -6,6 +6,7 @@ from subprocess import check_output
 from string import printable
 import re
 import json
+import sys
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
@@ -294,9 +295,9 @@ class Location(GPSLocation):
         Creates a list with all codes in a tuple with the location id
         :rtype: list(tuple)
         """
-        if self.id is not int:
-            print(self.dict_representation(), 'has no id')
-            raise ValueError('id is not int')
+        # if not isinstance(self.id, int):
+        #     print(self.dict_representation(), 'has no id')
+        #     raise ValueError('id is not int')
         ret_list = [(self.city_name, (self.id,))]
         for code in self.clli:
             ret_list.append((code, (self.id,)))
