@@ -40,6 +40,7 @@ def main(args=None):
     """Main function"""
     start = time.time()
     parser = argparse.ArgumentParser()
+    __create_parser_arguments(parser)
     args = parser.parse_args()
 
     if not os.path.exists('rdns_results'):
