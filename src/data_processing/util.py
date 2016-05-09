@@ -149,13 +149,30 @@ class JSONBase(object):
 class GPSLocation(JSONBase):
     """holds the coordinates"""
 
-    __slots__ = ['id', 'lat', 'lon']
+    __slots__ = ['_id', 'lat', 'lon']
 
     def __init__(self, lat, lon):
         """init"""
         self.id = None
         self.lat = lat
         self.lon = lon
+
+    @property
+    def id(self):
+        """Getter for id"""
+        return self._id
+
+    @id.setter
+    def id(self, new_id):
+        """Setter for id"""
+        if new_id is None:
+            self._id = None
+            return
+        try:
+            self._id = int(new_id)
+        except (ValueError, TypeError):
+            print('ValueError: id must be an Integer!', file=sys.stderr)
+            raise
 
     def is_in_radius(self, location, radius):
         """Returns a True if the location is within the radius with the equirectangular method"""
@@ -213,9 +230,9 @@ class GPSLocation(JSONBase):
         obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
                        dct['state_code'], dct['population'])
         if 'airport_info' in dct:
-            obj.airport_info = json_object_decoding(dct['airport_info'])
+            obj.airport_info = dct['airport_info']
         if 'locode' in dct:
-            obj.locode = json_object_decoding(dct['locode'])
+            obj.locode = dct['locode']
         return obj
 
 
@@ -280,6 +297,9 @@ class Location(GPSLocation):
         Creates a list with all codes in a tuple with the location id
         :rtype: list(tuple)
         """
+        if self.id is not int:
+            print(self.dict_representation(), 'has no id')
+            raise ValueError('id is not int')
         ret_list = [(self.city_name, (self.id,))]
         for code in self.clli:
             ret_list.append((code, (self.id,)))
@@ -303,9 +323,9 @@ class Location(GPSLocation):
         obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
                        dct['state_code'], dct['population'])
         if 'airport_info' in dct:
-            obj.airport_info = json_object_decoding(dct['airport_info'])
+            obj.airport_info = dct['airport_info']
         if 'locode' in dct:
-            obj.locode = json_object_decoding(dct['locode'])
+            obj.locode = dct['locode']
         return obj
 
 
@@ -410,7 +430,7 @@ class Domain(JSONBase):
         obj = Domain(dct['domain_name'], dct['ip_address'], dct['ipv6_address'])
         if 'domain_labels' in dct:
             for label_dct in dct['domain_labels']:
-                label_obj = json_object_decoding(label_dct)
+                label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
 
@@ -443,9 +463,8 @@ class DomainLabel(JSONBase):
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabel(dct['label'])
-        obj.matches = [json_object_decoding(match) for match in dct['matches']]
         for match in dct['matches']:
-            match_obj = json_object_decoding(match)
+            match_obj = match
             match_obj.domain_label = obj
             obj.matches.append(match_obj)
 
