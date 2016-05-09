@@ -330,8 +330,8 @@ def get_locode_name(city_name):
 
 def get_clli_codes(file_path):
     """Get the clli codes from file ./collectedData/clli-lat-lon.txt"""
-    with open(file_path) as clliFile:
-        for line in clliFile:
+    with open(file_path) as clli_file:
+        for line in clli_file:
             # [0:-1] remove last character \n and extract the information
             clli, lat, lon = line[0:-1].split('\t')
             newClliInfo = Location(lat=float(lat), lon=float(lon))
@@ -352,8 +352,8 @@ def get_clli_codes(file_path):
 def get_geo_names(file_path, min_population):
     """Get the geo names from file ./collectedData/cities1000.txt"""
 
-    with open(file_path) as clliFile:
-        for line in clliFile:
+    with open(file_path) as geoname_file:
+        for line in geoname_file:
             # [0:-1] remove last character \n and extract the information
             columns = line[0:-1].split('\t')
             if len(columns) < 15:
@@ -395,6 +395,8 @@ def location_merge(location1, location2):
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
     """
+    if location1.city_name is None:
+        location1.city_name = location2.city_name
     if location2.state_code is None:
         location2.state_code = location1.state_code
 

@@ -298,7 +298,9 @@ class Location(GPSLocation):
         # if not isinstance(self.id, int):
         #     print(self.dict_representation(), 'has no id')
         #     raise ValueError('id is not int')
-        ret_list = [(self.city_name, (self.id,))]
+        ret_list = []
+        if self.city_name:
+            ret_list.append((self.city_name, (self.id,)))
         for code in self.clli:
             ret_list.append((code, (self.id,)))
         for name in self.alternate_names:
