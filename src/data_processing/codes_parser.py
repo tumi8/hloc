@@ -473,8 +473,8 @@ def idfy_codes(codes):
     """Assign a unique id to every location in the array and return a dict with id to location"""
     ret_dict = {}
     for index in range(0, len(codes)):
-        codes[index].id = str(index)
-        ret_dict[str(index)] = codes[index]
+        codes[index].id = index
+        ret_dict[index] = codes[index]
 
     return ret_dict
 

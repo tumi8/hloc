@@ -171,7 +171,7 @@ class GPSLocation(JSONBase):
         try:
             self._id = int(new_id)
         except (ValueError, TypeError):
-            print('ValueError: id must be an Integer!', file=sys.stderr)
+            print('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
             raise
 
     def is_in_radius(self, location, radius):
@@ -227,12 +227,9 @@ class GPSLocation(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
-                       dct['state_code'], dct['population'])
-        if 'airport_info' in dct:
-            obj.airport_info = dct['airport_info']
-        if 'locode' in dct:
-            obj.locode = dct['locode']
+        obj = GPSLocation(dct['lat'], dct['lon'])
+        if 'id' in dct:
+            obj.id = dct['id']
         return obj
 
 
@@ -322,6 +319,8 @@ class Location(GPSLocation):
         """Creates a Location object from a dictionary"""
         obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
                        dct['state_code'], dct['population'])
+        if 'id' in dct:
+            obj.id = dct['id']
         if 'airport_info' in dct:
             obj.airport_info = dct['airport_info']
         if 'locode' in dct:
@@ -330,7 +329,7 @@ class Location(GPSLocation):
 
 
 class AirportInfo(JSONBase):
-    """Holds a list of the differen airport codes"""
+    """Holds a list of the different airport codes"""
 
     __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
 
