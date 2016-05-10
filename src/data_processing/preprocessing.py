@@ -73,12 +73,12 @@ def main():
         if i == (args.numProcesses - 1):
             process = Process(target=preprocess_file_part_profile,
                               args=(filename, i, i * (lineCount // args.numProcesses),
-                                    lineCount, ipregex, tlds, args.cProfiling))
+                                    lineCount, ipregex, tlds, args.destination, args.cProfiling))
         else:
             process = Process(target=preprocess_file_part_profile,
                               args=(filename, i, i * (lineCount // args.numProcesses),
                                     (i + 1) * (lineCount // args.numProcesses),
-                                    ipregex, tlds, False))
+                                    ipregex, tlds, args.destination, False))
         process.start()
 
     for process in processes:
@@ -105,7 +105,7 @@ def select_ip_regex(regexStrategy):
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, profile):
+def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, destination_dir, profile):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -114,10 +114,10 @@ def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, profi
     """
     startTime = time.clock()
     if profile:
-        cProfile.runctx('preprocess_file_part(filename, pnr, start, end, ipregex, tlds)',
+        cProfile.runctx('preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir)',
                         globals(), locals())
     else:
-        preprocess_file_part(filename, pnr, start, end, ipregex, tlds)
+        preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir)
 
     endTime = time.clock()
     print('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
