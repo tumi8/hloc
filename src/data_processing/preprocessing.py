@@ -158,8 +158,9 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
             badLines = []
 
     def add_labels(new_rdns_record):
-        for key, label in new_rdns_record['domainLabels'].items():
-            if key == 'tld':
+        for index, label in enumerate(new_rdns_record.domainLabels):
+            #skip if tld
+            if index == 0:
                 continue
             if label in labelDict.keys():
                 labelDict[label] += 1
@@ -247,7 +248,7 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
                 writeFiles['ipEncoded'].write('{0}\n'.format(line))
             else:
                 rdnsRecord = Domain(domain, ip_address=ipAddress)
-                if rdnsRecord.domain_labels['tld'].upper() in tlds:
+                if rdnsRecord.domain_labels[0].upper() in tlds:
                     if util.is_ip_hex_encoded_simple(ipAddress, domain):
                         append_hex_ip_line(line)
                     else:
