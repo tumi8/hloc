@@ -18,7 +18,7 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
-    line_count = int(str(count).split(' ')[0])
+    line_count = int(count.decode("utf-8") .split(' ')[0])
 
     print('Linecount for file: {0}'.format(line_count))
     return line_count
