@@ -11,7 +11,7 @@ Further filtering ideas: www pages and pages with only 2 levels
 from __future__ import print_function
 import argparse
 import re
-import pickle
+# import pickle
 import cProfile
 import time
 import os
@@ -71,12 +71,12 @@ def main():
     for i, process in enumerate(processes):
         if i == (args.numProcesses - 1):
             process = Process(target=preprocess_file_part_profile,
-                              args=(args.filename, i, i * (lineCount // args.numProcesses),
-                                    lineCount, ipregex, tlds, args.destination, args.cProfiling))
+                              args=(args.filename, (i, i * (lineCount // args.numProcesses),
+                                    lineCount), ipregex, tlds, args.destination, args.cProfiling))
         else:
             process = Process(target=preprocess_file_part_profile,
-                              args=(args.filename, i, i * (lineCount // args.numProcesses),
-                                    (i + 1) * (lineCount // args.numProcesses),
+                              args=(args.filename, (i, i * (lineCount // args.numProcesses),
+                                    (i + 1) * (lineCount // args.numProcesses)),
                                     ipregex, tlds, args.destination, False))
         process.start()
 
@@ -104,7 +104,7 @@ def select_ip_regex(regexStrategy):
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, destination_dir, profile):
+def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destination_dir, profile):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -113,17 +113,17 @@ def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, desti
     """
     startTime = time.clock()
     if profile:
-        cProfile.runctx('preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir)',
-                        globals(), locals())
+        cProfile.runctx('preprocess_file_part(filename, pnr, sector,'
+                        ' ipregex, tlds, destination_dir)',  globals(), locals())
     else:
-        preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir)
+        preprocess_file_part(filename, pnr, sector, ipregex, tlds, destination_dir)
 
     endTime = time.clock()
     print('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
           .format(pnr, (endTime - startTime), profile))
 
 
-def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_dir):
+def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -153,8 +153,7 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
         nonlocal badLines
         badLines.append(domain_line)
         if len(badLines) > 10 ** 3:
-            write_bad_lines(writeFiles['bad'], badLines, badCharacterDict,
-                            util.ACCEPTED_CHARACTER)
+            write_bad_lines(writeFiles['bad'], badLines, util.ACCEPTED_CHARACTER)
             badLines = []
 
     def add_labels(new_rdns_record):
@@ -162,10 +161,10 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
             #skip if tld
             if index == 0:
                 continue
-            if label in labelDict.keys():
-                labelDict[label] += 1
+            if label.label in labelDict.keys():
+                labelDict[label.label] += 1
             else:
-                labelDict[label] = 1
+                labelDict[label.label] = 1
 
     def write_bad_lines(badFile, lines, goodCharacters):
         """
@@ -208,6 +207,7 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
             writeFiles['badDNS'].write('\n')
             badDnsRecords = []
 
+    start, end = sector
     filename = util.get_path_filename(filepath)
     filepart = open(filepath, encoding='ISO-8859-1')
     labelDict = {}
@@ -248,7 +248,7 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
                 writeFiles['ipEncoded'].write('{0}\n'.format(line))
             else:
                 rdnsRecord = Domain(domain, ip_address=ipAddress)
-                if rdnsRecord.domain_labels[0].upper() in tlds:
+                if rdnsRecord.domain_labels[0].label.upper() in tlds:
                     if util.is_ip_hex_encoded_simple(ipAddress, domain):
                         append_hex_ip_line(line)
                     else:
@@ -265,7 +265,7 @@ def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_d
     util.json_dump(badDnsRecords, writeFiles['badDNS'])
     util.json_dump(hexIpRecords, writeFiles['hexIpEncoded'])
 
-    write_bad_lines(writeFiles['bad'], badLines, badCharacterDict, util.ACCEPTED_CHARACTER)
+    write_bad_lines(writeFiles['bad'], badLines, util.ACCEPTED_CHARACTER)
 
     print('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
     with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
