@@ -67,16 +67,15 @@ def main():
                 tlds.add(line[:-1].lower())
 
     processes = [None] * args.numProcesses
-    filename = util.get_path_filename(args.filename)
 
     for i, process in enumerate(processes):
         if i == (args.numProcesses - 1):
             process = Process(target=preprocess_file_part_profile,
-                              args=(filename, i, i * (lineCount // args.numProcesses),
+                              args=(args.filename, i, i * (lineCount // args.numProcesses),
                                     lineCount, ipregex, tlds, args.destination, args.cProfiling))
         else:
             process = Process(target=preprocess_file_part_profile,
-                              args=(filename, i, i * (lineCount // args.numProcesses),
+                              args=(args.filename, i, i * (lineCount // args.numProcesses),
                                     (i + 1) * (lineCount // args.numProcesses),
                                     ipregex, tlds, args.destination, False))
         process.start()
@@ -124,7 +123,7 @@ def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, desti
           .format(pnr, (endTime - startTime), profile))
 
 
-def preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir):
+def preprocess_file_part(filepath, pnr, start, end, ipregex, tlds, destination_dir):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -208,7 +207,8 @@ def preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_d
             writeFiles['badDNS'].write('\n')
             badDnsRecords = []
 
-    filepart = open(filename, encoding='ISO-8859-1')
+    filename = util.get_path_filename(filepath)
+    filepart = open(filepath, encoding='ISO-8859-1')
     labelDict = {}
 
     util.seek_lines(filepart, start)
