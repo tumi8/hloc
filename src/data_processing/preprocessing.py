@@ -71,11 +71,11 @@ def main():
     for i, process in enumerate(processes):
         if i == (args.numProcesses - 1):
             process = Process(target=preprocess_file_part_profile,
-                              args=(args.filename, (i, i * (lineCount // args.numProcesses),
+                              args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                     lineCount), ipregex, tlds, args.destination, args.cProfiling))
         else:
             process = Process(target=preprocess_file_part_profile,
-                              args=(args.filename, (i, i * (lineCount // args.numProcesses),
+                              args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                     (i + 1) * (lineCount // args.numProcesses)),
                                     ipregex, tlds, args.destination, False))
         process.start()
