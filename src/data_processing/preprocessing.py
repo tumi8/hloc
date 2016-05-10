@@ -16,6 +16,7 @@ import cProfile
 import time
 import os
 from multiprocessing import Process
+import ujson as json
 
 from . import util
 from .util import Domain
@@ -36,6 +37,8 @@ def __create_parser_arguments(parser):
     parser.add_argument('-p', '--profile', action='store_true',
                         dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
+    parser.add_argument('-d', '--destination', type=str, default='rdns_results',
+                        dest='destination', help='Set the desination directory (must exist)')
 
 
 def main():
@@ -45,8 +48,10 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    if not os.path.exists('rdns_results'):
+    if args.destination == 'rdns_results' and not os.path.exists('rdns_results'):
         os.mkdir('rdns_results')
+    if not os.path.exists(args.destination):
+        raise NotADirectoryError('destination directory must already exist!')
 
     ipregexText = select_ip_regex(args.regexStrategy)
 
@@ -56,7 +61,7 @@ def main():
     lineCount = util.count_lines(args.filename)
 
     tlds = set()
-    with open('collectedData/tlds.txt') as tldFile:
+    with open(args.tlds_file) as tldFile:
         for line in tldFile:
             if line[0] != '#':
                 tlds.add(line[:-1].lower())
@@ -119,7 +124,7 @@ def preprocess_file_part_profile(filename, pnr, start, end, ipregex, tlds, profi
           .format(pnr, (endTime - startTime), profile))
 
 
-def preprocess_file_part(filename, pnr, start, end, ipregex, tlds):
+def preprocess_file_part(filename, pnr, start, end, ipregex, tlds, destination_dir):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -207,15 +212,18 @@ def preprocess_file_part(filename, pnr, start, end, ipregex, tlds):
     labelDict = {}
 
     util.seek_lines(filepart, start)
-    
+
     writeFiles = {
-        'correct': open('rdns_results/{0}-{1}.cor'.format(filename, pnr), 'w', encoding='utf-8'),
-        'ipEncoded': open('rdns_results/{0}-{1}-ip-encoded.domain'.format(filename, pnr),
+        'correct': open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr),
+                        'w', encoding='utf-8'),
+        'ipEncoded': open(destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr),
                           'w', encoding='utf-8'),
-        'hexIpEncoded': open('rdns_results/{0}-{1}-hex-ip.domain'.format(filename, pnr),
+        'hexIpEncoded': open(destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr),
                              'w', encoding='utf-8'),
-        'bad': open('rdns_results/{0}-{1}.bad'.format(filename, pnr), 'w', encoding='utf-8'),
-        'badDNS': open('rdns_results/{0}-{1}-dns.bad'.format(filename, pnr), 'w', encoding='utf-8')
+        'bad': open(destination_dir + '/{0}-{1}.bad'.format(filename, pnr),
+                    'w', encoding='utf-8'),
+        'badDNS': open(destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr),
+                       'w', encoding='utf-8')
     }
 
     badCharacterDict = {}
@@ -259,19 +267,19 @@ def preprocess_file_part(filename, pnr, start, end, ipregex, tlds):
     write_bad_lines(writeFiles['bad'], badLines, badCharacterDict, util.ACCEPTED_CHARACTER)
 
     print('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
-    # with open('rdns_results/{0}-{1}-character.stats'.format(filename, pnr),
-    #           'w', encoding='utf-8') as characterStatsFile:
-    #     json.dump(badCharacterDict, characterStatsFile)
-    with open('rdns_results/{0}-{1}-character.stats'.format(filename, pnr),
-              'wb') as characterStatsFile:
-        pickle.dump(badCharacterDict, characterStatsFile)
+    with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
+              'w', encoding='utf-8') as characterStatsFile:
+        json.dump(badCharacterDict, characterStatsFile)
+    # with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
+    #           'wb') as characterStatsFile:
+    #     pickle.dump(badCharacterDict, characterStatsFile)
 
-    # with open('rdns_results/{0}-{1}-domain-label.stats'.format(filename, pnr),
-    #           'w', encoding='utf-8') as labelStatFile:
-    #     json.dump(labelDict, labelStatFile)
-    with open('rdns_results/{0}-{1}-domain-label.stats'.format(filename, pnr),
-              'wb') as labelStatFile:
-        pickle.dump(labelDict, labelStatFile)
+    with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
+              'w', encoding='utf-8') as labelStatFile:
+        json.dump(labelDict, labelStatFile)
+    # with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
+    #           'wb') as labelStatFile:
+    #     pickle.dump(labelDict, labelStatFile)
 
     # for character, count in badCharacterDict.items():
     #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \
