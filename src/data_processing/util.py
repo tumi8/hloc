@@ -26,7 +26,7 @@ def count_lines(filename):
 
 def seek_lines(seeking_file, seek_until_line):
     """Read number of lines definded in the seekPoint"""
-    if seek_until_line < 0:
+    if seek_until_line <= 0:
         return
     i = 0
     for _ in seeking_file:
