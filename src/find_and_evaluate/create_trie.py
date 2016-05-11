@@ -31,7 +31,7 @@ def create_trie(locations):
     """
     code_id_type_tuples = []
     for location in locations.values():
-        code_id_type_tuples.extend(location.code_id_tuples())
+        code_id_type_tuples.extend(location.code_id_type_tuples())
 
     return RecordTrie('<Hs', code_id_type_tuples)
 
