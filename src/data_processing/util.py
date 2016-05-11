@@ -134,12 +134,12 @@ def json_loads(json_str):
 ##       Models and Interfaces       ##
 #######################################
 class LocationCodeType(Enum):
-    iata = 'iata'
-    icao = 'icao'
-    faa = 'faa'
-    clli = 'clli'
-    locode = 'locode'
-    geonames = 'geonames'
+    iata = '___iata'
+    icao = '___icao'
+    faa = '____faa'
+    clli = '___clli'
+    locode = '_locode'
+    geonames = 'geoname'
 
 class JSONBase(object):
     """
