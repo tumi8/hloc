@@ -54,7 +54,7 @@ def main():
             popular_labels = pickle.load(pop_label_dict)
 
     if args.popular_labels_s is not None:
-
+        # TODO change to json loading
         with open(args.popular_labels_s, 'rb') as pop_label_file:
             popular_labels_list = pickle.load(pop_label_file)
 

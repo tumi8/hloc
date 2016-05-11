@@ -425,12 +425,12 @@ def location_merge(location1, location2):
     location1.alternate_names.extend(location2.alternate_names)
 
 
-def merge_locations_to_location(location, locations, start=0):
+def merge_locations_to_location(location, locations, radius, start=0):
     """Merge all locations from the locations list to the location if they are near enough"""
     nearLocations = []
 
     for j in range(start, len(locations)):
-        if location.is_in_radius(locations[j], LOCATION_RADIUS):
+        if location.is_in_radius(locations[j], radius):
             nearLocations.append(locations[j])
 
     for mloc in nearLocations:
@@ -438,7 +438,7 @@ def merge_locations_to_location(location, locations, start=0):
         locations.remove(mloc)
 
 
-def add_locations(locations, addLocations, create_new_locations=True):
+def add_locations(locations, addLocations, radius, create_new_locations=True):
     """
     The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in addLocations
@@ -447,14 +447,14 @@ def add_locations(locations, addLocations, create_new_locations=True):
         create new location objects Default is true
     """
     for i, location in enumerate(locations):
-        merge_locations_to_location(location, addLocations)
+        merge_locations_to_location(location, addLocations, radius)
 
     if create_new_locations:
-        merge_locations_by_gps(addLocations)
+        merge_locations_by_gps(addLocations, radius)
         locations.extend(addLocations)
 
 
-def merge_locations_by_gps(locations):
+def merge_locations_by_gps(locations, radius):
     """
     this method starts at the beginning and matches all locations which are in a
     range of 30 kilometers
@@ -462,13 +462,13 @@ def merge_locations_by_gps(locations):
     i = 0
     while i < len(locations):
         location = locations[i]
-        i = i + 1
+        i += 1
         lat_is_none = location.lat is None
         lon_is_none = location.lon is None
         if lat_is_none or lon_is_none:
             continue
 
-        merge_locations_to_location(location, locations, start=i)
+        merge_locations_to_location(location, locations, radius, start=i)
 
 
 def idfy_codes(codes):
@@ -527,16 +527,16 @@ def merge_location_codes(args):
     concatenated
     """
     location_codes = []
-    if args.merge:
+    if args.merge_radius:
         print('geonames length: ', len(GEONAMES_LOCATION_CODES))
         print('locode length: ', len(LOCODE_LOCATION_CODES))
         print('air length: ', len(AIRPORT_LOCATION_CODES))
         print('clli length: ', len(CLLI_LOCATION_CODES))
         # location_codes = GEONAMES_LOCATION_CODES
         location_codes = sorted(GEONAMES_LOCATION_CODES,
-                           key=lambda location: location.population,
-                           reverse=True)
-        merge_locations_by_gps(location_codes)
+                                key=lambda location: location.population,
+                                reverse=True)
+        merge_locations_by_gps(location_codes, args.merge_radius)
 
         locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
         airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
@@ -544,11 +544,11 @@ def merge_location_codes(args):
         # add_locations(location_codes, geo_codes)
 
         print('geonames merged: ', len(location_codes))
-        add_locations(location_codes, locodes, create_new_locations=False)
+        add_locations(location_codes, locodes, args.merge_radius, create_new_locations=False)
         print('locode merged', len(location_codes))
-        add_locations(location_codes, airport_codes)
+        add_locations(location_codes, airport_codes, args.merge_radius)
         print('air merged', len(location_codes))
-        add_locations(location_codes, clli_codes)
+        add_locations(location_codes, clli_codes, args.merge_radius)
         print('clli merged', len(location_codes))
 
     else:
@@ -570,16 +570,16 @@ def print_stats(location_codes):
     geonames = 0
     for location in location_codes:
         if location.locode is not None:
-            locode_codes = locode_codes + len(location.locode.place_codes)
-        geonames = geonames + len(location.alternate_names)
-        clli_codes = clli_codes + len(location.clli)
+            locode_codes += len(location.locode.place_codes)
+        geonames += len(location.alternate_names)
+        clli_codes += len(location.clli)
         if location.airport_info is not None:
             if len(location.airport_info.iata_codes) > 0:
-                iata_codes = iata_codes + len(location.airport_info.iata_codes)
+                iata_codes += len(location.airport_info.iata_codes)
             if len(location.airport_info.icao_codes) > 0:
-                icao_codes = icao_codes + len(location.airport_info.icao_codes)
+                icao_codes += len(location.airport_info.icao_codes)
             if len(location.airport_info.faa_codes) > 0:
-                faa_codes = faa_codes + len(location.airport_info.faa_codes)
+                faa_codes += len(location.airport_info.faa_codes)
 
     print('iata: {0} icao: {1} faa: {2} locode: {3} clli: {4} geonames: {5}'
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
@@ -635,9 +635,9 @@ def __create_parser_arguments(parser):
                         help='Load clli codes from the path')
     parser.add_argument('-g', '--geo-names', type=str, dest='geonames',
                         help='Load geonames from the given path')
-    parser.add_argument('-m', '--merge-locations', action='store_true',
-                        dest='merge',
-                        help='Try to merge locations by gps')
+    parser.add_argument('-m', '--merge-locations', type=int,
+                        dest='merge_radius',
+                        help='Try to merge locations in the given radius by gps')
     parser.add_argument('-t', '--max-threads', default=16, type=int,
                         dest='maxThreads',
                         help='Specify the maximal amount of threads')
