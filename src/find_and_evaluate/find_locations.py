@@ -43,6 +43,7 @@ def __create_parser_arguments(parser):
 def main():
     """Main function"""
     parser = argparse.ArgumentParser()
+    __create_parser_arguments()
     args = parser.parse_args()
 
     with open(args.regexpickle, 'rb') as locationRegexFile:
