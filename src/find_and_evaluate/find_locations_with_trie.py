@@ -43,7 +43,7 @@ def __create_parser_arguments(parser):
 def main():
     """Main function"""
     parser = argparse.ArgumentParser()
-    __create_parser_arguments()
+    __create_parser_arguments(parser)
     args = parser.parse_args()
 
     with open(args.trie_file_path, 'rb') as trie_file:
