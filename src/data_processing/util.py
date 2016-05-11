@@ -4,6 +4,7 @@ from __future__ import print_function
 from math import radians, cos, sin, asin, sqrt
 from subprocess import check_output
 from string import printable
+from enum import Enum
 import re
 import json
 import sys
@@ -132,6 +133,14 @@ def json_loads(json_str):
 #######################################
 ##       Models and Interfaces       ##
 #######################################
+class LocationCodeType(Enum):
+    iata = 'iata'
+    icao = 'icao'
+    faa = 'faa'
+    clli = 'clli'
+    locode = 'locode'
+    geonames = 'geonames'
+
 class JSONBase(object):
     """
     The Base class to JSON encode your object with json_encoding_func
@@ -290,7 +299,7 @@ class Location(GPSLocation):
 
         return ret_dict
 
-    def code_id_tuples(self):
+    def code_id_type_tuples(self):
         """
         Creates a list with all codes in a tuple with the location id
         :rtype: list(tuple)
@@ -300,21 +309,21 @@ class Location(GPSLocation):
         #     raise ValueError('id is not int')
         ret_list = []
         if self.city_name:
-            ret_list.append((self.city_name, (self.id,)))
+            ret_list.append((self.city_name, (self.id, LocationCodeType.geonames)))
         for code in self.clli:
-            ret_list.append((code, (self.id,)))
+            ret_list.append((code, (self.id, LocationCodeType.clli)))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id,)))
+            ret_list.append((name, (self.id, LocationCodeType.geonames)))
         if self.locode:
             for code in self.locode.place_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, LocationCodeType.locode)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, LocationCodeType.iata)))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, LocationCodeType.icao)))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, LocationCodeType.faa)))
         return ret_list
 
     @staticmethod

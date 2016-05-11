@@ -29,11 +29,11 @@ def create_trie(locations):
     Creates a RecordTrie with the marisa library
     :rtype: RecordTrie
     """
-    code_id_tuples = []
+    code_id_type_tuples = []
     for location in locations.values():
-        code_id_tuples.extend(location.code_id_tuples())
+        code_id_type_tuples.extend(location.code_id_tuples())
 
-    return RecordTrie('<H', code_id_tuples)
+    return RecordTrie('<Hs', code_id_type_tuples)
 
 if __name__ == '__main__':
     main()
