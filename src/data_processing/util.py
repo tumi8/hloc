@@ -310,21 +310,21 @@ class Location(GPSLocation):
         #     raise ValueError('id is not int')
         ret_list = []
         if self.city_name:
-            ret_list.append((self.city_name, (self.id, bytes(LocationCodeType.geonames, 'utf-8'))))
+            ret_list.append((self.city_name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
         for code in self.clli:
-            ret_list.append((code, (self.id, bytes(LocationCodeType.clli, 'utf-8'))))
+            ret_list.append((code, (self.id, bytes(LocationCodeType.clli.name, 'utf-8'))))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id, bytes(LocationCodeType.geonames, 'utf-8'))))
+            ret_list.append((name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
         if self.locode:
             for code in self.locode.place_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.locode, 'utf-8'))))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.locode.name, 'utf-8'))))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.iata, 'utf-8'))))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.iata.name, 'utf-8'))))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.icao, 'utf-8'))))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.icao.name, 'utf-8'))))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.faa, 'utf-8'))))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.faa.name, 'utf-8'))))
         return ret_list
 
     @staticmethod

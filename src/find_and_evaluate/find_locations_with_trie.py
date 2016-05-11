@@ -220,12 +220,12 @@ def search_in_label(o_label, trie):
     matches = []
     ids = {}
     type_count = {
-        util.LocationCodeType.iata: 0,
-        util.LocationCodeType.icao: 0,
-        util.LocationCodeType.faa: 0,
-        util.LocationCodeType.clli: 0,
-        util.LocationCodeType.alt: 0,
-        util.LocationCodeType.locode: 0
+        util.LocationCodeType.iata.name: 0,
+        util.LocationCodeType.icao.name: 0,
+        util.LocationCodeType.faa.name: 0,
+        util.LocationCodeType.clli.name: 0,
+        util.LocationCodeType.alt.name: 0,
+        util.LocationCodeType.locode.name: 0
     }
     label = o_label.label[:]
     while label:
