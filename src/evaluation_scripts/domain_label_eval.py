@@ -100,7 +100,7 @@ def count_occurences(string, list_strings):
 def read_stats_file(filename):
     """reads a pickle file and returns the dictionary"""
     returnDict = {}
-    with open(filename, 'rb') as characterFile:
+    with open(filename) as characterFile:
         returnDict = json.load(characterFile)
 
     return returnDict
