@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import json
+import ujson as json
 import pickle
 import argparse
 import operator
@@ -27,8 +27,6 @@ def main():
                 concatDict[key] = concatDict[key] + value
             else:
                 concatDict[key] = value
-    with open(args.regex_file, 'rb') as regex_file:
-        regexes = pickle.load(regex_file)
 
     print('sum labels ', sum(concatDict.values()))
 
@@ -53,12 +51,14 @@ def main():
     print(len(a), ' items have more than 20 occurences with ', sum(a))
 
     with open('popular_labels_10.pickle', 'wb') as popular_file:
-        pickle.dump(dict(filter_amount(concatDict.items(), 10)), popular_file)
+        json.dump(dict(filter_amount(concatDict.items(), 10)), popular_file)
 
     with open('popular_labels_5.pickle', 'wb') as popular_file:
-        pickle.dump(dict(filter_amount(concatDict.items(), 5)), popular_file)
+        json.dump(dict(filter_amount(concatDict.items(), 5)), popular_file)
 
     if args.print_all:
+        with open(args.regex_file, 'rb') as regex_file:
+            regexes = pickle.load(regex_file)
         sortedTupleList = sorted(concatDict.items(), key=operator.itemgetter(1), reverse=True)
         sublist = sorted([(x[0], x[1], len(get_matches(x[0], regexes)))
                           for x in sortedTupleList[:10000]],
@@ -101,7 +101,7 @@ def read_stats_file(filename):
     """reads a pickle file and returns the dictionary"""
     returnDict = {}
     with open(filename, 'rb') as characterFile:
-        returnDict = pickle.load(characterFile)
+        returnDict = json.load(characterFile)
 
     return returnDict
 
