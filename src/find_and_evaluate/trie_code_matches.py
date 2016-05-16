@@ -3,6 +3,7 @@
 import pickle
 import argparse
 from pprint import pprint
+import ujson as json
 
 from marisa_trie import RecordTrie
 
@@ -24,7 +25,7 @@ def main():
 
     for code, (location_id,) in code_tuples:
         if location_id not in matches:
-            matches[location_id] = {'__total_count__': 0}
+            matches[location_id] = {'__total_count__': 0} # TODO defaultdict
         elif code in matches[location_id]:
             continue
         code_matches = set(trie.keys(code))
@@ -33,7 +34,7 @@ def main():
         for code_match in code_matches:
             code_match_ids[code_match] = trie[code_match]
             total_count += len(code_match_ids[code_match])
-        if len(code_match_ids.keys()) > 1 or len(code_match_ids[code]) > 1:
+        if not code_match_ids or list(code_match_ids.keys()) == [code]:
             count_top_level_codes += 1
 
         matches[location_id][code] = code_match_ids
@@ -43,8 +44,20 @@ def main():
     loc_id_count = [(loc_id, dct['__total_count__']) for loc_id, dct in matches.items()]
     loc_id_count.sort(key=lambda x: x[1])
     pprint(loc_id_count)
+    with open(args.filename + '.cdfdata') as cdf_file:
+        json.dump(make_cdf(matches), cdf_file)
     with open(args.filename + '.eval', 'wb') as eval_file:
         pickle.dump(matches, eval_file)
+
+
+def make_cdf(matches):
+    match_count_group = {}
+    for dct in matches.values():
+        for indct in dct.values():
+            if indct not in match_count_group:
+                match_count_group[indct] = 0
+            match_count_group[indct] += 1
+    return match_count_group
 
 if __name__ == '__main__':
     main()
