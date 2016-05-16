@@ -68,17 +68,17 @@ def main():
 
     processes = [None] * args.numProcesses
 
-    for i, process in enumerate(processes):
+    for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
-            process = Process(target=preprocess_file_part_profile,
+            processes[i] = Process(target=preprocess_file_part_profile,
                               args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                     lineCount), ipregex, tlds, args.destination, args.cProfiling))
         else:
-            process = Process(target=preprocess_file_part_profile,
+            processes[i] = Process(target=preprocess_file_part_profile,
                               args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                     (i + 1) * (lineCount // args.numProcesses)),
                                     ipregex, tlds, args.destination, False))
-        process.start()
+        processes[i].start()
 
     for process in processes:
         process.join()
@@ -208,6 +208,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
             badDnsRecords = []
 
     start, end = sector
+    print('pnr', pnr, 'start', start, 'end', end)
     filename = util.get_path_filename(filepath)
     filepart = open(filepath, encoding='ISO-8859-1')
     labelDict = {}
