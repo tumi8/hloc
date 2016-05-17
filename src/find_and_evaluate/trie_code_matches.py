@@ -23,7 +23,7 @@ def main():
     matches = {}
     count_top_level_codes = 0
 
-    for code, (location_id,) in code_tuples:
+    for code, (location_id, type) in code_tuples:
         if location_id not in matches:
             matches[location_id] = {'__total_count__': 0} # TODO defaultdict
         elif code in matches[location_id]:
