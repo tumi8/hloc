@@ -44,10 +44,10 @@ def main():
     loc_id_count = [(loc_id, dct['__total_count__']) for loc_id, dct in matches.items()]
     loc_id_count.sort(key=lambda x: x[1])
     pprint(loc_id_count)
-    with open(args.filename + '.cdfdata') as cdf_file:
+    with open(args.filename + '.cdfdata', 'w') as cdf_file:
         json.dump(make_cdf(matches), cdf_file)
-    with open(args.filename + '.eval', 'wb') as eval_file:
-        pickle.dump(matches, eval_file)
+    with open(args.filename + '.eval', 'w') as eval_file:
+        json.dump(matches, eval_file)
 
 
 def make_cdf(matches):
