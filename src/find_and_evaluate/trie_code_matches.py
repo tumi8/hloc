@@ -54,9 +54,9 @@ def make_cdf(matches):
     match_count_group = {}
     for dct in matches.values():
         for indct in dct.values():
-            if indct not in match_count_group:
-                match_count_group[indct] = 0
-            match_count_group[indct] += 1
+            if indct['__total_count__'] not in match_count_group:
+                match_count_group[indct['__total_count__']] = 0
+            match_count_group[indct['__total_count__']] += 1
     return match_count_group
 
 if __name__ == '__main__':
