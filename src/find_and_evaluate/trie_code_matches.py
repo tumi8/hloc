@@ -2,6 +2,7 @@
 
 import pickle
 import argparse
+import collections
 from pprint import pprint
 import ujson as json
 
@@ -23,9 +24,10 @@ def main():
     matches = {}
     count_top_level_codes = 0
 
+    # TODO add filter to only evaluate the cities
     for code, (location_id, type) in code_tuples:
         if location_id not in matches:
-            matches[location_id] = {'__total_count__': 0} # TODO defaultdict
+            matches[location_id] = {'__all_match_ids__': set()} # TODO defaultdict
         elif code in matches[location_id]:
             continue
         code_matches = set(trie.keys(code))
@@ -33,15 +35,17 @@ def main():
         total_count = 0
         for code_match in code_matches:
             code_match_ids[code_match] = trie[code_match]
+            for loc_id, _ in code_match_ids[code_match]:
+                matches[location_id]['__all_match_ids__'].add(loc_id)
             total_count += len(code_match_ids[code_match])
         if not code_match_ids or list(code_match_ids.keys()) == [code]:
             count_top_level_codes += 1
 
         matches[location_id][code] = code_match_ids
         matches[location_id][code]['__total_count__'] = total_count
-        matches[location_id]['__total_count__'] += total_count
+        # matches[location_id]['__total_count__'] += total_count
 
-    loc_id_count = [(loc_id, dct['__total_count__']) for loc_id, dct in matches.items()]
+    loc_id_count = [(loc_id, len(dct['__all_match_ids__'])) for loc_id, dct in matches.items()]
     loc_id_count.sort(key=lambda x: x[1])
     pprint(loc_id_count)
     with open(args.filename + '.cdfdata', 'w') as cdf_file:

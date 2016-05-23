@@ -32,7 +32,7 @@ CLLI_LOCATION_CODES = []
 GEONAMES_LOCATION_CODES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
-NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
+NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE) # TODO use set
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -76,7 +76,7 @@ class WorldAirportCodesParser(HTMLParser):
         elif self.__currentKey is None:
             return
         elif self.__currentKey == 'cityName':
-            splitIndex = data.find(',')
+            splitIndex = data.find(',') # use split
             cityName = data[:splitIndex]
             stateString = data[splitIndex + 2:]
             self.airportInfo.city_name = cityName.lower()
@@ -316,6 +316,7 @@ def get_location_from_locode_text(locationtext):
     if locationtext[11] == 'W':
         lon = -lon
 
+    # TODO return as tuple
     return {'lat': lat, 'lon': lon}
 
 
@@ -323,6 +324,7 @@ def get_locode_name(city_name):
     """if there is a '=' in the name extract the first part of the name"""
     if NORMAL_CHARS_REGEX.search(city_name) is None:
         return None
+    # FIXME not reachable
     if '=' in city_name:
         city_name = city_name.split('=')[0].strip()
     return city_name
@@ -333,7 +335,8 @@ def get_clli_codes(file_path):
     with open(file_path) as clli_file:
         for line in clli_file:
             # [0:-1] remove last character \n and extract the information
-            clli, lat, lon = line[0:-1].split('\t')
+            line = line.strip()
+            clli, lat, lon = line.split('\t')
             newClliInfo = Location(lat=float(lat), lon=float(lon))
             newClliInfo.clli.append(clli[0:6])
             CLLI_LOCATION_CODES.append(newClliInfo)
@@ -508,6 +511,7 @@ def parse_locode_codes(path):
     locodeFile1 = path.format(1)
     locodeFile2 = path.format(2)
     locodeFile3 = path.format(3)
+    # TODO do not use threads
     threads.append(Thread(target=get_locode_locations, args=(locodeFile1,)))
     threads.append(Thread(target=get_locode_locations, args=(locodeFile2,)))
     threads.append(Thread(target=get_locode_locations, args=(locodeFile3,)))
@@ -521,13 +525,13 @@ def parse_locode_codes(path):
     print('Finished locode parsing')
 
 
-def merge_location_codes(args):
+def merge_location_codes(merge_radius):
     """
     Return all merged location codes if the option is set else return all codes
     concatenated
     """
     location_codes = []
-    if args.merge_radius:
+    if merge_radius:
         print('geonames length: ', len(GEONAMES_LOCATION_CODES))
         print('locode length: ', len(LOCODE_LOCATION_CODES))
         print('air length: ', len(AIRPORT_LOCATION_CODES))
@@ -536,20 +540,20 @@ def merge_location_codes(args):
         location_codes = sorted(GEONAMES_LOCATION_CODES,
                                 key=lambda location: location.population,
                                 reverse=True)
-        merge_locations_by_gps(location_codes, args.merge_radius)
+        merge_locations_by_gps(location_codes, merge_radius)
 
         locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
         airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
         clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])
         # add_locations(location_codes, geo_codes)
 
-        print('geonames merged: ', len(location_codes))
-        add_locations(location_codes, locodes, args.merge_radius, create_new_locations=False)
-        print('locode merged', len(location_codes))
-        add_locations(location_codes, airport_codes, args.merge_radius)
-        print('air merged', len(location_codes))
-        add_locations(location_codes, clli_codes, args.merge_radius)
-        print('clli merged', len(location_codes))
+        print('geonames merged:', len(location_codes))
+        add_locations(location_codes, locodes, merge_radius, create_new_locations=False)
+        print('locode merged:', len(location_codes))
+        add_locations(location_codes, airport_codes, merge_radius)
+        print('air merged:', len(location_codes))
+        add_locations(location_codes, clli_codes, merge_radius)
+        print('clli merged:', len(location_codes))
 
     else:
         location_codes.extend(AIRPORT_LOCATION_CODES)
@@ -647,6 +651,7 @@ def __create_parser_arguments(parser):
     parser.add_argument('-f', '--output-filename', type=str,
                         default='collectedData.json',
                         dest='filename', help='Specify the output filename')
+    # TODO config file
 
 
 def main():

@@ -48,13 +48,11 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    if args.destination == 'rdns_results' and not os.path.exists('rdns_results'):
-        os.mkdir('rdns_results')
-    if not os.path.exists(args.destination):
-        raise NotADirectoryError('destination directory must already exist!')
+    os.mkdir(args.destination)
 
     ipregexText = select_ip_regex(args.regexStrategy)
 
+    # TODO use logger
     print('using strategy: {}'.format(args.regexStrategy))
     ipregex = re.compile(ipregexText, flags=re.MULTILINE)
 
@@ -63,8 +61,9 @@ def main():
     tlds = set()
     with open(args.tlds_file) as tldFile:
         for line in tldFile:
+            line = line.strip()
             if line[0] != '#':
-                tlds.add(line[:-1].lower())
+                tlds.add(line.lower())
 
     processes = [None] * args.numProcesses
 
@@ -111,14 +110,15 @@ def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destinati
     if profile is set CProfile will profile the sanitizing
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
-    startTime = time.clock()
+    startTime = time.monotonic()
+    # TODO cprofile with output to file
     if profile:
         cProfile.runctx('preprocess_file_part(filename, pnr, sector,'
                         ' ipregex, tlds, destination_dir)',  globals(), locals())
     else:
         preprocess_file_part(filename, pnr, sector, ipregex, tlds, destination_dir)
 
-    endTime = time.clock()
+    endTime = time.monotonic()
     print('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
           .format(pnr, (endTime - startTime), profile))
 
@@ -146,6 +146,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         splits the line after the first ','
         returns both parts without ',' in a tuple
         """
+        # TODO use split
         comma_index = line.find(',')
         return domain_line[:comma_index], domain_line[(comma_index + 1):]
 
@@ -161,7 +162,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
             #skip if tld
             if index == 0:
                 continue
-            if label.label in labelDict.keys():
+            if label.label in labelDict:
                 labelDict[label.label] += 1
             else:
                 labelDict[label.label] = 1
@@ -172,12 +173,12 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         goodCharacters are all allowed Character
         returns all bad Character found in the lines in a list
         """
+        # TODO use sets and count only one time per line
         for line in lines:
             for character in line:
                 if character not in goodCharacters:
-                    if character in badCharacterDict.keys():
-                        badCharacterDict[character] = badCharacterDict[
-                                                          character] + 1
+                    if character in badCharacterDict:
+                        badCharacterDict[character] += 1
                     else:
                         badCharacterDict[character] = 1
             badFile.write('{0}\n'.format(line))
@@ -211,10 +212,12 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     print('pnr', pnr, 'start', start, 'end', end)
     filename = util.get_path_filename(filepath)
     filepart = open(filepath, encoding='ISO-8859-1')
-    labelDict = {}
+    labelDict = {} # TODO use default dict
 
     util.seek_lines(filepart, start)
 
+    # TODO use with
+    # TODO use os path join
     writeFiles = {
         'correct': open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr),
                         'w', encoding='utf-8'),
@@ -244,12 +247,12 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         if has_bad_characters_for_regex(util.DNS_REGEX, line[(index + 1):]):
             add_bad_line(line)
         else:
-            (ipAddress, domain) = split_line(line)
+            ipAddress, domain = line.split(',', 1)
             if is_standart_isp_domain(line):
                 writeFiles['ipEncoded'].write('{0}\n'.format(line))
             else:
                 rdnsRecord = Domain(domain, ip_address=ipAddress)
-                if rdnsRecord.domain_labels[0].label.upper() in tlds:
+                if rdnsRecord.domain_labels[0].label.lower() in tlds:
                     if util.is_ip_hex_encoded_simple(ipAddress, domain):
                         append_hex_ip_line(line)
                     else:

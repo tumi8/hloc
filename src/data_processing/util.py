@@ -16,6 +16,7 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 #######################################
 ##    Different utility functions    ##
 #######################################
+# TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
@@ -40,6 +41,7 @@ def hex_for_ip(ip_address):
     """Returns the hexadecimal code for the ip address"""
     ip_blocks = ip_address.split('.')
     hexdata = ''
+    # TODO use format %02x%02x%02x%02x
     for block in ip_blocks:
         hexdata += hex(int(block))[2:].zfill(2)
     return hexdata.upper()
@@ -54,6 +56,7 @@ def is_ip_hex_encoded_simple(ip_address, domain):
 
 def get_path_filename(path):
     """Extracts the filename from a path string"""
+    # TODO use os.basename
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
     file_index = path.find('/')
@@ -134,21 +137,26 @@ def json_loads(json_str):
 ##       Models and Interfaces       ##
 #######################################
 class LocationCodeType(Enum):
-    iata = '___iata'
-    icao = '___icao'
-    faa = '____faa'
-    clli = '___clli'
-    locode = '_locode'
-    geonames = 'geoname'
+    #TODO use ids
+    iata = 0
+    icao = 1
+    faa = 2
+    clli = 3
+    locode = 4
+    geonames = 5
 
 class JSONBase(object):
     """
     The Base class to JSON encode your object with json_encoding_func
     """
+    #TODO use ABC
 
     __slots__ = []
+    __class__ = "foo"
 
     def dict_representation(self):
+        ret = {k: getattr(self, k) for k in self.__slots__ if getattr(self, k) is not None}
+        ret["clazz"] == self.__class__
         raise NotImplementedError("JSONBase: Should have implemented this")
 
     @staticmethod
@@ -163,7 +171,7 @@ class GPSLocation(JSONBase):
 
     def __init__(self, lat, lon):
         """init"""
-        self.id = None
+        self._id = None
         self.lat = lat
         self.lon = lon
 
@@ -502,6 +510,7 @@ class DomainLabelMatch(JSONBase):
             '__class__': '__domain_label_match__',
             'location_id': self.location_id,
             'code_type': self.code_type,
+            'code': self.code,
             'matching': self.matching
         }
 
