@@ -25,7 +25,6 @@ def main():
     matches = {}
     count_top_level_codes = 0
 
-    # TODO add filter to only evaluate the cities
     for code, (location_id, type) in code_tuples:
         if location_id not in matches:
             matches[location_id] = {'__all_match_ids__': set(), '__total_count__': 0} # TODO defaultdict
@@ -46,10 +45,13 @@ def main():
         matches[location_id][code]['__total_count__'] = total_count
         matches[location_id]['__total_count__'] += total_count
 
+    print(len(matches))
     loc_id_count = [(loc_id, len(dct['__all_match_ids__'])) for loc_id, dct in matches.items()]
     loc_id_count.sort(key=lambda x: x[1])
-    pprint(loc_id_count)
+    #pprint(loc_id_count)
+
     with open(args.filename + '.cdfdata', 'w') as cdf_file:
+        print(args.cc)
         if args.cc:
             json.dump(make_cdf_code_to_code(matches), cdf_file)
         else:
