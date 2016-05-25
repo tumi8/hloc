@@ -195,8 +195,8 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         goodRecords.append(record)
         countGoodLines += 1
         add_labels(record)
-        if len(record) >= 10 ** 5:
-            util.json_dump(record, writeFiles['correct'])
+        if len(goodRecords) >= 10 ** 5:
+            util.json_dump(goodRecords, writeFiles['correct'])
             writeFiles['correct'].write('\n')
             goodRecords = []
 
