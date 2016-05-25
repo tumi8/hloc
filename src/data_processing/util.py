@@ -4,8 +4,10 @@ from __future__ import print_function
 from math import radians, cos, sin, asin, sqrt
 from subprocess import check_output
 from string import printable
+from enum import Enum
 import re
 import json
+import sys
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
@@ -14,10 +16,11 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 #######################################
 ##    Different utility functions    ##
 #######################################
+# TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
-    line_count = int(str(count).split(' ')[0])
+    line_count = int(count.decode("utf-8") .split(' ')[0])
 
     print('Linecount for file: {0}'.format(line_count))
     return line_count
@@ -25,7 +28,7 @@ def count_lines(filename):
 
 def seek_lines(seeking_file, seek_until_line):
     """Read number of lines definded in the seekPoint"""
-    if seek_until_line < 0:
+    if seek_until_line <= 0:
         return
     i = 0
     for _ in seeking_file:
@@ -38,6 +41,7 @@ def hex_for_ip(ip_address):
     """Returns the hexadecimal code for the ip address"""
     ip_blocks = ip_address.split('.')
     hexdata = ''
+    # TODO use format %02x%02x%02x%02x
     for block in ip_blocks:
         hexdata += hex(int(block))[2:].zfill(2)
     return hexdata.upper()
@@ -52,6 +56,7 @@ def is_ip_hex_encoded_simple(ip_address, domain):
 
 def get_path_filename(path):
     """Extracts the filename from a path string"""
+    # TODO use os.basename
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
     file_index = path.find('/')
@@ -131,14 +136,27 @@ def json_loads(json_str):
 #######################################
 ##       Models and Interfaces       ##
 #######################################
+class LocationCodeType(Enum):
+    #TODO use ids
+    iata = 0
+    icao = 1
+    faa = 2
+    clli = 3
+    locode = 4
+    geonames = 5
+
 class JSONBase(object):
     """
     The Base class to JSON encode your object with json_encoding_func
     """
+    #TODO use ABC
 
     __slots__ = []
+    __class__ = "foo"
 
     def dict_representation(self):
+        ret = {k: getattr(self, k) for k in self.__slots__ if getattr(self, k) is not None}
+        ret["clazz"] == self.__class__
         raise NotImplementedError("JSONBase: Should have implemented this")
 
     @staticmethod
@@ -149,13 +167,30 @@ class JSONBase(object):
 class GPSLocation(JSONBase):
     """holds the coordinates"""
 
-    __slots__ = ['id', 'lat', 'lon']
+    __slots__ = ['_id', 'lat', 'lon']
 
     def __init__(self, lat, lon):
         """init"""
-        self.id = None
+        self._id = None
         self.lat = lat
         self.lon = lon
+
+    @property
+    def id(self):
+        """Getter for id"""
+        return self._id
+
+    @id.setter
+    def id(self, new_id):
+        """Setter for id"""
+        if new_id is None:
+            self._id = None
+            return
+        try:
+            self._id = int(new_id)
+        except (ValueError, TypeError):
+            print('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
+            raise
 
     def is_in_radius(self, location, radius):
         """Returns a True if the location is within the radius with the equirectangular method"""
@@ -210,12 +245,9 @@ class GPSLocation(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
-                       dct['state_code'], dct['population'])
-        if 'airport_info' in dct:
-            obj.airport_info = json_object_decoding(dct['airport_info'])
-        if 'locode' in dct:
-            obj.locode = json_object_decoding(dct['locode'])
+        obj = GPSLocation(dct['lat'], dct['lon'])
+        if 'id' in dct:
+            obj.id = dct['id']
         return obj
 
 
@@ -275,26 +307,32 @@ class Location(GPSLocation):
 
         return ret_dict
 
-    def code_id_tuples(self):
+    def code_id_type_tuples(self):
         """
         Creates a list with all codes in a tuple with the location id
+        ONLY FOR TRIE CREATION
         :rtype: list(tuple)
         """
-        ret_list = [(self.city_name, (self.id,))]
+        # if not isinstance(self.id, int):
+        #     print(self.dict_representation(), 'has no id')
+        #     raise ValueError('id is not int')
+        ret_list = []
+        if self.city_name:
+            ret_list.append((self.city_name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
         for code in self.clli:
-            ret_list.append((code, (self.id,)))
+            ret_list.append((code, (self.id, bytes(LocationCodeType.clli.name, 'utf-8'))))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id,)))
+            ret_list.append((name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
         if self.locode:
             for code in self.locode.place_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.locode.name, 'utf-8'))))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.iata.name, 'utf-8'))))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.icao.name, 'utf-8'))))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id,)))
+                ret_list.append((code, (self.id, bytes(LocationCodeType.faa.name, 'utf-8'))))
         return ret_list
 
     @staticmethod
@@ -302,15 +340,17 @@ class Location(GPSLocation):
         """Creates a Location object from a dictionary"""
         obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
                        dct['state_code'], dct['population'])
+        if 'id' in dct:
+            obj.id = dct['id']
         if 'airport_info' in dct:
-            obj.airport_info = json_object_decoding(dct['airport_info'])
+            obj.airport_info = dct['airport_info']
         if 'locode' in dct:
-            obj.locode = json_object_decoding(dct['locode'])
+            obj.locode = dct['locode']
         return obj
 
 
 class AirportInfo(JSONBase):
-    """Holds a list of the differen airport codes"""
+    """Holds a list of the different airport codes"""
 
     __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
 
@@ -410,7 +450,7 @@ class Domain(JSONBase):
         obj = Domain(dct['domain_name'], dct['ip_address'], dct['ipv6_address'])
         if 'domain_labels' in dct:
             for label_dct in dct['domain_labels']:
-                label_obj = json_object_decoding(label_dct)
+                label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
 
@@ -443,9 +483,8 @@ class DomainLabel(JSONBase):
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabel(dct['label'])
-        obj.matches = [json_object_decoding(match) for match in dct['matches']]
         for match in dct['matches']:
-            match_obj = json_object_decoding(match)
+            match_obj = match
             match_obj.domain_label = obj
             obj.matches.append(match_obj)
 
@@ -471,6 +510,7 @@ class DomainLabelMatch(JSONBase):
             '__class__': '__domain_label_match__',
             'location_id': self.location_id,
             'code_type': self.code_type,
+            'code': self.code,
             'matching': self.matching
         }
 

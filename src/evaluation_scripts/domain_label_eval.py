@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import json
+import ujson as json
 import pickle
 import argparse
 import operator
@@ -27,38 +27,38 @@ def main():
                 concatDict[key] = concatDict[key] + value
             else:
                 concatDict[key] = value
-    with open(args.regex_file, 'rb') as regex_file:
-        regexes = pickle.load(regex_file)
 
     print('sum labels ', sum(concatDict.values()))
 
-    # print('amount of _: ', count_occurences('_', concatDict.keys()))
-    # print('amount of -: ', count_occurences('-', concatDict.keys()))
-    # print('Collected data on a total of ', len(concatDict), ' items')
-    # a = filter_amount(concatDict.values(), 2, val=True)
-    # print(len(a), ' items have more than 2 occurences with ', sum(a))
-    # a = filter_amount(a, 3, val=True)
-    # print(len(a), ' items have more than 3 occurences with ', sum(a))
-    # a = filter_amount(a, 4, val=True)
-    # print(len(a), ' items have more than 4 occurences with ', sum(a))
-    # a = filter_amount(a, 5, val=True)
-    # print(len(a), ' items have more than 5 occurences with ', sum(a))
-    # a = filter_amount(a, 8, val=True)
-    # print(len(a), ' items have more than 8 occurences with ', sum(a))
-    # a = filter_amount(a, 10, val=True)
-    # print(len(a), ' items have more than 10 occurences with ', sum(a))
-    # a = filter_amount(a, 15, val=True)
-    # print(len(a), ' items have more than 15 occurences with ', sum(a))
-    # a = filter_amount(a, 20, val=True)
-    # print(len(a), ' items have more than 20 occurences with ', sum(a))
-    #
-    # with open('popular_labels_10.pickle', 'wb') as popular_file:
-    #     pickle.dump(dict(filter_amount(concatDict.items(), 10)), popular_file)
-    #
-    # with open('popular_labels_5.pickle', 'wb') as popular_file:
-    #     pickle.dump(dict(filter_amount(concatDict.items(), 5)), popular_file)
+    print('amount of _: ', count_occurences('_', concatDict.keys()))
+    print('amount of -: ', count_occurences('-', concatDict.keys()))
+    print('Collected data on a total of ', len(concatDict), ' items')
+    a = filter_amount(concatDict.values(), 2, val=True)
+    print(len(a), ' items have more than 2 occurences with ', sum(a))
+    a = filter_amount(a, 3, val=True)
+    print(len(a), ' items have more than 3 occurences with ', sum(a))
+    a = filter_amount(a, 4, val=True)
+    print(len(a), ' items have more than 4 occurences with ', sum(a))
+    a = filter_amount(a, 5, val=True)
+    print(len(a), ' items have more than 5 occurences with ', sum(a))
+    a = filter_amount(a, 8, val=True)
+    print(len(a), ' items have more than 8 occurences with ', sum(a))
+    a = filter_amount(a, 10, val=True)
+    print(len(a), ' items have more than 10 occurences with ', sum(a))
+    a = filter_amount(a, 15, val=True)
+    print(len(a), ' items have more than 15 occurences with ', sum(a))
+    a = filter_amount(a, 20, val=True)
+    print(len(a), ' items have more than 20 occurences with ', sum(a))
+
+    with open('popular_labels_10.pickle', 'wb') as popular_file:
+        json.dump(dict(filter_amount(concatDict.items(), 10)), popular_file)
+
+    with open('popular_labels_5.pickle', 'wb') as popular_file:
+        json.dump(dict(filter_amount(concatDict.items(), 5)), popular_file)
 
     if args.print_all:
+        with open(args.regex_file, 'rb') as regex_file:
+            regexes = pickle.load(regex_file)
         sortedTupleList = sorted(concatDict.items(), key=operator.itemgetter(1), reverse=True)
         sublist = sorted([(x[0], x[1], len(get_matches(x[0], regexes)))
                           for x in sortedTupleList[:10000]],
@@ -100,8 +100,8 @@ def count_occurences(string, list_strings):
 def read_stats_file(filename):
     """reads a pickle file and returns the dictionary"""
     returnDict = {}
-    with open(filename, 'rb') as characterFile:
-        returnDict = pickle.load(characterFile)
+    with open(filename) as characterFile:
+        returnDict = json.load(characterFile)
 
     return returnDict
 

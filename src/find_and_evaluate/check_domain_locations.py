@@ -23,8 +23,8 @@ from ripe.atlas.cousteau import (
     Ping, AtlasSource, AtlasCreateRequest, AtlasResultsRequest,
     MeasurementRequest, Measurement, ProbeRequest)
 
-from src.data_processing import util
-from src.data_processing.util import GPSLocation, LocationResult, DomainLabelMatch
+from ..data_processing import util
+from ..data_processing.util import GPSLocation, LocationResult, DomainLabelMatch
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
