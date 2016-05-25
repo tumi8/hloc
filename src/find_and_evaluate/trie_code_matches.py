@@ -77,7 +77,7 @@ def make_cdf_code_to_location(matches):
     match_count_group = collections.defaultdict(int)
     for dct in matches.values():
         for indct in dct.values():
-            if isinstance(indct, int):
+            if isinstance(indct, int) or isinstance(indct, set):
                 continue
             loc_set = set()
             for lst in indct.values():
