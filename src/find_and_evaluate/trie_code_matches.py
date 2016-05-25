@@ -14,7 +14,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('filename', type=str,
                         help='The filename with the location-trie')
-    parser.add_argument('-cc', action="store_true", help="set if you want the code to code evaluation")
+    parser.add_argument('-cl', action="store_true",
+                        help="set if you want the code to location evaluation")
+    parser.add_argument('-cc', action="store_true",
+                        help="set if you want the code to code evaluation")
     args = parser.parse_args()
 
     with open(args.filename, 'rb') as location_file:
@@ -54,6 +57,8 @@ def main():
         print(args.cc)
         if args.cc:
             json.dump(make_cdf_code_to_code(matches), cdf_file)
+        elif args.cl:
+            json.dump(make_cdf_code_to_location(matches), cdf_file)
         else:
             json.dump(make_cdf_location_to_location(matches), cdf_file)
     with open(args.filename + '.eval', 'w') as eval_file:
@@ -69,6 +74,20 @@ def make_cdf_code_to_code(matches):
             if indct['__total_count__'] not in match_count_group:
                 match_count_group[indct['__total_count__']] = 0
             match_count_group[indct['__total_count__']] += 1
+    return match_count_group
+
+def make_cdf_code_to_location(matches):
+    match_count_group = {}
+    for dct in matches.values():
+        for indct in dct.values():
+            pprint(indct)
+            break
+            if isinstance(indct, int):
+                continue
+            if indct['__total_count__'] not in match_count_group:
+                match_count_group[indct['__total_count__']] = 0
+            match_count_group[indct['__total_count__']] += 1
+        break
     return match_count_group
 
 def make_cdf_location_to_location(matches):
