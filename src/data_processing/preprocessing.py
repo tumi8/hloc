@@ -158,7 +158,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
             badLines = []
 
     def add_labels(new_rdns_record):
-        for index, label in enumerate(new_rdns_record.domainLabels):
+        for index, label in enumerate(new_rdns_record.domain_labels):
             #skip if tld
             if index == 0:
                 continue
