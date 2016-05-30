@@ -146,7 +146,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                     label_count += 1
                     label_loc_found = False
                     is_popular = o_label in popular_labels.keys()
-                    label_length += len(o_label)
+                    label_length += len(o_label.label)
 
                     if is_popular and popular_labels[o_label.label]['matches'] is not None:
                         popular_count += 1
