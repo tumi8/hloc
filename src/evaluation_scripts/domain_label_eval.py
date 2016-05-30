@@ -50,10 +50,10 @@ def main():
     a = filter_amount(a, 20, val=True)
     print(len(a), ' items have more than 20 occurences with ', sum(a))
 
-    with open('popular_labels_10.pickle', 'wb') as popular_file:
+    with open('popular_labels_10.pickle', 'w') as popular_file:
         json.dump(dict(filter_amount(concatDict.items(), 10)), popular_file)
 
-    with open('popular_labels_5.pickle', 'wb') as popular_file:
+    with open('popular_labels_5.pickle', 'w') as popular_file:
         json.dump(dict(filter_amount(concatDict.items(), 5)), popular_file)
 
     if args.print_all:
