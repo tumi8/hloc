@@ -102,7 +102,7 @@ def json_object_decoding(dct):
     return dct
 
 
-def json_dump(encoding_var, file_ptr, indent=0):
+def json_dump(encoding_var, file_ptr, indent=None):
     """
     Dumps the encoding_var to the file in file_ptr with the
     json_object_encoding function
@@ -154,6 +154,7 @@ class JSONBase(object):
     __slots__ = []
     __class__ = "foo"
 
+    # TODO
     def dict_representation(self):
         ret = {k: getattr(self, k) for k in self.__slots__ if getattr(self, k) is not None}
         ret["clazz"] == self.__class__
