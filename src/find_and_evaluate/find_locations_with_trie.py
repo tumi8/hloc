@@ -155,9 +155,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                         for key in match_count.keys():
                             match_count[key] += popular_labels[o_label]['counts'][key]
                     else:
-                        pm_count = {
-                            'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
-                        }
+                        pm_count = collections.defaultdict(int)
 
                         temp_gr_count, matches = search_in_label(o_label, trie)
 
