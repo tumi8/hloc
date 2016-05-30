@@ -7,6 +7,7 @@ import cProfile
 import time
 import os
 import ujson as json
+import collections
 from multiprocessing import Process
 
 from ..data_processing import util
@@ -114,9 +115,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     filename = filename_proto.format(index)
     loc_found_file = open('.'.join(filename.split('.')[:-1]) + '_found.json', 'w')
     locn_found_file = open('.'.join(filename.split('.')[:-1]) + '_not_found.json', 'w')
-    match_count = {
-        'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
-    }
+    match_count = collections.defaultdict(int)
     entries_count = 0
     label_count = 0
     entries_wl_count = 0
@@ -220,14 +219,7 @@ def search_in_label(o_label, trie):
     """returns all matches for this label"""
     matches = []
     ids = {}
-    type_count = {
-        util.LocationCodeType.iata.name: 0,
-        util.LocationCodeType.icao.name: 0,
-        util.LocationCodeType.faa.name: 0,
-        util.LocationCodeType.clli.name: 0,
-        util.LocationCodeType.alt.name: 0,
-        util.LocationCodeType.locode.name: 0
-    }
+    type_count = collections.defaultdict(int)
     label = o_label.label[:]
     while label:
         matching_keys = trie.prefixes(label)
