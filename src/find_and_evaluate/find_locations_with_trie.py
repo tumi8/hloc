@@ -6,6 +6,7 @@ import argparse
 import cProfile
 import time
 import os
+import ujson as json
 from multiprocessing import Process
 
 from ..data_processing import util
@@ -29,11 +30,11 @@ def __create_parser_arguments(parser):
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-d', '--load-popular-domain-labels', type=str,
                         dest='popular_labels_l',
-                        help='Specify a pickle file where the results for popular labels'
+                        help='Specify a json file where the results for popular labels'
                              ' are saved')
     parser.add_argument('-p', '--save-popular-domain-labels', type=str,
                         dest='popular_labels_s',
-                        help='Specify a pickle file where popular domain labels'
+                        help='Specify a json file where popular domain labels'
                              ' are saved and the scripts generates a pickle output file with the'
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
@@ -51,13 +52,12 @@ def main():
 
     popular_labels = {}
     if args.popular_labels_l is not None:
-        with open(args.popular_labels_l, 'rb') as pop_label_dict:
+        with open(args.popular_labels_l, 'r') as pop_label_dict:
             popular_labels = pickle.load(pop_label_dict)
 
     if args.popular_labels_s is not None:
-        # TODO change to json loading
-        with open(args.popular_labels_s, 'rb') as pop_label_file:
-            popular_labels_list = pickle.load(pop_label_file)
+        with open(args.popular_labels_s, 'r') as pop_label_file:
+            popular_labels_list = json.load(pop_label_file)
 
         for label in popular_labels_list:
             if label not in popular_labels.keys():
@@ -89,8 +89,8 @@ def main():
 
         os.remove('popular_labels_found_{}.pickle'.format(index))
 
-    with open('popular_labels_found.pickle', 'wb') as popular_file:
-        pickle.dump(popular_labels, popular_file)
+    with open('popular_labels_found.pickle', 'w') as popular_file:
+        json.dump(popular_labels, popular_file)
 
 
 def start_search_in_file(filename_proto, index, trie, popular_labels,
