@@ -137,7 +137,6 @@ def json_loads(json_str):
 ##       Models and Interfaces       ##
 #######################################
 class LocationCodeType(Enum):
-    #TODO use ids
     iata = 0
     icao = 1
     faa = 2
