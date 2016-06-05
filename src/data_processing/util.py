@@ -323,9 +323,9 @@ class Location(GPSLocation):
             ret_list.append((code, (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
             ret_list.append((name, (self.id, LocationCodeType.geonames.value)))
-        if self.locode:
+        if self.locode and self.state_code:
             for code in self.locode.place_codes:
-                ret_list.append((code, (self.id, LocationCodeType.locode.value)))
+                ret_list.append(('{}{}'.format(self.state_code, code), (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
                 ret_list.append((code, (self.id, LocationCodeType.iata.value)))

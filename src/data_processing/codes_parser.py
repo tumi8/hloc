@@ -477,9 +477,9 @@ def merge_locations_by_gps(locations, radius):
 def idfy_codes(codes):
     """Assign a unique id to every location in the array and return a dict with id to location"""
     ret_dict = {}
-    for index in range(0, len(codes)):
-        codes[index].id = index
-        ret_dict[index] = codes[index]
+    for index, code in enumerate(codes):
+        code.id = index
+        ret_dict[index] = code
 
     return ret_dict
 
