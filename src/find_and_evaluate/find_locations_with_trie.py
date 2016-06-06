@@ -53,11 +53,11 @@ def main():
 
     popular_labels = {}
     if args.popular_labels_l is not None:
-        with open(args.popular_labels_l, 'r') as pop_label_dict:
-            popular_labels = pickle.load(pop_label_dict)
+        with open(args.popular_labels_l) as pop_label_dict:
+            popular_labels = json.load(pop_label_dict)
 
     if args.popular_labels_s is not None:
-        with open(args.popular_labels_s, 'r') as pop_label_file:
+        with open(args.popular_labels_s) as pop_label_file:
             popular_labels_list = json.load(pop_label_file)
 
         for label in popular_labels_list:
