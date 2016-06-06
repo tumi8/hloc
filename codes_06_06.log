@@ -1,0 +1,199 @@
+Thread for character a startet
+saved 0 locations
+saved 0 locations
+Thread for character b startet
+Thread for character c startet
+Thread for character d startet
+Thread for character e startet
+Thread for character f startet
+Thread for character g startet
+Thread for character h startet
+Thread for character i startet
+Thread for character j startet
+Thread for character k startet
+Thread for character l startet
+Thread for character m startet
+Thread for character n startet
+Thread for character o startet
+Thread for character p startet
+saved 5000 locations
+Thread for character q startet
+Thread for character r startet
+Thread for character s startet
+saved 10000 locations
+Thread for character t startet
+Thread for character u startet
+Thread for character v startet
+saved 15000 locations
+Thread for character w startet
+Thread for character x startet
+Thread for character y startet
+Thread for character z startet
+saved 20000 locations
+saved 25000 locations
+Finished airport codes parsing
+Finished locode parsing
+Finished clli parsing
+Finished geonames parsing
+geonames length:  3522
+locode length:  56627
+air length:  29727
+clli length:  30842
+geonames merged: 1469
+locode merged: 1469
+air merged: 4120
+clli merged: 4291
+finished and needed  410.618048  seconds of theprocessor computation time
+And  406  seconds of the real world time.
+Collected data on  4291  locations.
+iata: 5776 icao: 9837 faa: 15183 locode: 43786 clli: 30842 geonames: 35077
+Thread for character a startet
+saved 0 locations
+saved 0 locations
+Thread for character b startet
+Thread for character c startet
+Thread for character d startet
+Thread for character e startet
+Thread for character f startet
+Thread for character g startet
+Thread for character h startet
+Thread for character i startet
+Thread for character j startet
+Thread for character k startet
+Thread for character l startet
+Thread for character m startet
+Thread for character n startet
+Thread for character o startet
+Thread for character p startet
+saved 5000 locations
+Thread for character q startet
+Thread for character r startet
+Thread for character s startet
+saved 10000 locations
+Thread for character t startet
+Thread for character u startet
+Thread for character v startet
+Thread for character w startet
+saved 15000 locations
+Thread for character x startet
+Thread for character y startet
+Thread for character z startet
+saved 20000 locations
+saved 25000 locations
+Finished airport codes parsing
+Finished locode parsing
+Finished clli parsing
+Finished geonames parsing
+geonames length:  24035
+locode length:  56627
+air length:  29727
+clli length:  30842
+geonames merged: 3244
+locode merged: 3244
+air merged: 4663
+clli merged: 4822
+finished and needed  485.296287  seconds of theprocessor computation time
+And  481  seconds of the real world time.
+Collected data on  4822  locations.
+iata: 5776 icao: 9837 faa: 15183 locode: 54016 clli: 30842 geonames: 103399
+Thread for character a startet
+saved 0 locations
+saved 0 locations
+Thread for character b startet
+Thread for character c startet
+Thread for character d startet
+Thread for character e startet
+Thread for character f startet
+Thread for character g startet
+Thread for character h startet
+Thread for character i startet
+Thread for character j startet
+Thread for character k startet
+Thread for character l startet
+Thread for character m startet
+Thread for character n startet
+Thread for character o startet
+Thread for character p startet
+saved 5000 locations
+Thread for character q startet
+Thread for character r startet
+saved 10000 locations
+Thread for character s startet
+Thread for character t startet
+Thread for character u startet
+Thread for character v startet
+saved 15000 locations
+Thread for character w startet
+Thread for character x startet
+Thread for character y startet
+Thread for character z startet
+saved 20000 locations
+saved 20000 locations
+saved 25000 locations
+Finished airport codes parsing
+Finished locode parsing
+Finished clli parsing
+Finished geonames parsing
+geonames length:  310
+locode length:  56627
+air length:  29727
+clli length:  30842
+geonames merged: 255
+locode merged: 255
+air merged: 3884
+clli merged: 4039
+finished and needed  258.63758299999995  seconds of theprocessor computation time
+And  254  seconds of the real world time.
+Collected data on  4039  locations.
+iata: 5776 icao: 9837 faa: 15183 locode: 12006 clli: 30842 geonames: 6305
+Thread for character a startet
+saved 0 locations
+saved 0 locations
+Thread for character b startet
+Thread for character c startet
+Thread for character d startet
+Thread for character e startet
+Thread for character f startet
+Thread for character g startet
+Thread for character h startet
+Thread for character i startet
+Thread for character j startet
+Thread for character k startet
+Thread for character l startet
+Thread for character m startet
+Thread for character n startet
+Thread for character o startet
+Thread for character p startet
+saved 5000 locations
+Thread for character q startet
+Thread for character r startet
+Thread for character s startet
+saved 10000 locations
+saved 10000 locations
+Thread for character t startet
+Thread for character u startet
+Thread for character v startet
+saved 15000 locations
+Thread for character w startet
+Thread for character x startet
+Thread for character y startet
+Thread for character z startet
+saved 20000 locations
+saved 20000 locations
+saved 25000 locations
+Finished airport codes parsing
+Finished locode parsing
+Finished clli parsing
+Finished geonames parsing
+geonames length:  668
+locode length:  56627
+air length:  29727
+clli length:  30842
+geonames merged: 488
+locode merged: 488
+air merged: 3904
+clli merged: 4064
+finished and needed  294.36476600000003  seconds of theprocessor computation time
+And  291  seconds of the real world time.
+Collected data on  4064  locations.
+iata: 5776 icao: 9837 faa: 15183 locode: 20316 clli: 30842 geonames: 11543

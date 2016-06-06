@@ -1,0 +1,27 @@
+using strategy: abstract
+Linecount for file: 1235099301
+pnr 5 start 771937060 end 926324472
+pnr 5: good lines: 28702992
+pnr 5: preprocess_file_part running time: 5783.829742744099 profiled: False
+pnr 0 start 0 end 154387412
+pnr 0: good lines: 25366941
+pnr 0: preprocess_file_part running time: 5786.429998701904 profiled: False
+pnr 2 start 308774824 end 463162236
+pnr 2: good lines: 28389958
+pnr 2: preprocess_file_part running time: 5862.90122768702 profiled: False
+pnr 4 start 617549648 end 771937060
+pnr 4: good lines: 32524818
+pnr 4: preprocess_file_part running time: 6186.912228232715 profiled: False
+pnr 3 start 463162236 end 617549648
+pnr 3: good lines: 42316242
+pnr 3: preprocess_file_part running time: 7651.875887081027 profiled: False
+pnr 7 start 1080711884 end 1235099301
+pnr 7: good lines: 40628107
+pnr 7: preprocess_file_part running time: 7819.3830581260845 profiled: False
+pnr 6 start 926324472 end 1080711884
+pnr 6: good lines: 41190330
+pnr 6: preprocess_file_part running time: 7843.781630527228 profiled: False
+pnr 1 start 154387412 end 308774824
+pnr 1: good lines: 73020021
+pnr 1: preprocess_file_part running time: 11932.018535978626 profiled: False
+Running time: 12527.988248348236
