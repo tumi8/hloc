@@ -14,13 +14,13 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 
 
 #######################################
-##    Different utility functions    ##
+#    Different utility functions      #
 #######################################
 # TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = check_output(['wc', '-l', filename])
-    line_count = int(count.decode("utf-8") .split(' ')[0])
+    line_count = int(count.decode().split(' ')[0])
 
     print('Linecount for file: {0}'.format(line_count))
     return line_count
@@ -70,7 +70,7 @@ def get_path_filename(path):
 
 
 #######################################
-##     JSON utility functions        ##
+#    JSON utility functions           #
 #######################################
 def json_object_encoding(obj):
     """Overrides the default method from the JSONEncoder"""
@@ -102,7 +102,7 @@ def json_object_decoding(dct):
     return dct
 
 
-def json_dump(encoding_var, file_ptr, indent=0):
+def json_dump(encoding_var, file_ptr, indent=None):
     """
     Dumps the encoding_var to the file in file_ptr with the
     json_object_encoding function
@@ -134,10 +134,9 @@ def json_loads(json_str):
 
 
 #######################################
-##       Models and Interfaces       ##
+#       Models and Interfaces         #
 #######################################
 class LocationCodeType(Enum):
-    #TODO use ids
     iata = 0
     icao = 1
     faa = 2
@@ -145,15 +144,17 @@ class LocationCodeType(Enum):
     locode = 4
     geonames = 5
 
+
 class JSONBase(object):
     """
     The Base class to JSON encode your object with json_encoding_func
     """
-    #TODO use ABC
+    # TODO use ABC
 
     __slots__ = []
     __class__ = "foo"
 
+    # TODO
     def dict_representation(self):
         ret = {k: getattr(self, k) for k in self.__slots__ if getattr(self, k) is not None}
         ret["clazz"] == self.__class__
@@ -237,7 +238,7 @@ class GPSLocation(JSONBase):
             'lat': self.lat,
             'lon': self.lon
         }
-        if self.id:
+        if self.id is not None:
             ret_dict['id'] = self.id
 
         return ret_dict
@@ -318,21 +319,22 @@ class Location(GPSLocation):
         #     raise ValueError('id is not int')
         ret_list = []
         if self.city_name:
-            ret_list.append((self.city_name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
+            ret_list.append((self.city_name, (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
-            ret_list.append((code, (self.id, bytes(LocationCodeType.clli.name, 'utf-8'))))
+            ret_list.append((code, (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id, bytes(LocationCodeType.geonames.name, 'utf-8'))))
-        if self.locode:
+            ret_list.append((name, (self.id, LocationCodeType.geonames.value)))
+        if self.locode and self.state_code:
             for code in self.locode.place_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.locode.name, 'utf-8'))))
+                ret_list.append(('{}{}'.format(self.state_code, code),
+                                 (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.iata.name, 'utf-8'))))
+                ret_list.append((code, (self.id, LocationCodeType.iata.value)))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.icao.name, 'utf-8'))))
+                ret_list.append((code, (self.id, LocationCodeType.icao.value)))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id, bytes(LocationCodeType.faa.name, 'utf-8'))))
+                ret_list.append((code, (self.id, LocationCodeType.faa.value)))
         return ret_list
 
     @staticmethod
@@ -496,7 +498,8 @@ class DomainLabelMatch(JSONBase):
 
     __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
 
-    def __init__(self, location_id, code_type, domain_label=None, code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType, domain_label: str=None,
+                 code=None):
         """init"""
         self.domain_label = domain_label
         self.location_id = location_id
@@ -527,7 +530,7 @@ class LocationResult(JSONBase):
 
     __slots__ = ['location_id', 'rtt', 'location']
 
-    def __init__(self, location_id, rtt, location=None):
+    def __init__(self, location_id: int, rtt, location=None):
         """init"""
         self.location_id = location_id
         self.location = location
@@ -542,6 +545,6 @@ class LocationResult(JSONBase):
         }
 
     @staticmethod
-    def create_object_from_dict(dct):
+    def create_object_from_dict(dct: dict):
         """Creates a LocationResult object from a dictionary"""
         return LocationResult(dct['location_id'], dct['rtt'])

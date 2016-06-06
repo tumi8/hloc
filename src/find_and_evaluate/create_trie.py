@@ -33,7 +33,7 @@ def create_trie(locations):
     for location in locations.values():
         code_id_type_tuples.extend(location.code_id_type_tuples())
 
-    return RecordTrie('<Hh', code_id_type_tuples)
+    return RecordTrie('<HH', code_id_type_tuples)
 
 if __name__ == '__main__':
     main()

@@ -477,9 +477,9 @@ def merge_locations_by_gps(locations, radius):
 def idfy_codes(codes):
     """Assign a unique id to every location in the array and return a dict with id to location"""
     ret_dict = {}
-    for index in range(0, len(codes)):
-        codes[index].id = index
-        ret_dict[index] = codes[index]
+    for index, code in enumerate(codes):
+        code.id = index
+        ret_dict[index] = code
 
     return ret_dict
 
@@ -607,7 +607,7 @@ def parse_codes(args):
         get_geo_names(args.geonames, args.min_population)
         print('Finished geonames parsing')
 
-    location_codes = merge_location_codes(args)
+    location_codes = merge_location_codes(args.merge_radius)
 
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')

@@ -6,6 +6,8 @@ import argparse
 import cProfile
 import time
 import os
+import ujson as json
+import collections
 from multiprocessing import Process
 
 from ..data_processing import util
@@ -29,11 +31,11 @@ def __create_parser_arguments(parser):
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-d', '--load-popular-domain-labels', type=str,
                         dest='popular_labels_l',
-                        help='Specify a pickle file where the results for popular labels'
+                        help='Specify a json file where the results for popular labels'
                              ' are saved')
     parser.add_argument('-p', '--save-popular-domain-labels', type=str,
                         dest='popular_labels_s',
-                        help='Specify a pickle file where popular domain labels'
+                        help='Specify a json file where popular domain labels'
                              ' are saved and the scripts generates a pickle output file with the'
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
@@ -51,13 +53,12 @@ def main():
 
     popular_labels = {}
     if args.popular_labels_l is not None:
-        with open(args.popular_labels_l, 'rb') as pop_label_dict:
-            popular_labels = pickle.load(pop_label_dict)
+        with open(args.popular_labels_l) as pop_label_dict:
+            popular_labels = json.load(pop_label_dict)
 
     if args.popular_labels_s is not None:
-        # TODO change to json loading
-        with open(args.popular_labels_s, 'rb') as pop_label_file:
-            popular_labels_list = pickle.load(pop_label_file)
+        with open(args.popular_labels_s) as pop_label_file:
+            popular_labels_list = json.load(pop_label_file)
 
         for label in popular_labels_list:
             if label not in popular_labels.keys():
@@ -89,8 +90,8 @@ def main():
 
         os.remove('popular_labels_found_{}.pickle'.format(index))
 
-    with open('popular_labels_found.pickle', 'wb') as popular_file:
-        pickle.dump(popular_labels, popular_file)
+    with open('popular_labels_found.pickle', 'w') as popular_file:
+        json.dump(popular_labels, popular_file)
 
 
 def start_search_in_file(filename_proto, index, trie, popular_labels,
@@ -114,9 +115,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     filename = filename_proto.format(index)
     loc_found_file = open('.'.join(filename.split('.')[:-1]) + '_found.json', 'w')
     locn_found_file = open('.'.join(filename.split('.')[:-1]) + '_not_found.json', 'w')
-    match_count = {
-        'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
-    }
+    match_count = collections.defaultdict(int)
     entries_count = 0
     label_count = 0
     entries_wl_count = 0
@@ -146,7 +145,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                     label_count += 1
                     label_loc_found = False
                     is_popular = o_label in popular_labels.keys()
-                    label_length += len(o_label)
+                    label_length += len(o_label.label)
 
                     if is_popular and popular_labels[o_label.label]['matches'] is not None:
                         popular_count += 1
@@ -156,9 +155,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                         for key in match_count.keys():
                             match_count[key] += popular_labels[o_label]['counts'][key]
                     else:
-                        pm_count = {
-                            'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
-                        }
+                        pm_count = collections.defaultdict(int)
 
                         temp_gr_count, matches = search_in_label(o_label, trie)
 
@@ -220,14 +217,7 @@ def search_in_label(o_label, trie):
     """returns all matches for this label"""
     matches = []
     ids = {}
-    type_count = {
-        util.LocationCodeType.iata.name: 0,
-        util.LocationCodeType.icao.name: 0,
-        util.LocationCodeType.faa.name: 0,
-        util.LocationCodeType.clli.name: 0,
-        util.LocationCodeType.alt.name: 0,
-        util.LocationCodeType.locode.name: 0
-    }
+    type_count = collections.defaultdict(int)
     label = o_label.label[:]
     while label:
         matching_keys = trie.prefixes(label)
