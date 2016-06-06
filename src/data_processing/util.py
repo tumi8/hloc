@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Some utility functions"""
 from __future__ import print_function
-from math import radians, cos, sin, asin, sqrt
-from subprocess import check_output
-from string import printable
-from enum import Enum
+import math
+import subprocess
+import string
+import enum
+import collections
 import re
 import json
 import sys
 
-ACCEPTED_CHARACTER = '{0},.-_'.format(printable[0:62])
+ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
+DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z])>>')
 
 
 #######################################
@@ -19,7 +21,7 @@ DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
 # TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
-    count = check_output(['wc', '-l', filename])
+    count = subprocess.check_output(['wc', '-l', filename])
     line_count = int(count.decode().split(' ')[0])
 
     print('Linecount for file: {0}'.format(line_count))
@@ -99,6 +101,8 @@ def json_object_decoding(dct):
             return DomainLabelMatch.create_object_from_dict(dct)
         if dct['__class__'] == '__gps_location__':
             return GPSLocation.create_object_from_dict(dct)
+        if dct['__class__'] == '__drop_rule__':
+            return DRoPRule.create_object_from_dict(dct)
     return dct
 
 
@@ -136,7 +140,7 @@ def json_loads(json_str):
 #######################################
 #       Models and Interfaces         #
 #######################################
-class LocationCodeType(Enum):
+class LocationCodeType(enum.Enum):
     iata = 0
     icao = 1
     faa = 2
@@ -152,17 +156,15 @@ class JSONBase(object):
     # TODO use ABC
 
     __slots__ = []
-    __class__ = "foo"
+    __class__ = "jsonbase"
+    __no_json__ = []
 
-    # TODO
     def dict_representation(self):
-        ret = {k: getattr(self, k) for k in self.__slots__ if getattr(self, k) is not None}
-        ret["clazz"] == self.__class__
-        raise NotImplementedError("JSONBase: Should have implemented this")
+        raise NotImplementedError("JSONBase: Should have implemented this method")
 
     @staticmethod
     def create_object_from_dict(dct):
-        raise NotImplementedError("JSONBase: Should have implemented this")
+        raise NotImplementedError("JSONBase: Should have implemented this nethod")
 
 
 class GPSLocation(JSONBase):
@@ -195,22 +197,22 @@ class GPSLocation(JSONBase):
 
     def is_in_radius(self, location, radius):
         """Returns a True if the location is within the radius with the equirectangular method"""
-        lon1 = radians(float(self.lon))
-        lat1 = radians(float(self.lat))
-        lon2 = radians(float(location.lon))
-        lat2 = radians(float(location.lat))
+        lon1 = math.radians(float(self.lon))
+        lat1 = math.radians(float(self.lat))
+        lon2 = math.radians(float(location.lon))
+        lat2 = math.radians(float(location.lat))
         # Radius of earth in kilometers. Use 3956 for miles
-        return (((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (
+        return (((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
             lat2 - lat1) ** 2) <= (radius / 6371) ** 2
 
     def gps_distance_equirectangular(self, location):
         """Return the distance between the two locations using the equirectangular method"""
-        lon1 = radians(float(self.lon))
-        lat1 = radians(float(self.lat))
-        lon2 = radians(float(location.lon))
-        lat2 = radians(float(location.lat))
+        lon1 = math.radians(float(self.lon))
+        lat1 = math.radians(float(self.lat))
+        lon2 = math.radians(float(location.lon))
+        lat2 = math.radians(float(location.lat))
 
-        return sqrt((((lon2 - lon1) * cos(0.5 * (lat2 + lat1))) ** 2 + (
+        return math.sqrt((((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
             lat2 - lat1) ** 2)) * 6371
 
     def gps_distance_haversine(self, location2):
@@ -219,22 +221,22 @@ class GPSLocation(JSONBase):
         on the earth (specified in decimal degrees)
         """
         # convert decimal degrees to radians
-        lon1 = radians(float(self.lon))
-        lat1 = radians(float(self.lat))
-        lon2 = radians(float(location2.lon))
-        lat2 = radians(float(location2.lat))
+        lon1 = math.radians(float(self.lon))
+        lat1 = math.radians(float(self.lat))
+        lon2 = math.radians(float(location2.lon))
+        lat2 = math.radians(float(location2.lat))
         # haversine formula
         dlon = lon2 - lon1
         dlat = lat2 - lat1
-        tmp = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-        ftmp = 2 * asin(sqrt(tmp))
+        tmp = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        ftmp = 2 * math.asin(math.sqrt(tmp))
         # Radius of earth in kilometers. Use 3956 for miles
         return ftmp * 6371
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
-            '__gps_location__': True,
+            '__class__': '__gps_locations__',
             'lat': self.lat,
             'lon': self.lon
         }
@@ -548,3 +550,70 @@ class LocationResult(JSONBase):
     def create_object_from_dict(dct: dict):
         """Creates a LocationResult object from a dictionary"""
         return LocationResult(dct['location_id'], dct['rtt'])
+
+
+class DRoPRule(JSONBase):
+    """Stores a DRoP rule to find locations in domain names"""
+
+    __slots__ = ['name', 'source', '_rules']
+
+    def __init__(self, name: str, source: str):
+        """init"""
+        self.name = name
+        self.source = source
+        self._rules = []
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        return {
+            '__class__': '__drop_rule__',
+            'name': self.name,
+            'source': self.source,
+            'rules': self._rules
+        }
+
+    @property
+    def rules(self):
+        """
+        :returns all rules saved in this object in a named tuple (rule: str, type: LocationCodeType)
+        """
+        return self._rules
+
+    def add_rule(self, rule: str, code_type: LocationCodeType):
+        """adds a rule with the LocationCodeType set in type"""
+        rule_tuple = collections.namedtuple('Rule', ['rule', 'type'])
+        self._rules.append(rule_tuple(rule, code_type))
+
+    @staticmethod
+    def create_object_from_dict(dct):
+        """Creates a DroPRuler object from a dictionary"""
+        obj = DRoPRule(dct['name'], dct['source'])
+        obj._rules = dct['rules']
+        return obj
+
+    @staticmethod
+    def create_rule_from_yaml_dict(dct):
+        """Creates a DroPRuler object from a yaml-DRoP dictionary"""
+        obj = DRoPRule(dct['name'], dct['source'])
+        for rule in dct['rules']:
+            if rule['mapping_required'] != 1:
+                print(rule)
+            else:
+                rule_type_match = DROP_RULE_TYPE_REGEX.search(rule['regexp'])
+                if rule_type_match:
+                    drop_rule_type = rule_type_match.group('type')
+                    if drop_rule_type == 'pop':
+                        our_rule_type = LocationCodeType.geonames
+                    elif drop_rule_type == 'iata':
+                        our_rule_type = LocationCodeType.iata
+                    elif drop_rule_type == 'icao':
+                        our_rule_type = LocationCodeType.icao
+                    elif drop_rule_type == 'locode':
+                        our_rule_type = LocationCodeType.locode
+                    elif drop_rule_type == 'clli':
+                        our_rule_type = LocationCodeType.clli
+                    else:
+                        print(drop_rule_type)
+                    rule_str = rule['regexp'].replace(rule_type_match.group(0), '{}')
+                    obj.add_rule(rule_str, our_rule_type)
+

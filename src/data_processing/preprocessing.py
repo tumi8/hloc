@@ -202,7 +202,6 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
 
     util.seek_lines(filepart, start)
 
-    # TODO use with
     # TODO use os path join
     with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'w',
               encoding='utf-8') as correctFile, open(
