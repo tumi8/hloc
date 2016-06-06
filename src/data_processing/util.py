@@ -238,7 +238,7 @@ class GPSLocation(JSONBase):
             'lat': self.lat,
             'lon': self.lon
         }
-        if self.id is None:
+        if self.id is not None:
             ret_dict['id'] = self.id
 
         return ret_dict
