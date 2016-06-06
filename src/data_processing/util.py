@@ -617,3 +617,5 @@ class DRoPRule(JSONBase):
                     rule_str = rule['regexp'].replace(rule_type_match.group(0), '{}')
                     obj.add_rule(rule_str, our_rule_type)
 
+        return obj
+
