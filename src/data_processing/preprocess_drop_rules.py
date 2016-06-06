@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
     rules = []
     with open(args.drop_rules_file_path) as drop_rules_file:
-        docs = yaml.load(drop_rules_file)
+        docs = yaml.load_all(drop_rules_file)
         for doc in docs:
             if 'source' in doc and doc['name'].find('DRoP') >= 0:
                 rules.append(util.DRoPRule.create_rule_from_yaml_dict(doc))
