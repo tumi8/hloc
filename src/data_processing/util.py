@@ -12,7 +12,7 @@ import sys
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
-DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z])>>')
+DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 
 
 #######################################
