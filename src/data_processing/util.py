@@ -588,7 +588,7 @@ class DRoPRule(JSONBase):
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
-            obj.add_rule(rule['rule'], rule['type'])
+            obj.add_rule(rule['rule'], getattr(LocationCodeType, rule['type']))
         return obj
 
     @staticmethod
@@ -623,7 +623,7 @@ class DRoPRule(JSONBase):
         __slots__ = ()
 
         def _as_norm_dict(self):
-            return {'rule': self.rule, 'type': self.type}
+            return {'rule': self.rule, 'type': str(self.type)}
 
         def __str__(self):
             return 'Rule(\nregexrule: {}\ntype: {}\n)'.format(self.rule, self.type)
