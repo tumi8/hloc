@@ -569,7 +569,7 @@ class DRoPRule(JSONBase):
             '__class__': '__drop_rule__',
             'name': self.name,
             'source': self.source,
-            'rules': self._rules
+            'rules': [rule._as_norm_dict() for rule in self._rules]
         }
 
     @property
@@ -588,7 +588,8 @@ class DRoPRule(JSONBase):
     def create_object_from_dict(dct):
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
-        obj._rules = dct['rules']
+        for rule in dct['rules']:
+            obj.add_rule(rule['rule'], rule['type'])
         return obj
 
     @staticmethod
@@ -618,4 +619,10 @@ class DRoPRule(JSONBase):
                     obj.add_rule(rule_str, our_rule_type)
 
         return obj
+
+    class Rule(namedtuple('Rule', ['rule' ,'type'])):
+        __slots__ = ()
+
+        def _as_norm_dict(self):
+            return {'rule': self.rule, 'type': self.type}
 

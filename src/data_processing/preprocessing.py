@@ -132,68 +132,6 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
 
-    def is_standart_isp_domain(domain_line):
-        """Basic check if the domain is a isp client domain address"""
-        return ipregex.search(domain_line)
-
-    def has_bad_characters_for_regex(dnsregex, domain_line):
-        """
-        Execute regex on line
-        return true if regex had a match
-        """
-        return dnsregex.search(domain_line) is None
-
-    def add_bad_line(domain_line):
-        nonlocal badLines
-        badLines.append(domain_line)
-        if len(badLines) > 10 ** 3:
-            write_bad_lines(writeFiles['bad'], badLines, util.ACCEPTED_CHARACTER)
-            badLines = []
-
-    def add_labels(new_rdns_record):
-        for index, label in enumerate(new_rdns_record.domain_labels):
-            # skip if tld
-            if index == 0:
-                continue
-            labelDict[label.label] += 1
-
-    def write_bad_lines(badFile, lines, goodCharacters):
-        """
-        write lines to the badFile
-        goodCharacters are all allowed Character
-        returns all bad Character found in the lines in a list
-        """
-        for line in lines:
-            for character in set(line):
-                if character not in goodCharacters:
-                    badCharacterDict[character] += 1
-            badFile.write('{0}\n'.format(line))
-
-    def append_hex_ip_line(app_line):
-        nonlocal hexIpRecords
-        hexIpRecords.append(app_line)
-        if len(hexIpRecords) >= 10 ** 5:
-            writeFiles['hexIpEncoded'].write('\n'.join(hexIpRecords))
-            hexIpRecords = []
-
-    def append_good_record(record):
-        nonlocal goodRecords, countGoodLines
-        goodRecords.append(record)
-        countGoodLines += 1
-        add_labels(record)
-        if len(goodRecords) >= 10 ** 5:
-            util.json_dump(goodRecords, writeFiles['correct'])
-            writeFiles['correct'].write('\n')
-            goodRecords = []
-
-    def append_bad_dns_record(record):
-        nonlocal badDnsRecords
-        badDnsRecords.append(rdnsRecord)
-        if len(badDnsRecords) >= 10 ** 5:
-            util.json_dump(badDnsRecords, writeFiles['badDNS'])
-            writeFiles['badDNS'].write('\n')
-            badDnsRecords = []
-
     start, end = sector
     print('pnr', pnr, 'start', start, 'end', end)
     filename = util.get_path_filename(filepath)
@@ -213,6 +151,67 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
                 encoding='utf-8') as badFile, open(
                 destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'w',
                 encoding='utf-8') as badDnsFile:
+        def is_standart_isp_domain(domain_line):
+            """Basic check if the domain is a isp client domain address"""
+            return ipregex.search(domain_line)
+
+        def has_bad_characters_for_regex(dnsregex, domain_line):
+            """
+            Execute regex on line
+            return true if regex had a match
+            """
+            return dnsregex.search(domain_line) is None
+
+        def add_bad_line(domain_line):
+            nonlocal badLines
+            badLines.append(domain_line)
+            if len(badLines) > 10 ** 3:
+                write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
+                badLines = []
+
+        def add_labels(new_rdns_record):
+            for index, label in enumerate(new_rdns_record.domain_labels):
+                # skip if tld
+                if index == 0:
+                    continue
+                labelDict[label.label] += 1
+
+        def write_bad_lines(badFile, lines, goodCharacters):
+            """
+            write lines to the badFile
+            goodCharacters are all allowed Character
+            returns all bad Character found in the lines in a list
+            """
+            for line in lines:
+                for character in set(line):
+                    if character not in goodCharacters:
+                        badCharacterDict[character] += 1
+                badFile.write('{0}\n'.format(line))
+
+        def append_hex_ip_line(app_line):
+            nonlocal hexIpRecords
+            hexIpRecords.append(app_line)
+            if len(hexIpRecords) >= 10 ** 5:
+                hexIpEncodedFile.write('\n'.join(hexIpRecords))
+                hexIpRecords = []
+
+        def append_good_record(record):
+            nonlocal goodRecords, countGoodLines
+            goodRecords.append(record)
+            countGoodLines += 1
+            add_labels(record)
+            if len(goodRecords) >= 10 ** 5:
+                util.json_dump(goodRecords, correctFile)
+                correctFile.write('\n')
+                goodRecords = []
+
+        def append_bad_dns_record(record):
+            nonlocal badDnsRecords
+            badDnsRecords.append(record)
+            if len(badDnsRecords) >= 10 ** 5:
+                util.json_dump(badDnsRecords, badDnsFile)
+                badDnsFile.write('\n')
+                badDnsRecords = []
 
         badCharacterDict = collections.defaultdict(int)
         badLines = []
