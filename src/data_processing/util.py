@@ -620,7 +620,7 @@ class DRoPRule(JSONBase):
 
         return obj
 
-    class Rule(namedtuple('Rule', ['rule' ,'type'])):
+    class Rule(collections.namedtuple('Rule', ['rule' ,'type'])):
         __slots__ = ()
 
         def _as_norm_dict(self):
