@@ -79,7 +79,7 @@ def json_object_encoding(obj):
     if isinstance(obj, JSONBase):
         return obj.dict_representation()
 
-    raise TypeError('Object not handled by the JSON encoding function')
+    raise TypeError('Object not handled by the JSON encoding function ({})'.format(type(obj)))
 
 
 def json_object_decoding(dct):
