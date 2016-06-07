@@ -581,8 +581,7 @@ class DRoPRule(JSONBase):
 
     def add_rule(self, rule: str, code_type: LocationCodeType):
         """adds a rule with the LocationCodeType set in type"""
-        rule_tuple = collections.namedtuple('Rule', ['rule', 'type'])
-        self._rules.append(rule_tuple(rule, code_type))
+        self._rules.append(DRoPRule.Rule(rule, code_type))
 
     @staticmethod
     def create_object_from_dict(dct):
@@ -620,9 +619,11 @@ class DRoPRule(JSONBase):
 
         return obj
 
-    class Rule(collections.namedtuple('Rule', ['rule' ,'type'])):
+    class Rule(collections.namedtuple('Rule', ['rule', 'type'])):
         __slots__ = ()
 
         def _as_norm_dict(self):
             return {'rule': self.rule, 'type': self.type}
 
+        def __str__(self):
+            return 'Rule(\nregexrule: {}\ntype: {}\n)'.format(self.rule, self.type)
