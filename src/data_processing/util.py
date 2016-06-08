@@ -510,7 +510,7 @@ class DomainLabelMatch(JSONBase):
         return {
             '__class__': '__domain_label_match__',
             'location_id': self.location_id,
-            'code_type': str(self.code_type),
+            'code_type': self.code_type.value,
             'code': self.code,
             'matching': self.matching
         }
@@ -518,7 +518,7 @@ class DomainLabelMatch(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabelMatch(dct['location_id'], getattr(LocationCodeType, dct['code_type']))
+        obj = DomainLabelMatch(dct['location_id'], LocationCodeType(dct['code_type']))
         obj.matching = dct['matching']
         return obj
 
@@ -584,7 +584,7 @@ class DRoPRule(JSONBase):
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
-            obj.add_rule(rule['rule'], getattr(LocationCodeType, rule['type']))
+            obj.add_rule(rule['rule'], LocationCodeType(rule['type']))
         return obj
 
     @staticmethod
@@ -619,7 +619,7 @@ class DRoPRule(JSONBase):
         __slots__ = ()
 
         def as_norm_dict(self) -> dict:
-            return {'rule': self.rule, 'type': str(self.type)}
+            return {'rule': self.rule, 'type': self.type.value}
 
         def __str__(self):
-            return 'Rule(\nregexrule: {}\ntype: {}\n)'.format(self.rule, self.type)
+            return 'Rule(\nregexrule: {}\ntype: {}\n)'.format(self.rule, self.type.name)
