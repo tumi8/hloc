@@ -155,10 +155,6 @@ class JSONBase(object):
     """
     # TODO use ABC
 
-    __slots__ = []
-    __class__ = "jsonbase"
-    __no_json__ = []
-
     def dict_representation(self):
         raise NotImplementedError("JSONBase: Should have implemented this method")
 
@@ -514,7 +510,7 @@ class DomainLabelMatch(JSONBase):
         return {
             '__class__': '__domain_label_match__',
             'location_id': self.location_id,
-            'code_type': self.code_type,
+            'code_type': str(self.code_type),
             'code': self.code,
             'matching': self.matching
         }
@@ -522,7 +518,7 @@ class DomainLabelMatch(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabelMatch(dct['location_id'], dct['code_type'])
+        obj = DomainLabelMatch(dct['location_id'], getattr(LocationCodeType, dct['code_type']))
         obj.matching = dct['matching']
         return obj
 
@@ -569,7 +565,7 @@ class DRoPRule(JSONBase):
             '__class__': '__drop_rule__',
             'name': self.name,
             'source': self.source,
-            'rules': [rule._as_norm_dict() for rule in self._rules]
+            'rules': [rule.as_norm_dict() for rule in self._rules]
         }
 
     @property
@@ -622,7 +618,7 @@ class DRoPRule(JSONBase):
     class Rule(collections.namedtuple('Rule', ['rule', 'type'])):
         __slots__ = ()
 
-        def _as_norm_dict(self):
+        def as_norm_dict(self) -> dict:
             return {'rule': self.rule, 'type': str(self.type)}
 
         def __str__(self):
