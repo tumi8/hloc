@@ -746,7 +746,7 @@ class DRoPRule(JSONBase):
         self._rules.append(DRoPRule.Rule(rule, code_type))
 
     @staticmethod
-    def create_object_from_dict(dct) -> DRoPRule:
+    def create_object_from_dict(dct):
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct[self.PropertyKey.name], dct[self.PropertyKey.source])
         for rule in dct[self.PropertyKey.rules]:
@@ -755,7 +755,7 @@ class DRoPRule(JSONBase):
         return obj
 
     @staticmethod
-    def create_rule_from_yaml_dict(dct) -> DRoPRule:
+    def create_rule_from_yaml_dict(dct):
         """Creates a DroPRule object from a DRoP-Yaml dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
