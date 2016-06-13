@@ -152,15 +152,15 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     util.seek_lines(filepart, start)
 
     # TODO use os path join
-    with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'w',
+    with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'wb',
               encoding='utf-8') as correctFile, open(
-                destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr), 'w',
+                destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr), 'wb',
                 encoding='utf-8') as ipEncodedFile, open(
-                destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr), 'w',
+                destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr), 'wb',
                 encoding='utf-8') as hexIpEncodedFile, open(
                 destination_dir + '/{0}-{1}.bad'.format(filename, pnr), 'w',
                 encoding='utf-8') as badFile, open(
-                destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'w',
+                destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'wb',
                 encoding='utf-8') as badDnsFile:
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
