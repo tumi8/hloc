@@ -9,6 +9,7 @@ import collections
 import re
 import json
 import sys
+import logging
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
@@ -24,7 +25,7 @@ def count_lines(filename):
     count = subprocess.check_output(['wc', '-l', filename])
     line_count = int(count.decode().split(' ')[0])
 
-    print('Linecount for file: {0}'.format(line_count))
+    logging.info('Linecount for file: {0}'.format(line_count))
     return line_count
 
 
@@ -148,6 +149,29 @@ class LocationCodeType(enum.Enum):
     locode = 4
     geonames = 5
 
+    @property
+    def regex(self):
+        """
+        :returns the pattern for regex matching a code of the type
+        :return: str
+        """
+        base = r'[a-zA-Z]'
+        if self == iata:
+            pattern = base + r'{3}'
+        elif self == icao:
+            pattern = base + r'{4}'
+        elif self == clli:
+            pattern = base + r'{6}'
+        elif self == locode:
+            pattern = base + r'{5}'
+        elif self == geonames:
+            pattern = r'[a-zA-Z ]+'
+        else:
+            logging.error('WTF? should not be possible')
+            return
+
+        return r'(?P<type>' + pattern + r')'
+
 
 class JSONBase(object):
     """
@@ -188,7 +212,7 @@ class GPSLocation(JSONBase):
         try:
             self._id = int(new_id)
         except (ValueError, TypeError):
-            print('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
+            logging.critical('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
             raise
 
     def is_in_radius(self, location, radius):
@@ -413,7 +437,7 @@ class Domain(JSONBase):
     """
 
     __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
-                 'location']
+                 'location', 'matches']
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -429,6 +453,7 @@ class Domain(JSONBase):
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
         self.location = None
+        self.matches = []
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
@@ -438,7 +463,8 @@ class Domain(JSONBase):
             'ip_address': self.ip_address,
             'ipv6_address': self.ipv6_address,
             'domain_labels': [label.dict_representation() for label in
-                              self.domain_labels]
+                              self.domain_labels],
+            'matches': [match.dict_representation() for match in self.matches]
         }
         if self.location:
             ret_dict['location'] = self.location.id
@@ -453,6 +479,11 @@ class Domain(JSONBase):
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
+        if 'matches' in dct:
+            for match_dct in dct['matches']:
+                match_obj = match_dct
+                match_obj.domain_label = obj
+                obj.matches.append(match_obj)
 
         return obj
 
@@ -485,11 +516,40 @@ class DomainLabel(JSONBase):
         obj = DomainLabel(dct['label'])
         for match in dct['matches']:
             match_obj = match
-            match_obj.domain_label = obj
+            match_obj.domain = obj
             obj.matches.append(match_obj)
 
         return obj
 
+class DomainMatch(JSONBase):
+    """The model for a Match between a domain name and a location code for DRopRules"""
+
+    __slots__ = ['location_id', 'code_type', 'code', 'domain', 'matching']
+
+    def __init__(self, location_id: int, code_type: LocationCodeType, code: str, domain: Domain = None):
+        """init"""
+        self.domain = domain
+        self.location_id = location_id
+        self.code_type = code_type
+        self.code = code
+        self.matching = False
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        return {
+            '__class__': '__domain_match__',
+            'location_id': self.location_id,
+            'code_type': self.code_type.value,
+            'code': self.code,
+            'matching': self.matching
+        }
+
+    @staticmethod
+    def create_object_from_dict(dct):
+        """Creates a DomainLabel object from a dictionary"""
+        obj = DomainMatch(dct['location_id'], LocationCodeType(dct['code_type']))
+        obj.matching = dct['matching']
+        return obj
 
 class DomainLabelMatch(JSONBase):
     """The model for a Match between a domain name label and a location code"""
@@ -551,7 +611,7 @@ class LocationResult(JSONBase):
 class DRoPRule(JSONBase):
     """Stores a DRoP rule to find locations in domain names"""
 
-    __slots__ = ['name', 'source', '_rules']
+    __slots__ = ['name', 'source', '_rules', '_regex_rules']
 
     def __init__(self, name: str, source: str):
         """init"""
@@ -559,7 +619,7 @@ class DRoPRule(JSONBase):
         self.source = source
         self._rules = []
 
-    def dict_representation(self):
+    def dict_representation(self) -> dict:
         """Returns a dictionary with the information of the object"""
         return {
             '__class__': '__drop_rule__',
@@ -569,18 +629,33 @@ class DRoPRule(JSONBase):
         }
 
     @property
-    def rules(self):
+    def rules(self) -> list(str):
         """
         :returns all rules saved in this object in a named tuple (rule: str, type: LocationCodeType)
+        :return: list(collections.namedtuple('Rule', ['rule', 'type']))
         """
         return self._rules
+
+    @property
+    def regex_pattern_rules(self) -> tuple(list(re), LocationCodeType):
+        """
+        :returns all rules saved in this object as patterns for regex execution
+        :return: list(String)
+        """
+        if self._regex_rules is None:
+            ret_rules = []
+            for rule in self._rules:
+                ret_rules.append((re.compile(rule.rule.format(rule.type.regex)), rule.type))
+            self._regex_rules = ret_rules
+
+        return self._regex_rules
 
     def add_rule(self, rule: str, code_type: LocationCodeType):
         """adds a rule with the LocationCodeType set in type"""
         self._rules.append(DRoPRule.Rule(rule, code_type))
 
     @staticmethod
-    def create_object_from_dict(dct):
+    def create_object_from_dict(dct) -> DRoPRule:
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
@@ -588,28 +663,22 @@ class DRoPRule(JSONBase):
         return obj
 
     @staticmethod
-    def create_rule_from_yaml_dict(dct):
-        """Creates a DroPRuler object from a yaml-DRoP dictionary"""
+    def create_rule_from_yaml_dict(dct) -> DRoPRule:
+        """Creates a DroPRule object from a DRoP-Yaml dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
             if rule['mapping_required'] != 1:
-                print(rule)
+                logging.warning('mapping required != 1 for ' + rule)
             else:
                 rule_type_match = DROP_RULE_TYPE_REGEX.search(rule['regexp'])
                 if rule_type_match:
                     drop_rule_type = rule_type_match.group('type')
                     if drop_rule_type == 'pop':
                         our_rule_type = LocationCodeType.geonames
-                    elif drop_rule_type == 'iata':
-                        our_rule_type = LocationCodeType.iata
-                    elif drop_rule_type == 'icao':
-                        our_rule_type = LocationCodeType.icao
-                    elif drop_rule_type == 'locode':
-                        our_rule_type = LocationCodeType.locode
-                    elif drop_rule_type == 'clli':
-                        our_rule_type = LocationCodeType.clli
+                    elif drop_rule_type in ['iata', 'icao', 'locode', 'clli']:
+                        our_rule_type = getattr(LocationCodeType, drop_rule_type)
                     else:
-                        print(drop_rule_type)
+                        logging.warning('drop rule type not in list: ' + drop_rule_type)
                     rule_str = rule['regexp'].replace(rule_type_match.group(0), '{}')
                     obj.add_rule(rule_str, our_rule_type)
 
@@ -622,4 +691,4 @@ class DRoPRule(JSONBase):
             return {'rule': self.rule, 'type': self.type.value}
 
         def __str__(self):
-            return 'Rule(\nregexrule: {}\ntype: {}\n)'.format(self.rule, self.type.name)
+            return 'Rule(regexrule: {}, type: {})'.format(self.rule, self.type.name)

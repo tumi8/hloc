@@ -8,16 +8,15 @@ saves results in the folder ./rdns_results
 
 Further filtering ideas: www pages and pages with only 2 levels
 """
-from __future__ import print_function
 import argparse
 import re
-# import pickle
 import cProfile
 import time
 import os
 import collections
 from multiprocessing import Process
 import ujson as json
+import logging
 
 from . import util
 from .util import Domain
@@ -35,11 +34,14 @@ def __create_parser_arguments(parser):
                         choices=['strict', 'abstract', 'moderate'],
                         default='abstract',
                         help='Specify a regex Strategy')
-    parser.add_argument('-p', '--profile', action='store_true',
-                        dest='cProfiling',
+    parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
     parser.add_argument('-d', '--destination', type=str, default='rdns_results',
                         dest='destination', help='Set the desination directory (must exist)')
+    parser.add_argument('-i', '--ip-filter', action='store_true', dest='ip_filter',
+                        help='set if you want to filter isp ip domain names')
+    parser.add_argument('-l', '--logging-file', type=str, default='find_drop.log', dest='log_file',
+                        help='Specify a logging file where the log should be saved')
 
 
 def main():
@@ -49,12 +51,18 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    logging.basicConfig(filename=args.log_file, level=logging.DEBUG)
+
     os.mkdir(args.destination)
 
     ipregexText = select_ip_regex(args.regexStrategy)
+    if not args.ip_filter:
+        ipregexText = r''
 
-    # TODO use logger
-    print('using strategy: {}'.format(args.regexStrategy))
+    if args.ip_filter:
+        logging.info('using strategy: {}'.format(args.regexStrategy))
+    else:
+        logging.info('not filtering ip domain names')
     ipregex = re.compile(ipregexText, flags=re.MULTILINE)
 
     lineCount = util.count_lines(args.filename)
@@ -85,7 +93,7 @@ def main():
         process.join()
 
     end = time.time()
-    print('Running time: {0}'.format((end - start)))
+    logging.info('Running time: {0}'.format((end - start)))
 
 
 def select_ip_regex(regexStrategy):
@@ -121,7 +129,7 @@ def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destinati
         preprocess_file_part(filename, pnr, sector, ipregex, tlds, destination_dir)
 
     endTime = time.monotonic()
-    print('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
+    logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
           .format(pnr, (endTime - startTime), profile))
 
 
@@ -133,7 +141,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     """
 
     start, end = sector
-    print('pnr', pnr, 'start', start, 'end', end)
+    logging.info('pnr', pnr, 'start', start, 'end', end)
     filename = util.get_path_filename(filepath)
     filepart = open(filepath, encoding='ISO-8859-1')
     labelDict = collections.defaultdict(int)
@@ -253,7 +261,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
 
         write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
 
-        print('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
+        logging.info('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
         with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(badCharacterDict, characterStatsFile)
