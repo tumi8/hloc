@@ -201,7 +201,6 @@ class GPSLocation(JSONBase):
     __slots__ = ['_id', 'lat', 'lon']
 
     class PropertyKey:
-        __slots__ = ['id', 'lat', 'lon']
         id = '0'
         lat = '1'
         lon = '2'
@@ -301,8 +300,6 @@ class Location(GPSLocation):
                  'available_nodes']
 
     class PropertyKey:
-        __slots__ = ['city_name', 'state', 'state_code', 'population',
-                     'airport_info', 'locode', 'clli', 'alternate_names']
         city_name = '3'
         state = '4'
         state_code = '5'
@@ -410,7 +407,6 @@ class AirportInfo(JSONBase):
     __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
 
     class PropertyKey:
-        __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
         iata_codes = '0'
         icao_codes = '1'
         faa_codes = '2'
@@ -448,7 +444,6 @@ class LocodeInfo(JSONBase):
     __slots__ = ['place_codes', 'subdivision_codes']
 
     class PropertyKey:
-        __slots__ = ['place_codes', 'subdivision_codes']
         place_codes = '0'
         subdivision_codes = '1'
 
@@ -486,7 +481,6 @@ class Domain(JSONBase):
                  'location', 'matches']
 
     class PropertyKey:
-        __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'matches']
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
@@ -551,7 +545,6 @@ class DomainLabel(JSONBase):
     __slots__ = ['label', 'domain', 'matches']
 
     class PropertyKey:
-        __slots__ = ['label', 'matches']
         label = '0'
         matches = '1'
 
@@ -592,7 +585,6 @@ class DomainMatch(JSONBase):
     __slots__ = ['location_id', 'code_type', 'code', 'domain', 'matching']
 
     class PropertyKey:
-        __slots__ = ['location_id', 'code_type', 'code', 'matching']
         location_id = '0'
         code_type = '1'
         code = '2'
@@ -635,7 +627,6 @@ class DomainLabelMatch(JSONBase):
     __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
 
     class PropertyKey:
-        __slots__ = ['location_id', 'code_type', 'code', 'matching']
         location_id = '0'
         code_type = '1'
         code = '2'
@@ -677,7 +668,6 @@ class LocationResult(JSONBase):
     __slots__ = ['location_id', 'rtt', 'location']
 
     class PropertyKey:
-        __slots__ = ['location_id', 'rtt']
         location_id = '0'
         rtt = '1'
 
@@ -709,7 +699,6 @@ class DRoPRule(JSONBase):
     __slots__ = ['name', 'source', '_rules', '_regex_rules']
 
     class PropertyKey:
-        __slots__ = ['name', 'source', 'rules']
         name = '0'
         source = '1'
         rules = '2'
@@ -792,7 +781,6 @@ class DRoPRule(JSONBase):
         __slots__ = ()
 
         class PropertyKey:
-            __slots__ = ['rule', 'rule_type']
             rule = '0'
             rule_type = '1'
 
