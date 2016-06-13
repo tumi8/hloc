@@ -22,7 +22,9 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG)
+    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
 
     rules = []
     with open(args.drop_rules_file_path) as drop_rules_file:

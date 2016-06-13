@@ -51,7 +51,9 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG)
+    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
 
     os.mkdir(args.destination)
 
@@ -81,12 +83,13 @@ def main():
             processes[i] = Process(target=preprocess_file_part_profile,
                                    args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                          lineCount), ipregex, tlds, args.destination,
-                                         args.cProfiling))
+                                         args.cProfiling), name='preprocessing_{}'.format(i))
         else:
             processes[i] = Process(target=preprocess_file_part_profile,
                                    args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                          (i + 1) * (lineCount // args.numProcesses)),
-                                         ipregex, tlds, args.destination, False))
+                                         ipregex, tlds, args.destination, False),
+                                   name='preprocessing_{}'.format(i))
         processes[i].start()
 
     for process in processes:

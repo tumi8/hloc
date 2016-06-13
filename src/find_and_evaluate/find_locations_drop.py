@@ -40,7 +40,9 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG)
+    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
 
     with open(args.trie_file, 'rb') as trie_file:
         trie = pickle.load(trie_file)
@@ -53,7 +55,7 @@ def main():
         process = Process(target=start_search_in_file,
                           args=(args.doaminfilename_proto, index, trie,
                                 drop_rules, args.amount),
-                          kwargs={'amount': args.amount})
+                          name='find_drop_{}'.format(index))
         processes.append(process)
 
     for process in processes:
