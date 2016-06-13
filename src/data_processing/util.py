@@ -133,7 +133,7 @@ def json_load(file_ptr):
     return json.load(file_ptr, object_hook=json_object_decoding)
 
 
-def json_loads(json_str) -> [Byte]:
+def json_loads(json_str) -> [bytes]:
     """
     Decodes the content of the string variable and returns it
     :param json_str: the string which content should be decoded
