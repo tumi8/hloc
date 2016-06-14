@@ -40,9 +40,7 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
-                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
+    util.setup_logging(args.log_file)
 
     with open(args.trie_file, 'rb') as trie_file:
         trie = pickle.load(trie_file)

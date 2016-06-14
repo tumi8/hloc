@@ -74,6 +74,13 @@ def get_path_filename(path):
     return filename
 
 
+def setup_logging(filename):
+    """does the basic config on logging"""
+    logging.basicConfig(filename=filename, level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               '%(filename)s:%(lineno)d %(message)s', datefmt='%d/%m/%Y %H:%M:%S')
+
+
 #######################################
 #    JSON utility functions           #
 #######################################

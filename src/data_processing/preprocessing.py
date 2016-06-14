@@ -40,7 +40,7 @@ def __create_parser_arguments(parser):
                         dest='destination', help='Set the desination directory (must exist)')
     parser.add_argument('-i', '--ip-filter', action='store_true', dest='ip_filter',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-l', '--logging-file', type=str, default='find_drop.log', dest='log_file',
+    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
 
@@ -51,9 +51,7 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
-                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
+    util.setup_logging(args.log_file)
 
     os.mkdir(args.destination)
 
@@ -133,7 +131,7 @@ def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destinati
 
     endTime = time.monotonic()
     logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
-          .format(pnr, (endTime - startTime), profile))
+                 .format(pnr, (endTime - startTime), profile))
 
 
 def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
@@ -152,15 +150,15 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     util.seek_lines(filepart, start)
 
     # TODO use os path join
-    with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'wb',
+    with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'w',
               encoding='utf-8') as correctFile, open(
-                destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr), 'wb',
+                destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr), 'w',
                 encoding='utf-8') as ipEncodedFile, open(
-                destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr), 'wb',
+                destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr), 'w',
                 encoding='utf-8') as hexIpEncodedFile, open(
                 destination_dir + '/{0}-{1}.bad'.format(filename, pnr), 'w',
                 encoding='utf-8') as badFile, open(
-                destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'wb',
+                destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'w',
                 encoding='utf-8') as badDnsFile:
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
@@ -268,16 +266,10 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(badCharacterDict, characterStatsFile)
-        # with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
-        #           'wb') as characterStatsFile:
-        #     pickle.dump(badCharacterDict, characterStatsFile)
 
         with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
                   'w', encoding='utf-8') as labelStatFile:
             json.dump(labelDict, labelStatFile)
-        # with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
-        #           'wb') as labelStatFile:
-        #     pickle.dump(labelDict, labelStatFile)
 
         # for character, count in badCharacterDict.items():
         #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \

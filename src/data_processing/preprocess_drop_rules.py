@@ -5,15 +5,14 @@ import yaml
 import src.data_processing.util as util
 import logging
 
-
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('drop_rules_file_path', type=str,
                         help='The path to the file containing the drop rules')
     parser.add_argument('output_filename', type=str, default='drop_rules.json',
                         help='The path and name for the outputfile')
-    parser.add_argument('-l', '--logging-file', type=str, default='find_drop.log', dest='log_file',
-                        help='Specify a logging file where the log should be saved')
+    parser.add_argument('-l', '--logging-file', type=str, default='preprocess_drop.log',
+                        dest='log_file', help='The logging file where the log should be saved')
 
 
 def main():
@@ -22,9 +21,7 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log_file, level=logging.DEBUG,
-                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               '%(filename)s:%(lineno)d %(message)s', datefmt='%s/%m/%Y %H:%M:%S')
+    util.setup_logging(args.log_file)
 
     rules = []
     with open(args.drop_rules_file_path) as drop_rules_file:
@@ -35,6 +32,8 @@ def main():
 
     with open(args.output_filename, 'w') as output_file:
         util.json_dump(rules, output_file)
+
+    logging.info('Collected {} DRoP rules'.format(len(rules)))
 
 
 if __name__ == '__main__':
