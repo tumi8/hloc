@@ -12,8 +12,7 @@ import logging
 # import msgpack
 import json
 
-ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
-DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
+ACCEPTED_CHARACTER = set('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
 
@@ -678,7 +677,7 @@ class LocationResult(JSONBase):
         location_id = '0'
         rtt = '1'
 
-    def __init__(self, location_id: int, rtt, location=None):
+    def __init__(self, location_id: str, rtt, location=None):
         """init"""
         self.location_id = location_id
         self.location = location

@@ -14,9 +14,10 @@ import cProfile
 import time
 import os
 import collections
-from multiprocessing import Process
+import multiprocessing as mp
 import ujson as json
 import logging
+import mmap
 
 from . import util
 from .util import Domain
@@ -65,8 +66,6 @@ def main():
         logging.info('not filtering ip domain names')
     ipregex = re.compile(ipregexText, flags=re.MULTILINE)
 
-    lineCount = util.count_lines(args.filename)
-
     tlds = set()
     with open(args.tlds_file) as tldFile:
         for line in tldFile:
@@ -76,22 +75,27 @@ def main():
 
     processes = [None] * args.numProcesses
 
+    rdns_file_handle = open(args.filename, encoding='ISO-8859-1')
+    rdns_file = mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+    file_lock = mp.Lock()
+
     for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
-            processes[i] = Process(target=preprocess_file_part_profile,
-                                   args=(args.filename, i, (i * (lineCount // args.numProcesses),
-                                         lineCount), ipregex, tlds, args.destination,
+            processes[i] = mp.Process(target=preprocess_file_part_profile,
+                                   args=(rdns_file, i, file_lock, ipregex, tlds, args.destination,
                                          args.cProfiling), name='preprocessing_{}'.format(i))
         else:
-            processes[i] = Process(target=preprocess_file_part_profile,
-                                   args=(args.filename, i, (i * (lineCount // args.numProcesses),
-                                         (i + 1) * (lineCount // args.numProcesses)),
-                                         ipregex, tlds, args.destination, False),
+            processes[i] = mp.Process(target=preprocess_file_part_profile,
+                                   args=(rdns_file, i, file_lock, ipregex, tlds, args.destination,
+                                         False),
                                    name='preprocessing_{}'.format(i))
         processes[i].start()
 
     for process in processes:
         process.join()
+
+    rdns_file.close()
+    rdns_file_handle.close()
 
     end = time.time()
     logging.info('Running time: {0}'.format((end - start)))
@@ -114,7 +118,8 @@ def select_ip_regex(regexStrategy):
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destination_dir, profile):
+def preprocess_file_part_profile(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipregex: re,
+                                 tlds: {str}, destination_dir: str, profile):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -122,44 +127,42 @@ def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destinati
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
     startTime = time.monotonic()
-    # TODO cprofile with output to file
     if profile:
-        cProfile.runctx('preprocess_file_part(filename, pnr, sector,'
+        profiler = cProfile.Profile()
+        profiler.runctx('preprocess_file_part(rdns_file, pnr, file_lock,'
                         ' ipregex, tlds, destination_dir)',  globals(), locals())
+        profiler.dump_stats('preprocess.profile')
     else:
-        preprocess_file_part(filename, pnr, sector, ipregex, tlds, destination_dir)
+        preprocess_file_part(rdns_file, pnr, file_lock, ipregex, tlds, destination_dir)
 
     endTime = time.monotonic()
     logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
                  .format(pnr, (endTime - startTime), profile))
 
 
-def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
+def preprocess_file_part(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipregex: re,
+                         tlds: {str}, destination_dir: str):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
 
-    start, end = sector
-    logging.info('pnr', pnr, 'start', start, 'end', end)
-    filename = util.get_path_filename(filepath)
-    filepart = open(filepath, encoding='ISO-8859-1')
+    logging.info('starting')
+    filename = util.get_path_filename(rdns_file.name)
     labelDict = collections.defaultdict(int)
 
-    util.seek_lines(filepart, start)
-
-    # TODO use os path join
-    with open(destination_dir + '/{0}-{1}.cor'.format(filename, pnr), 'w',
-              encoding='utf-8') as correctFile, open(
-                destination_dir + '/{0}-{1}-ip-encoded.domain'.format(filename, pnr), 'w',
-                encoding='utf-8') as ipEncodedFile, open(
-                destination_dir + '/{0}-{1}-hex-ip.domain'.format(filename, pnr), 'w',
-                encoding='utf-8') as hexIpEncodedFile, open(
-                destination_dir + '/{0}-{1}.bad'.format(filename, pnr), 'w',
-                encoding='utf-8') as badFile, open(
-                destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'w',
+    with open(os.path.join(destination_dir, '{0}-{1}.cor'.format(filename, pnr)), 'w',
+              encoding='utf-8') as correctFile, open(os.path.join(
+                destination_dir, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
+                encoding='utf-8') as ipEncodedFile, open(os.path.join(
+                destination_dir, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
+                encoding='utf-8') as hexIpEncodedFile, open(os.path.join(
+                destination_dir, '{0}-{1}.bad'.format(filename, pnr)), 'w',
+                encoding='utf-8') as badFile, open(os.path.join(
+                destination_dir, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
                 encoding='utf-8') as badDnsFile:
+
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
             return ipregex.search(domain_line)
@@ -178,6 +181,12 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
                 write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
                 badLines = []
 
+        def next_line() -> str:
+            file_lock.acquire()
+            next_line_str = rdns_file.readline().decode('utf-8')
+            file_lock.release()
+            return next_line_str
+
         def add_labels(new_rdns_record):
             for index, label in enumerate(new_rdns_record.domain_labels):
                 # skip if tld
@@ -192,9 +201,8 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
             returns all bad Character found in the lines in a list
             """
             for line in lines:
-                for character in set(line):
-                    if character not in goodCharacters:
-                        badCharacterDict[character] += 1
+                for character in set(line).difference(goodCharacters):
+                    badCharacterDict[character] += 1
                 badFile.write('{0}\n'.format(line))
 
         def append_hex_ip_line(app_line):
@@ -229,13 +237,13 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
         badDnsRecords = []
         hexIpRecords = []
 
-        lineCount = start
-        for line in filepart:
+        line = next_line()
+        while len(line) > 0:
             if len(line) == 0:
                 continue
             line = line.strip()
             index = line.find(',')
-            if has_bad_characters_for_regex(util.DNS_REGEX, line[(index + 1):]):
+            if set(line[(index + 1):]).difference(util.ACCEPTED_CHARACTER):
                 add_bad_line(line)
             else:
                 ipAddress, domain = line.split(',', 1)
@@ -252,9 +260,7 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
                     else:
                         append_bad_dns_record(rdnsRecord)
 
-            lineCount += 1
-            if lineCount == end:
-                break
+            line = next_line()
 
         util.json_dump(goodRecords, correctFile)
         util.json_dump(badDnsRecords, badDnsFile)
@@ -262,12 +268,12 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
 
         write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
 
-        logging.info('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
-        with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
+        logging.info('good lines: {}'.format(countGoodLines))
+        with open(os.path.join(destination_dir, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(badCharacterDict, characterStatsFile)
 
-        with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
+        with open(os.path.join(destination_dir, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as labelStatFile:
             json.dump(labelDict, labelStatFile)
 
