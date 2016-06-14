@@ -7,12 +7,15 @@ import string
 import enum
 import collections
 import re
-import json
 import sys
+import logging
+# import msgpack
+import json
 
 ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
 DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
-DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z])>>')
+DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
+CLASS_IDENTIFIER = '_c'
 
 
 #######################################
@@ -24,7 +27,7 @@ def count_lines(filename):
     count = subprocess.check_output(['wc', '-l', filename])
     line_count = int(count.decode().split(' ')[0])
 
-    print('Linecount for file: {0}'.format(line_count))
+    logging.info('Linecount for file: {0}'.format(line_count))
     return line_count
 
 
@@ -71,6 +74,13 @@ def get_path_filename(path):
     return filename
 
 
+def setup_logging(filename):
+    """does the basic config on logging"""
+    logging.basicConfig(filename=filename, level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               '%(filename)s:%(lineno)d %(message)s', datefmt='%d/%m/%Y %H:%M:%S')
+
+
 #######################################
 #    JSON utility functions           #
 #######################################
@@ -79,44 +89,45 @@ def json_object_encoding(obj):
     if isinstance(obj, JSONBase):
         return obj.dict_representation()
 
-    raise TypeError('Object not handled by the JSON encoding function')
+    raise TypeError('Object not handled by the JSON encoding function ({})'.format(type(obj)))
 
 
 def json_object_decoding(dct):
     """Decodes the dictionary to an object if it is one"""
-    if '__class__' in dct:
-        if dct['__class__'] == '__location__':
+    if CLASS_IDENTIFIER in dct:
+        if dct[CLASS_IDENTIFIER] == Location.class_name_identifier:
             return Location.create_object_from_dict(dct)
-        if dct['__class__'] == '__airport_info__':
+        if dct[CLASS_IDENTIFIER] == AirportInfo.class_name_identifier:
             return AirportInfo.create_object_from_dict(dct)
-        if dct['__class__'] == '__locode_info__':
+        if dct[CLASS_IDENTIFIER] == LocodeInfo.class_name_identifier:
             return LocodeInfo.create_object_from_dict(dct)
-        if dct['__class__'] == '__location_result__':
+        if dct[CLASS_IDENTIFIER] == LocationResult.class_name_identifier:
             return LocationResult.create_object_from_dict(dct)
-        if dct['__class__'] == '__domain__':
+        if dct[CLASS_IDENTIFIER] == Domain.class_name_identifier:
             return Domain.create_object_from_dict(dct)
-        if dct['__class__'] == '__domain_label__':
+        if dct[CLASS_IDENTIFIER] == DomainMatch.class_name_identifier:
+            return DomainMatch.create_object_from_dict(dct)
+        if dct[CLASS_IDENTIFIER] == DomainLabel.class_name_identifier:
             return DomainLabel.create_object_from_dict(dct)
-        if dct['__class__'] == '__domain_label_match__':
+        if dct[CLASS_IDENTIFIER] == DomainLabelMatch.class_name_identifier:
             return DomainLabelMatch.create_object_from_dict(dct)
-        if dct['__class__'] == '__gps_location__':
+        if dct[CLASS_IDENTIFIER] == GPSLocation.class_name_identifier:
             return GPSLocation.create_object_from_dict(dct)
-        if dct['__class__'] == '__drop_rule__':
+        if dct[CLASS_IDENTIFIER] == DRoPRule.class_name_identifier:
             return DRoPRule.create_object_from_dict(dct)
     return dct
 
 
-def json_dump(encoding_var, file_ptr, indent=None):
+def json_dump(encoding_var, file_ptr):
     """
     Dumps the encoding_var to the file in file_ptr with the
     json_object_encoding function
     :param encoding_var: the variable you want to encode in json
     :param file_ptr: the file where the
-    :param indent: the indent for the dump call
     :return: None
     """
-    json.dump(encoding_var, file_ptr, default=json_object_encoding,
-              indent=indent)
+    # msgpack.pack(encoding_var, file_ptr, default=json_object_encoding)
+    json.dump(encoding_var, file_ptr, default=json_object_encoding)
 
 
 def json_load(file_ptr):
@@ -125,6 +136,7 @@ def json_load(file_ptr):
     :param file_ptr: the pointer to the file where json should load and decode
     :return: the variable from json.load
     """
+    # sreturn msgpack.unpack(file_ptr, object_hook=json_object_decoding)
     return json.load(file_ptr, object_hook=json_object_decoding)
 
 
@@ -134,6 +146,7 @@ def json_loads(json_str):
     :param json_str: the string which content should be decoded
     :return: the variable from json.loads
     """
+    # return msgpack.unpackb(json_str, object_hook=json_object_decoding)
     return json.loads(json_str, object_hook=json_object_decoding)
 
 
@@ -148,16 +161,36 @@ class LocationCodeType(enum.Enum):
     locode = 4
     geonames = 5
 
+    @property
+    def regex(self):
+        """
+        :returns the pattern for regex matching a code of the type
+        :return: str
+        """
+        base = r'[a-zA-Z]'
+        if self == iata:
+            pattern = base + r'{3}'
+        elif self == icao:
+            pattern = base + r'{4}'
+        elif self == clli:
+            pattern = base + r'{6}'
+        elif self == locode:
+            pattern = base + r'{5}'
+        elif self == geonames:
+            pattern = r'[a-zA-Z ]+'
+        else:
+            logging.error('WTF? should not be possible')
+            return
+
+        return r'(?P<type>' + pattern + r')'
+
 
 class JSONBase(object):
     """
     The Base class to JSON encode your object with json_encoding_func
     """
     # TODO use ABC
-
-    __slots__ = []
-    __class__ = "jsonbase"
-    __no_json__ = []
+    class_name_identifier = None
 
     def dict_representation(self):
         raise NotImplementedError("JSONBase: Should have implemented this method")
@@ -170,7 +203,14 @@ class JSONBase(object):
 class GPSLocation(JSONBase):
     """holds the coordinates"""
 
+    class_name_identifier = 'gl'
+
     __slots__ = ['_id', 'lat', 'lon']
+
+    class PropertyKey:
+        id = '0'
+        lat = '1'
+        lon = '2'
 
     def __init__(self, lat, lon):
         """init"""
@@ -192,7 +232,7 @@ class GPSLocation(JSONBase):
         try:
             self._id = int(new_id)
         except (ValueError, TypeError):
-            print('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
+            logging.critical('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
             raise
 
     def is_in_radius(self, location, radius):
@@ -236,21 +276,21 @@ class GPSLocation(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
-            '__class__': '__gps_locations__',
-            'lat': self.lat,
-            'lon': self.lon
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.lat: self.lat,
+            self.PropertyKey.lon: self.lon
         }
         if self.id is not None:
-            ret_dict['id'] = self.id
+            ret_dict[self.PropertyKey.id] = self.id
 
         return ret_dict
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = GPSLocation(dct['lat'], dct['lon'])
-        if 'id' in dct:
-            obj.id = dct['id']
+        obj = GPSLocation(dct[self.PropertyKey.lat], dct[self.PropertyKey.lon])
+        if self.PropertyKey.id in dct:
+            obj.id = dct[self.PropertyKey.id]
         return obj
 
 
@@ -260,9 +300,21 @@ class Location(GPSLocation):
     Additionally information like the population can be saved
     """
 
+    class_name_identifier = 'loc'
+
     __slots__ = ['lat', 'lon', 'city_name', 'state', 'state_code', 'population',
                  'airport_info', 'locode', 'clli', 'alternate_names', 'nodes',
                  'available_nodes']
+
+    class PropertyKey:
+        city_name = '3'
+        state = '4'
+        state_code = '5'
+        population = '6'
+        clli = '7'
+        alternate_names = '8'
+        airport_info = '9'
+        locode = '10'
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
                  population=0):
@@ -292,21 +344,21 @@ class Location(GPSLocation):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         ret_dict = super().dict_representation()
-        del ret_dict['__gps_location__']
+        del ret_dict[CLASS_IDENTIFIER]
         ret_dict.update({
-            '__class__': '__location__',
-            'city_name': self.city_name,
-            'state': self.state,
-            'state_code': self.state_code,
-            'population': self.population,
-            'clli': self.clli,
-            'alternate_names': self.alternate_names
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.city_name: self.city_name,
+            self.PropertyKey.state: self.state,
+            self.PropertyKey.state_code: self.state_code,
+            self.PropertyKey.population: self.population,
+            self.PropertyKey.clli: self.clli,
+            self.PropertyKey.alternate_names: self.alternate_names
         })
         if self.airport_info:
-            ret_dict['airport_info'] = self.airport_info.dict_representation()
+            ret_dict[self.PropertyKey.airport_info] = self.airport_info.dict_representation()
 
         if self.locode:
-            ret_dict['locode'] = self.locode.dict_representation()
+            ret_dict[self.PropertyKey.locode] = self.locode.dict_representation()
 
         return ret_dict
 
@@ -342,21 +394,29 @@ class Location(GPSLocation):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct['lat'], dct['lon'], dct['city_name'], dct['state'],
-                       dct['state_code'], dct['population'])
-        if 'id' in dct:
-            obj.id = dct['id']
-        if 'airport_info' in dct:
-            obj.airport_info = dct['airport_info']
-        if 'locode' in dct:
-            obj.locode = dct['locode']
+        obj = Location(dct[self.PropertyKey.lat], dct[self.PropertyKey.lon],
+                       dct[self.PropertyKey.city_name], dct[self.PropertyKey.state],
+                       dct[self.PropertyKey.state_code], dct[self.PropertyKey.population])
+        if self.PropertyKey.id in dct:
+            obj.id = dct[self.PropertyKey.id]
+        if self.PropertyKey.airport_info in dct:
+            obj.airport_info = dct[self.PropertyKey.airport_info]
+        if self.PropertyKey.locode in dct:
+            obj.locode = dct[self.PropertyKey.locode]
         return obj
 
 
 class AirportInfo(JSONBase):
     """Holds a list of the different airport codes"""
 
+    class_name_identifier = 'ai'
+
     __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
+
+    class PropertyKey:
+        iata_codes = '0'
+        icao_codes = '1'
+        faa_codes = '2'
 
     def __init__(self):
         """init"""
@@ -367,26 +427,32 @@ class AirportInfo(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__airport_info__',
-            'iata_codes': self.iata_codes,
-            'icao_codes': self.icao_codes,
-            'faa_codes': self.faa_codes
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.iata_codes: self.iata_codes,
+            self.PropertyKey.icao_codes: self.icao_codes,
+            self.PropertyKey.faa_codes: self.faa_codes
         }
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a AirportInfo object from a dictionary"""
         obj = AirportInfo()
-        obj.faa_codes = dct['faa_codes']
-        obj.iata_codes = dct['iata_codes']
-        obj.icao_codes = dct['icao_codes']
+        obj.faa_codes = dct[self.PropertyKey.faa_codes]
+        obj.iata_codes = dct[self.PropertyKey.iata_codes]
+        obj.icao_codes = dct[self.PropertyKey.icao_codes]
         return obj
 
 
 class LocodeInfo(JSONBase):
     """Holds a list of locode codes"""
 
+    class_name_identifier = 'li'
+
     __slots__ = ['place_codes', 'subdivision_codes']
+
+    class PropertyKey:
+        place_codes = '0'
+        subdivision_codes = '1'
 
     def __init__(self):
         """init"""
@@ -396,17 +462,17 @@ class LocodeInfo(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__locode_info__',
-            'place_codes': self.place_codes,
-            'subdivision_codes': self.subdivision_codes
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.place_codes: self.place_codes,
+            self.PropertyKey.subdivision_codes: self.subdivision_codes
         }
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a LocodeInfo object from a dictionary"""
         obj = LocodeInfo()
-        obj.place_codes = dct['place_codes']
-        obj.subdivision_codes = dct['subdivision_codes']
+        obj.place_codes = dct[self.PropertyKey.place_codes]
+        obj.subdivision_codes = dct[self.PropertyKey.subdivision_codes]
         return obj
 
 
@@ -416,8 +482,17 @@ class Domain(JSONBase):
     DO NOT SET the DOMAIN NAME after calling the constructor!
     """
 
+    class_name_identifier = 'd'
+
     __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
-                 'location']
+                 'location', 'matches']
+
+    class PropertyKey:
+        domain_name = '0'
+        ip_address = '1'
+        ipv6_address = '2'
+        domain_labels = '3'
+        matches = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -433,30 +508,38 @@ class Domain(JSONBase):
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
         self.location = None
+        self.matches = []
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
-            '__class__': '__domain__',
-            'domain_name': self.domain_name,
-            'ip_address': self.ip_address,
-            'ipv6_address': self.ipv6_address,
-            'domain_labels': [label.dict_representation() for label in
-                              self.domain_labels]
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.domain_name: self.domain_name,
+            self.PropertyKey.ip_address: self.ip_address,
+            self.PropertyKey.ipv6_address: self.ipv6_address,
+            self.PropertyKey.domain_labels: [label.dict_representation() for label in
+                                             self.domain_labels],
+            self.PropertyKey.matches: [match.dict_representation() for match in self.matches]
         }
         if self.location:
-            ret_dict['location'] = self.location.id
+            ret_dict[self.PropertyKey.location] = self.location.id
         return ret_dict
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Domain object from a dictionary"""
-        obj = Domain(dct['domain_name'], dct['ip_address'], dct['ipv6_address'])
-        if 'domain_labels' in dct:
-            for label_dct in dct['domain_labels']:
+        obj = Domain(dct[self.PropertyKey.domain_name], dct[self.PropertyKey.ip_address],
+                     dct[self.PropertyKey.ipv6_address])
+        if self.PropertyKey.domain_labels in dct:
+            for label_dct in dct[self.PropertyKey.domain_labels]:
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
+        if self.PropertyKey.matches in dct:
+            for match_dct in dct[self.PropertyKey.matches]:
+                match_obj = match_dct
+                match_obj.domain_label = obj
+                obj.matches.append(match_obj)
 
         return obj
 
@@ -464,7 +547,13 @@ class Domain(JSONBase):
 class DomainLabel(JSONBase):
     """The model for a domain name label"""
 
+    class_name_identifier = 'dl'
+
     __slots__ = ['label', 'domain', 'matches']
+
+    class PropertyKey:
+        label = '0'
+        matches = '1'
 
     def __init__(self, label, domain=None):
         """
@@ -478,7 +567,7 @@ class DomainLabel(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__domain_label__',
+            CLASS_IDENTIFIER: self.class_name_identifier,
             'label': self.label,
             'matches': [match.dict_representation() for match in self.matches]
         }
@@ -486,19 +575,69 @@ class DomainLabel(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabel(dct['label'])
-        for match in dct['matches']:
+        obj = DomainLabel(dct[self.PropertyKey.label])
+        for match in dct[self.PropertyKey.matches]:
             match_obj = match
-            match_obj.domain_label = obj
+            match_obj.domain = obj
             obj.matches.append(match_obj)
 
+        return obj
+
+
+class DomainMatch(JSONBase):
+    """The model for a Match between a domain name and a location code for DRopRules"""
+
+    class_name_identifier = 'dm'
+
+    __slots__ = ['location_id', 'code_type', 'code', 'domain', 'matching']
+
+    class PropertyKey:
+        location_id = '0'
+        code_type = '1'
+        code = '2'
+        matching = '3'
+
+    def __init__(self, location_id: int, code_type: LocationCodeType, code: str,
+                 domain: Domain=None):
+        """init"""
+        self.domain = domain
+        self.location_id = location_id
+        self.code_type = code_type
+        self.code = code
+        self.matching = False
+
+    def dict_representation(self):
+        """Returns a dictionary with the information of the object"""
+        return {
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.location_id: self.location_id,
+            self.PropertyKey.code_type: self.code_type.value,
+            self.PropertyKey.code: self.code,
+            self.PropertyKey.matching: self.matching
+        }
+
+    @staticmethod
+    def create_object_from_dict(dct):
+        """Creates a DomainLabel object from a dictionary"""
+        obj = DomainMatch(dct[self.PropertyKey.location_id],
+                          LocationCodeType(dct[self.PropertyKey.code_type]),
+                          dct[self.PropertyKey.code])
+        obj.matching = dct[self.PropertyKey.matching]
         return obj
 
 
 class DomainLabelMatch(JSONBase):
     """The model for a Match between a domain name label and a location code"""
 
+    class_name_identifier = 'dlm'
+
     __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
+
+    class PropertyKey:
+        location_id = '0'
+        code_type = '1'
+        code = '2'
+        matching = '3'
 
     def __init__(self, location_id: int, code_type: LocationCodeType, domain_label: str=None,
                  code=None):
@@ -512,25 +651,32 @@ class DomainLabelMatch(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__domain_label_match__',
-            'location_id': self.location_id,
-            'code_type': self.code_type,
-            'code': self.code,
-            'matching': self.matching
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.location_id: self.location_id,
+            self.PropertyKey.code_type: self.code_type.value,
+            self.PropertyKey.code: self.code,
+            self.PropertyKey.matching: self.matching
         }
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabelMatch(dct['location_id'], dct['code_type'])
-        obj.matching = dct['matching']
+        obj = DomainLabelMatch(dct[self.PropertyKey.location_id],
+                               LocationCodeType(dct[self.PropertyKey.code_type]))
+        obj.matching = dct[self.PropertyKey.matching]
         return obj
 
 
 class LocationResult(JSONBase):
     """Stores the result for a location"""
 
+    class_name_identifier = 'lr'
+
     __slots__ = ['location_id', 'rtt', 'location']
+
+    class PropertyKey:
+        location_id = '0'
+        rtt = '1'
 
     def __init__(self, location_id: int, rtt, location=None):
         """init"""
@@ -541,79 +687,112 @@ class LocationResult(JSONBase):
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__location_result__',
-            'location_id': self.location_id,
-            'rtt': self.rtt
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.location_id: self.location_id,
+            self.PropertyKey.rtt: self.rtt
         }
 
     @staticmethod
     def create_object_from_dict(dct: dict):
         """Creates a LocationResult object from a dictionary"""
-        return LocationResult(dct['location_id'], dct['rtt'])
+        return LocationResult(dct[self.PropertyKey.location_id], dct[self.PropertyKey.rtt])
 
 
 class DRoPRule(JSONBase):
     """Stores a DRoP rule to find locations in domain names"""
 
-    __slots__ = ['name', 'source', '_rules']
+    class_name_identifier = 'dr'
+
+    __slots__ = ['name', 'source', '_rules', '_regex_rules']
+
+    class PropertyKey:
+        name = '0'
+        source = '1'
+        rules = '2'
 
     def __init__(self, name: str, source: str):
         """init"""
         self.name = name
         self.source = source
         self._rules = []
+        self._regex_rules = None
 
-    def dict_representation(self):
+    def dict_representation(self) -> dict:
         """Returns a dictionary with the information of the object"""
         return {
-            '__class__': '__drop_rule__',
-            'name': self.name,
-            'source': self.source,
-            'rules': self._rules
+            CLASS_IDENTIFIER: self.class_name_identifier,
+            self.PropertyKey.name: self.name,
+            self.PropertyKey.source: self.source,
+            self.PropertyKey.rules: [rule.as_norm_dict() for rule in self._rules]
         }
 
     @property
-    def rules(self):
+    def rules(self) -> [str]:
         """
         :returns all rules saved in this object in a named tuple (rule: str, type: LocationCodeType)
+        :return: list(collections.namedtuple('Rule', ['rule', 'type']))
         """
         return self._rules
 
+    @property
+    def regex_pattern_rules(self) -> ([re], LocationCodeType):
+        """
+        :returns all rules saved in this object as patterns for regex execution
+        :return: list(String)
+        """
+        if self._regex_rules is None:
+            ret_rules = []
+            for rule in self._rules:
+                ret_rules.append((re.compile(rule.rule.format(rule.type.regex)), rule.type))
+            self._regex_rules = ret_rules
+
+        return self._regex_rules
+
     def add_rule(self, rule: str, code_type: LocationCodeType):
         """adds a rule with the LocationCodeType set in type"""
-        rule_tuple = collections.namedtuple('Rule', ['rule', 'type'])
-        self._rules.append(rule_tuple(rule, code_type))
+        self._rules.append(DRoPRule.Rule(rule, code_type))
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DroPRuler object from a dictionary"""
-        obj = DRoPRule(dct['name'], dct['source'])
-        obj._rules = dct['rules']
+        obj = DRoPRule(dct[self.PropertyKey.name], dct[self.PropertyKey.source])
+        for rule in dct[self.PropertyKey.rules]:
+            obj.add_rule(rule[Rule.PropertyKey.rule],
+                         LocationCodeType(rule[Rule.PropertyKey.rule_type]))
         return obj
 
     @staticmethod
     def create_rule_from_yaml_dict(dct):
-        """Creates a DroPRuler object from a yaml-DRoP dictionary"""
+        """Creates a DroPRule object from a DRoP-Yaml dictionary"""
         obj = DRoPRule(dct['name'], dct['source'])
         for rule in dct['rules']:
             if rule['mapping_required'] != 1:
-                print(rule)
+                logging.warning('mapping required != 1 for ' + rule)
             else:
                 rule_type_match = DROP_RULE_TYPE_REGEX.search(rule['regexp'])
                 if rule_type_match:
                     drop_rule_type = rule_type_match.group('type')
                     if drop_rule_type == 'pop':
                         our_rule_type = LocationCodeType.geonames
-                    elif drop_rule_type == 'iata':
-                        our_rule_type = LocationCodeType.iata
-                    elif drop_rule_type == 'icao':
-                        our_rule_type = LocationCodeType.icao
-                    elif drop_rule_type == 'locode':
-                        our_rule_type = LocationCodeType.locode
-                    elif drop_rule_type == 'clli':
-                        our_rule_type = LocationCodeType.clli
+                    elif drop_rule_type in ['iata', 'icao', 'locode', 'clli']:
+                        our_rule_type = getattr(LocationCodeType, drop_rule_type)
                     else:
-                        print(drop_rule_type)
+                        logging.warning('drop rule type not in list: ' + drop_rule_type)
+                        continue
                     rule_str = rule['regexp'].replace(rule_type_match.group(0), '{}')
                     obj.add_rule(rule_str, our_rule_type)
 
+        return obj
+
+    class Rule(collections.namedtuple('Rule', ['rule', 'type'])):
+        __slots__ = ()
+
+        class PropertyKey:
+            rule = '0'
+            rule_type = '1'
+
+        def as_norm_dict(self) -> dict:
+            return {self.PropertyKey.rule: self.rule, self.PropertyKey.rule_type: self.type.value}
+
+        def __str__(self):
+            return 'Rule(regexrule: {}, type: {})'.format(self.rule, self.type.name)

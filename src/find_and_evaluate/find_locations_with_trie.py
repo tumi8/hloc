@@ -9,6 +9,7 @@ import os
 import ujson as json
 import collections
 from multiprocessing import Process
+import logging
 
 from ..data_processing import util
 from ..data_processing.util import DomainLabelMatch
@@ -40,6 +41,8 @@ def __create_parser_arguments(parser):
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
                         dest='profile', action='store_true')
+    parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
+                        help='Specify a logging file where the log should be saved')
 
 
 def main():
@@ -47,6 +50,8 @@ def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
     args = parser.parse_args()
+
+    util.setup_logging(args.log_file)
 
     with open(args.trie_file_path, 'rb') as trie_file:
         trie = pickle.load(trie_file)
@@ -106,8 +111,8 @@ def start_search_in_file(filename_proto, index, trie, popular_labels,
         search_in_file(filename_proto, index, trie, popular_labels,
                        amount=amount)
     end_time = time.time()
-    print('index {0}: search_in_file running time: {1}'
-          .format(index, (end_time - start_time)))
+    logging.info('index {0}: search_in_file running time: {1}'
+                 .format(index, (end_time - start_time)))
 
 
 def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
@@ -203,14 +208,14 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:
         pickle.dump(popular_labels, popular_file)
-    print('index', index, 'total entries:', entries_count)
-    print('index', index, 'total labels:', label_count)
-    print('index', index, 'total label length:', label_length)
-    print('index', index, 'popular_count:', popular_count)
-    print('index', index, 'entries with location found:', entries_wl_count)
-    print('index', index, 'label with location found:', label_wl_count)
-    print('index', index, 'matches:', sum(match_count.values()))
-    print('index', index, 'match count:\n', match_count)
+    logging.info('index', index, 'total entries:', entries_count)
+    logging.info('index', index, 'total labels:', label_count)
+    logging.info('index', index, 'total label length:', label_length)
+    logging.info('index', index, 'popular_count:', popular_count)
+    logging.info('index', index, 'entries with location found:', entries_wl_count)
+    logging.info('index', index, 'label with location found:', label_wl_count)
+    logging.info('index', index, 'matches:', sum(match_count.values()))
+    logging.info('index', index, 'match count:\n', match_count)
 
 
 def search_in_label(o_label, trie):

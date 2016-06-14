@@ -8,16 +8,15 @@ saves results in the folder ./rdns_results
 
 Further filtering ideas: www pages and pages with only 2 levels
 """
-from __future__ import print_function
 import argparse
 import re
-# import pickle
 import cProfile
 import time
 import os
 import collections
 from multiprocessing import Process
 import ujson as json
+import logging
 
 from . import util
 from .util import Domain
@@ -35,11 +34,14 @@ def __create_parser_arguments(parser):
                         choices=['strict', 'abstract', 'moderate'],
                         default='abstract',
                         help='Specify a regex Strategy')
-    parser.add_argument('-p', '--profile', action='store_true',
-                        dest='cProfiling',
+    parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
     parser.add_argument('-d', '--destination', type=str, default='rdns_results',
                         dest='destination', help='Set the desination directory (must exist)')
+    parser.add_argument('-i', '--ip-filter', action='store_true', dest='ip_filter',
+                        help='set if you want to filter isp ip domain names')
+    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
+                        help='Specify a logging file where the log should be saved')
 
 
 def main():
@@ -49,12 +51,18 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    util.setup_logging(args.log_file)
+
     os.mkdir(args.destination)
 
     ipregexText = select_ip_regex(args.regexStrategy)
+    if not args.ip_filter:
+        ipregexText = r''
 
-    # TODO use logger
-    print('using strategy: {}'.format(args.regexStrategy))
+    if args.ip_filter:
+        logging.info('using strategy: {}'.format(args.regexStrategy))
+    else:
+        logging.info('not filtering ip domain names')
     ipregex = re.compile(ipregexText, flags=re.MULTILINE)
 
     lineCount = util.count_lines(args.filename)
@@ -73,19 +81,20 @@ def main():
             processes[i] = Process(target=preprocess_file_part_profile,
                                    args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                          lineCount), ipregex, tlds, args.destination,
-                                         args.cProfiling))
+                                         args.cProfiling), name='preprocessing_{}'.format(i))
         else:
             processes[i] = Process(target=preprocess_file_part_profile,
                                    args=(args.filename, i, (i * (lineCount // args.numProcesses),
                                          (i + 1) * (lineCount // args.numProcesses)),
-                                         ipregex, tlds, args.destination, False))
+                                         ipregex, tlds, args.destination, False),
+                                   name='preprocessing_{}'.format(i))
         processes[i].start()
 
     for process in processes:
         process.join()
 
     end = time.time()
-    print('Running time: {0}'.format((end - start)))
+    logging.info('Running time: {0}'.format((end - start)))
 
 
 def select_ip_regex(regexStrategy):
@@ -121,8 +130,8 @@ def preprocess_file_part_profile(filename, pnr, sector, ipregex, tlds, destinati
         preprocess_file_part(filename, pnr, sector, ipregex, tlds, destination_dir)
 
     endTime = time.monotonic()
-    print('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
-          .format(pnr, (endTime - startTime), profile))
+    logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
+                 .format(pnr, (endTime - startTime), profile))
 
 
 def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
@@ -132,70 +141,8 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
 
-    def is_standart_isp_domain(domain_line):
-        """Basic check if the domain is a isp client domain address"""
-        return ipregex.search(domain_line)
-
-    def has_bad_characters_for_regex(dnsregex, domain_line):
-        """
-        Execute regex on line
-        return true if regex had a match
-        """
-        return dnsregex.search(domain_line) is None
-
-    def add_bad_line(domain_line):
-        nonlocal badLines
-        badLines.append(domain_line)
-        if len(badLines) > 10 ** 3:
-            write_bad_lines(writeFiles['bad'], badLines, util.ACCEPTED_CHARACTER)
-            badLines = []
-
-    def add_labels(new_rdns_record):
-        for index, label in enumerate(new_rdns_record.domain_labels):
-            # skip if tld
-            if index == 0:
-                continue
-            labelDict[label.label] += 1
-
-    def write_bad_lines(badFile, lines, goodCharacters):
-        """
-        write lines to the badFile
-        goodCharacters are all allowed Character
-        returns all bad Character found in the lines in a list
-        """
-        for line in lines:
-            for character in set(line):
-                if character not in goodCharacters:
-                    badCharacterDict[character] += 1
-            badFile.write('{0}\n'.format(line))
-
-    def append_hex_ip_line(app_line):
-        nonlocal hexIpRecords
-        hexIpRecords.append(app_line)
-        if len(hexIpRecords) >= 10 ** 5:
-            writeFiles['hexIpEncoded'].write('\n'.join(hexIpRecords))
-            hexIpRecords = []
-
-    def append_good_record(record):
-        nonlocal goodRecords, countGoodLines
-        goodRecords.append(record)
-        countGoodLines += 1
-        add_labels(record)
-        if len(goodRecords) >= 10 ** 5:
-            util.json_dump(goodRecords, writeFiles['correct'])
-            writeFiles['correct'].write('\n')
-            goodRecords = []
-
-    def append_bad_dns_record(record):
-        nonlocal badDnsRecords
-        badDnsRecords.append(rdnsRecord)
-        if len(badDnsRecords) >= 10 ** 5:
-            util.json_dump(badDnsRecords, writeFiles['badDNS'])
-            writeFiles['badDNS'].write('\n')
-            badDnsRecords = []
-
     start, end = sector
-    print('pnr', pnr, 'start', start, 'end', end)
+    logging.info('pnr', pnr, 'start', start, 'end', end)
     filename = util.get_path_filename(filepath)
     filepart = open(filepath, encoding='ISO-8859-1')
     labelDict = collections.defaultdict(int)
@@ -213,6 +160,67 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
                 encoding='utf-8') as badFile, open(
                 destination_dir + '/{0}-{1}-dns.bad'.format(filename, pnr), 'w',
                 encoding='utf-8') as badDnsFile:
+        def is_standart_isp_domain(domain_line):
+            """Basic check if the domain is a isp client domain address"""
+            return ipregex.search(domain_line)
+
+        def has_bad_characters_for_regex(dnsregex, domain_line):
+            """
+            Execute regex on line
+            return true if regex had a match
+            """
+            return dnsregex.search(domain_line) is None
+
+        def add_bad_line(domain_line):
+            nonlocal badLines
+            badLines.append(domain_line)
+            if len(badLines) > 10 ** 3:
+                write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
+                badLines = []
+
+        def add_labels(new_rdns_record):
+            for index, label in enumerate(new_rdns_record.domain_labels):
+                # skip if tld
+                if index == 0:
+                    continue
+                labelDict[label.label] += 1
+
+        def write_bad_lines(badFile, lines, goodCharacters):
+            """
+            write lines to the badFile
+            goodCharacters are all allowed Character
+            returns all bad Character found in the lines in a list
+            """
+            for line in lines:
+                for character in set(line):
+                    if character not in goodCharacters:
+                        badCharacterDict[character] += 1
+                badFile.write('{0}\n'.format(line))
+
+        def append_hex_ip_line(app_line):
+            nonlocal hexIpRecords
+            hexIpRecords.append(app_line)
+            if len(hexIpRecords) >= 10 ** 5:
+                hexIpEncodedFile.write('\n'.join(hexIpRecords))
+                hexIpRecords = []
+
+        def append_good_record(record):
+            nonlocal goodRecords, countGoodLines
+            goodRecords.append(record)
+            countGoodLines += 1
+            add_labels(record)
+            if len(goodRecords) >= 10 ** 5:
+                util.json_dump(goodRecords, correctFile)
+                correctFile.write('\n')
+                goodRecords = []
+
+        def append_bad_dns_record(record):
+            nonlocal badDnsRecords
+            badDnsRecords.append(record)
+            if len(badDnsRecords) >= 10 ** 5:
+                util.json_dump(badDnsRecords, badDnsFile)
+                badDnsFile.write('\n')
+                badDnsRecords = []
 
         badCharacterDict = collections.defaultdict(int)
         badLines = []
@@ -254,20 +262,14 @@ def preprocess_file_part(filepath, pnr, sector, ipregex, tlds, destination_dir):
 
         write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
 
-        print('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
+        logging.info('pnr {0}: good lines: {1}'.format(pnr, countGoodLines))
         with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(badCharacterDict, characterStatsFile)
-        # with open(destination_dir + '/{0}-{1}-character.stats'.format(filename, pnr),
-        #           'wb') as characterStatsFile:
-        #     pickle.dump(badCharacterDict, characterStatsFile)
 
         with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
                   'w', encoding='utf-8') as labelStatFile:
             json.dump(labelDict, labelStatFile)
-        # with open(destination_dir + '/{0}-{1}-domain-label.stats'.format(filename, pnr),
-        #           'wb') as labelStatFile:
-        #     pickle.dump(labelDict, labelStatFile)
 
         # for character, count in badCharacterDict.items():
         #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \
