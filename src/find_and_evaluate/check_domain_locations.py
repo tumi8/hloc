@@ -2,7 +2,6 @@
 """
 This module checks the location information found with different verifing methods
 """
-from __future__ import print_function
 import argparse
 import ujson as json
 import requests
@@ -14,17 +13,14 @@ import random
 import mmap
 import sys
 import IP2Location
-# from pympler import tracker
+import logging
 import multiprocessing as mp
-import ripe.atlas.cousteau
+import ripe.atlas.cousteau as ripe_atlas
 from threading import Thread, Semaphore, Lock
 from math import ceil
-from ripe.atlas.cousteau import (
-    Ping, AtlasSource, AtlasCreateRequest, AtlasResultsRequest,
-    MeasurementRequest, Measurement, ProbeRequest)
 
-from ..data_processing import util
-from ..data_processing.util import GPSLocation, LocationResult, DomainLabelMatch
+
+import src.data_processing.util as util
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
@@ -36,14 +32,14 @@ MEASUREMENT_URL = ATLAS_URL + API_MEASUREMENT_POINT + '/'
 
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
-DISTANCE_METHOD = GPSLocation.gps_distance_equirectangular
+DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 MUNICH_ID = 'munich'
 DALLAS_ID = 'dallas'
 SINGAPORE_ID = 'singapore'
 COORDS = {
-    MUNICH_ID: {'gps_coords': GPSLocation(lat=48.137357, lon=11.575288)},
-    DALLAS_ID: {'gps_coords': GPSLocation(lat=32.776664, lon=-96.796988)},
-    SINGAPORE_ID: {'gps_coords': GPSLocation(lat=1.352083, lon=103.874949)}
+    MUNICH_ID: {'gps_coords': util.GPSLocation(lat=48.137357, lon=11.575288)},
+    DALLAS_ID: {'gps_coords': util.GPSLocation(lat=32.776664, lon=-96.796988)},
+    SINGAPORE_ID: {'gps_coords': util.GPSLocation(lat=1.352083, lon=103.874949)}
 }
 
 
@@ -86,6 +82,8 @@ def __create_parser_arguments(parser):
                         dest='ripeRequestBurstLimit',
                         help='How many request should at maximum be allowed per second'
                              ' to the ripe server', default=15)
+    parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
+                        help='Specify a logging file where the log should be saved')
 
 
 def __check_args(args):
@@ -116,6 +114,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
     __check_args(args)
+
+    util.setup_logging(args.log_file)
 
     start_time = time.time()
     with open(args.locationFile) as locationFile:
@@ -155,8 +155,7 @@ def main():
             COORDS[SINGAPORE_ID]['distances'][str(location['id'])] = \
                 DISTANCE_METHOD(location, COORDS[SINGAPORE_ID]['gps_coords'])
 
-    print('finished ripe after {}'.format((time.time() - start_time)),
-          flush=True)
+    logging.info('finished ripe after {}'.format((time.time() - start_time)))
 
     processes = []
     for pid in range(0, args.fileCount):
@@ -196,13 +195,13 @@ def main():
                 process.join()
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
-                print(process_sts.count(True), 'processes alive')
+                logging.info(process_sts.count(True), 'processes alive')
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
 
     end_time = time.time()
-    print('running time: {}'.format((end_time - start_time)))
+    logging.info('running time: {}'.format((end_time - start_time)))
     sys.exit(0)
 
 
@@ -225,14 +224,14 @@ def ip2location_check_for_list(filename_proto, pid, locations,
     ip2loc_obj = IP2Location.IP2Location()
     ip2loc_obj.open(ip2locations_filename)
 
-    locationDomainFile = open(filename_proto.format(pid) + '.locations', 'w')
+    location_domain_file = open(filename_proto.format(pid) + '.locations', 'w')
 
     correct_count = {
         'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
         }
 
     with open(filename_proto.format(pid)) as domainFile:
-        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, prot=mmap.PROT_READ)
+        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
@@ -248,8 +247,8 @@ def ip2location_check_for_list(filename_proto, pid, locations,
                     correct_locs.append(domain)
                 else:
                     wrong_locs.append(domain)
-            util.json_dump(correct_locs, locationDomainFile, indent=4)
-            locationDomainFile.write('\n')
+            util.json_dump(correct_locs, location_domain_file)
+            location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
 
@@ -279,7 +278,7 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
         }
 
     with open(filename_proto.format(pid)) as domainFile:
-        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, prot=mmap.PROT_READ)
+        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
@@ -295,13 +294,13 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
                     correct_locs.append(domain)
                 else:
                     wrong_locs.append(domain)
-            util.json_dump(correct_locs, location_domain_file, indent=4)
+            util.json_dump(correct_locs, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
     location_domain_file.close()
     geoipreader.close()
-    print('pid: ', pid, 'correct count: ', correct_count, flush=True)
+    logging.info('correct count: {}'.format(correct_count))
 
 
 def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
@@ -318,8 +317,8 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
 
         for match in label.matches:
             if locations[match.location_id].is_in_radius(
-                    GPSLocation(geoip_location.location.latitude,
-                                geoip_location.location.longitude)):
+                    util.GPSLocation(geoip_location.location.latitude,
+                                     geoip_location.location.longitude)):
                 correct_count[match['type']] += 1
                 return match
 
@@ -359,10 +358,9 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
 
     def dump_domain_list():
         """Write all domains in the buffer to the file and empty the lists"""
-        print('pid', pid, 'correct', len(domains[CORRECT_TYPE]),
-              'not_responding', len(domains[NOT_RESPONDING_TYPE]),
-              'no_location', len(domains[NO_LOCATION_TYPE]),
-              'blacklisted', len(domains[BLACKLISTED_TYPE]), flush=True)
+        logging.info('correct {} not_responding {} no_location {} blacklisted {}'.format(
+            len(domains[CORRECT_TYPE]), len(domains[NOT_RESPONDING_TYPE]),
+            len(domains[NO_LOCATION_TYPE]), len(domains[BLACKLISTED_TYPE])))
         util.json_dump(domains, domain_output_file)
         domain_output_file.write('\n')
         del domains[CORRECT_TYPE]
@@ -388,8 +386,7 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
     threads = []
     try:
         with open(filename_proto.format(pid)) as domainFile:
-            domain_file_mm = mmap.mmap(domainFile.fileno(), 0,
-                                       prot=mmap.PROT_READ)
+            domain_file_mm = mmap.mmap(domainFile.fileno(), 0, acccess=mmap.ACCESS_READ)
             line = domain_file_mm.readline().decode('utf-8')
             count_entries = 0
             while len(line) > 0:
@@ -415,9 +412,8 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
                     threads.append(thread)
                     count_entries += 1
                     if count_entries % 10000 == 0:
-                        print('pid', pid, 'count', count_entries,
-                              'correct_count',
-                              correct_count, flush=True)
+                        logging.info('count {} correct_count {}'.format(count_entries,
+                                                                        correct_count))
                 line = domain_file_mm.readline().decode('utf-8')
 
             domain_file_mm.close()
@@ -428,7 +424,7 @@ def ripe_check_for_list(filename_proto, pid, locations, rtt_proto,
         thread.join()
 
     util.json_dump(domains, domain_output_file)
-    print('pid', pid, 'correct_count', correct_count, flush=True)
+    logging.info('correct_count {}'.format(correct_count))
 
 
 CORRECT_TYPE = 'correct'
@@ -451,15 +447,15 @@ def check_domain_location_ripe(pid, domain, update_domains,
                 update_domains(domain, BLACKLISTED_TYPE)
                 return
 
-            results = [LocationResult(MUNICH_ID,
-                                      rtts[domain['ip']]['rtt'][MUNICH_ID],
-                                      COORDS[MUNICH_ID]['gps_coords']),
-                       LocationResult(SINGAPORE_ID,
-                                      rtts[domain['ip']]['rtt'][SINGAPORE_ID],
-                                      COORDS[SINGAPORE_ID]['gps_coords']),
-                       LocationResult(DALLAS_ID,
-                                      rtts[domain['ip']]['rtt'][DALLAS_ID],
-                                      COORDS[DALLAS_ID]['gps_coords'])]
+            results = [util.LocationResult(MUNICH_ID,
+                                           rtts[domain['ip']]['rtt'][MUNICH_ID],
+                                           COORDS[MUNICH_ID]['gps_coords']),
+                       util.LocationResult(SINGAPORE_ID,
+                                           rtts[domain['ip']]['rtt'][SINGAPORE_ID],
+                                           COORDS[SINGAPORE_ID]['gps_coords']),
+                       util.LocationResult(DALLAS_ID,
+                                           rtts[domain['ip']]['rtt'][DALLAS_ID],
+                                           COORDS[DALLAS_ID]['gps_coords'])]
         else:
             results = test_netsec_server(domain['ip'], chair_server_locks)
         if results is None or len(
@@ -470,7 +466,7 @@ def check_domain_location_ripe(pid, domain, update_domains,
         # TODO refactoring measurements are in dict format
         measurements = [mes for mes in
                         get_measurements(domain.ip, ripe_slow_down_sema)]
-        # print('pid', pid, 'ip', domain['ip'], 'got measurements', len(measurements), flush=True)
+        logging.info('ip {} got measurements {}'.format(domain['ip'], len(measurements)))
 
         # TODO change algorithm to choose next match sort by longest match
         for i, label in enumerate(domain.domain_labels):
@@ -509,9 +505,8 @@ def check_domain_location_ripe(pid, domain, update_domains,
 
                 if node is not None:
                     node_location_dist = location.gps_distance_equirectangular(
-                        GPSLocation(node['latitude'], node['longitude']))
+                        util.GPSLocation(node['latitude'], node['longitude']))
                 if chk_m is None or chk_m == -1:
-                    # print('make measurement', flush=True)
                     # only if no old measurement exists
                     m_results, near_node = create_and_check_measurement(
                         domain.ip,
@@ -520,8 +515,7 @@ def check_domain_location_ripe(pid, domain, update_domains,
                         ripe_slow_down_sema)
                     if near_node is not None:
                         node_location_dist = location.gps_distance_equirectangular(
-                            GPSLocation(near_node['latitude'],
-                                        near_node['longitude']))
+                            util.GPSLocation(near_node['latitude'], near_node['longitude']))
 
                     if m_results is None:
                         matches.remove(next_match)
@@ -552,10 +546,9 @@ def check_domain_location_ripe(pid, domain, update_domains,
                         update_domains(domain, CORRECT_TYPE)
                         break
                     else:
-                        n_res = LocationResult(location.id, chk_res, location)
+                        n_res = util.LocationResult(location.id, chk_res, location)
                         results.append(n_res)
                 elif chk_m < (MAX_RTT + node_location_dist / 100):
-                    # print('measurements fetched', flush=True)
                     update_count_for_type(next_match.code_type)
                     matched = True
                     next_match.matching = node
@@ -563,8 +556,7 @@ def check_domain_location_ripe(pid, domain, update_domains,
                     update_domains(domain, CORRECT_TYPE)
                     break
                 else:
-                    # print('measurements fetched', flush=True)
-                    n_res = LocationResult(location.id, chk_m, location)
+                    n_res = util.LocationResult(location.id, chk_m, location)
                     results.append(n_res)
 
                 matches.remove(next_match)
@@ -631,22 +623,22 @@ def test_netsec_server(ip_address, chair_server_locks):
         'd': {'user': 'root', 'port': None, 'server': '45.33.5.55'}
         }
     chair_server_locks['m'].acquire()
-    ret.append(LocationResult(MUNICH_ID,
-                              get_min_rtt(
-                                  ssh_ping(server_configs['m'], ip_address)),
-                              COORDS[MUNICH_ID]['gps_coords']))
+    ret.append(util.LocationResult(MUNICH_ID,
+                                   get_min_rtt(
+                                       ssh_ping(server_configs['m'], ip_address)),
+                                   COORDS[MUNICH_ID]['gps_coords']))
     chair_server_locks['m'].release()
     chair_server_locks['s'].acquire()
-    ret.append(LocationResult(SINGAPORE_ID,
-                              get_min_rtt(
-                                  ssh_ping(server_configs['s'], ip_address)),
-                              COORDS[SINGAPORE_ID]['gps_coords']))
+    ret.append(util.LocationResult(SINGAPORE_ID,
+                                   get_min_rtt(
+                                       ssh_ping(server_configs['s'], ip_address)),
+                                   COORDS[SINGAPORE_ID]['gps_coords']))
     chair_server_locks['s'].release()
     chair_server_locks['d'].acquire()
-    ret.append(LocationResult(DALLAS_ID,
-                              get_min_rtt(
-                                  ssh_ping(server_configs['d'], ip_address)),
-                              COORDS[DALLAS_ID]['gps_coords']))
+    ret.append(util.LocationResult(DALLAS_ID,
+                                   get_min_rtt(
+                                       ssh_ping(server_configs['d'], ip_address)),
+                                   COORDS[DALLAS_ID]['gps_coords']))
     chair_server_locks['d'].release()
     if ret[0].rtt is None and ret[1].rtt is None and ret[2].rtt is None:
         return None
@@ -670,7 +662,7 @@ def ssh_ping(server_conf, ip_address):
         elif error.returncode == 255:
             time.sleep(3)
             return ssh_ping(server_conf, ip_address)
-        print(error.output, flush=True, file=sys.stderr)
+        logging.error(error.output)
         raise error
     except subprocess.TimeoutExpired:
         return None
@@ -763,13 +755,13 @@ def create_and_check_measurement(ip_addr, location, ripe_create_sema,
             else:
                 sleep_ten()
         ripe_slow_down_sema.acquire()
-        success, m_results = AtlasResultsRequest(
+        success, m_results = ripe_atlas.AtlasResultsRequest(
             **{'msm_id': measurement_id}).create()
         while not success:
-            print('ResultRequest error', m_results, flush=True, file=sys.stderr)
+            logging.warning('ResultRequest error {}'.format(m_results))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
-            success, m_results = AtlasResultsRequest(
+            success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
 
         return m_results, near_node
@@ -784,15 +776,14 @@ USE_WRAPPER = True
 def create_ripe_measurement(ip_addr, location, near_node, ripe_slow_down_sema):
     """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
-    def create_ripe_measurement_wrapper(ip_addr, location, near_node,
-                                        ripe_slow_down_sema):
+    def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
-        ping = Ping(af=4, packets=1, target=ip_addr,
-                    description=ip_addr + ' test for location ' + location.city_name)
-        source = AtlasSource(value=str(near_node['id']), requested=1,
-                             type='probes')
-        atlas_request = AtlasCreateRequest(
+        ping = ripe_atlas.Ping(af=4, packets=1, target=ip_addr,
+                               description=ip_addr + ' test for location ' + location.city_name)
+        source = ripe_atlas.AtlasSource(value=str(near_node['id']), requested=1,
+                                        type='probes')
+        atlas_request = ripe_atlas.AtlasCreateRequest(
             key=API_KEY,
             measurements=[ping],
             sources=[source],
@@ -809,15 +800,14 @@ def create_ripe_measurement(ip_addr, location, near_node, ripe_slow_down_sema):
                 break
             time.sleep(10 + (random.randrange(0, 500) / 100))
 
-            retries = retries + 1
+            retries += 1
             if retries % 5 == 0:
-                print('Create error', response, flush=True, file=sys.stderr)
+                logging.error('Create error {}'.format(response))
 
         measurement_ids = response['measurements']
         return measurement_ids[0]
 
-    def create_ripe_measurement_post(ip_addr, location, near_node,
-                                     ripe_slow_down_sema):
+    def create_ripe_measurement_post():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
         headers = {
             'Content-Type': 'application/json', 'Accept': 'application/json'
@@ -854,8 +844,7 @@ def create_ripe_measurement(ip_addr, location, near_node, ripe_slow_down_sema):
         retries = 0
         while response.status_code != 202 and retries < 5:
             if response.status_code == 400:
-                print('Create measurement error!', response.text, flush=True,
-                      file=sys.stderr)
+                logging.error('Create measurement error! {}'.format(response.text))
                 return None
             ripe_slow_down_sema.acquire()
             response = requests.post(
@@ -871,11 +860,9 @@ def create_ripe_measurement(ip_addr, location, near_node, ripe_slow_down_sema):
         return measurement_ids[0]
 
     if USE_WRAPPER:
-        return create_ripe_measurement_wrapper(ip_addr, location, near_node,
-                                               ripe_slow_down_sema)
+        return create_ripe_measurement_wrapper()
     else:
-        return create_ripe_measurement_post(ip_addr, location, near_node,
-                                            ripe_slow_down_sema)
+        return create_ripe_measurement_post()
 
 
 def get_measurements(ip_addr, ripe_slow_down_sema):
@@ -888,7 +875,7 @@ def get_measurements(ip_addr, ripe_slow_down_sema):
         while True:
             try:
                 measurement.next_batch()
-            except ripe.atlas.cousteau.exceptions.APIResponseError:
+            except ripe_atlas.exceptions.APIResponseError:
                 pass
             else:
                 break
@@ -897,8 +884,7 @@ def get_measurements(ip_addr, ripe_slow_down_sema):
             loc_retries += 1
 
             if loc_retries % 5 == 0:
-                print('Ripe next_batch error!', ip_addr, flush=True,
-                      file=sys.stderr)
+                logging.warning('Ripe next_batch error! {}'.format(ip_addr))
 
     max_age = int(time.time()) - ALLOWED_MEASUREMENT_AGE
     params = {
@@ -911,8 +897,8 @@ def get_measurements(ip_addr, ripe_slow_down_sema):
     retries = 0
     while True:
         try:
-            measurements = MeasurementRequest(**params)
-        except ripe.atlas.cousteau.exceptions.APIResponseError:
+            measurements = ripe_atlas.MeasurementRequest(**params)
+        except ripe_atlas.exceptions.APIResponseError:
             pass
         else:
             break
@@ -921,8 +907,7 @@ def get_measurements(ip_addr, ripe_slow_down_sema):
         retries += 1
 
         if retries % 5 == 0:
-            print('Ripe MeasurementRequest error!', ip_addr, flush=True,
-                  file=sys.stderr)
+            logging.warning('Ripe MeasurementRequest error! {}'.format(ip_addr))
             time.sleep(30)
     next_batch(measurements)
     if measurements.total_count > 200:
@@ -945,18 +930,17 @@ def get_measurements_for_nodes(measurements, ripe_slow_down_sema, near_nodes):
             'probe_ids': [node['id'] for node in near_nodes]
             }
         ripe_slow_down_sema.acquire()
-        success, result_list = AtlasResultsRequest(**params).create()
+        success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
         retries = 0
         while not success and retries < 5:
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
-            success, result_list = AtlasResultsRequest(**params).create()
+            success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
             if not success:
                 retries += 1
 
         if retries > 4:
-            print('AtlasResultsRequest error!', result_list, flush=True,
-                  file=sys.stderr)
+            logging.error('AtlasResultsRequest error! {}'.format(result_list))
             continue
 
         # measure['results'] = result_list
@@ -983,7 +967,7 @@ def check_measurements_for_nodes(measurements, location, results,
         for result in m_results['results']:
             oldest_alowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
             if (result['prb_id'] not in near_node_ids or
-                        result['timestamp'] < oldest_alowed_time):
+                    result['timestamp'] < oldest_alowed_time):
                 continue
             check_res = get_rtt_from_result(result)
             if check_res is None:
@@ -995,7 +979,7 @@ def check_measurements_for_nodes(measurements, location, results,
                                if near_node['id'] == result['prb_id']))
                 check_n = check_res
                 results.append(
-                    LocationResult(location.id, check_res, location=location))
+                    util.LocationResult(location.id, check_res, location=location))
 
     if check_n is not None:
         return check_n, node_n
@@ -1008,16 +992,15 @@ def get_ripe_measurement(measurement_id):
     retries = 0
     while True:
         try:
-            return Measurement(id=measurement_id)
-        except ripe.atlas.cousteau.exceptions.APIResponseError:
+            return ripe_atlas.Measurement(id=measurement_id)
+        except ripe_atlas.exceptions.APIResponseError:
             pass
 
         time.sleep(5)
         retries += 1
 
         if retries % 5 == 0:
-            print('Ripe get Measurement error!', measurement_id, flush=True,
-                  file=sys.stderr)
+            logging.warning('Ripe get Measurement error! {}'.format(measurement_id))
 
 
 def json_request_get_wrapper(url, ripe_slow_down_sema, params=None,
@@ -1048,8 +1031,7 @@ def get_nearest_ripe_nodes(location, max_distance):
     :rtype: (list, list)
     """
     if max_distance % 50 != 0:
-        print('max_distance must be a multiple of 50', flush=True,
-              file=sys.stderr)
+        logging.critical('max_distance must be a multiple of 50')
         return None, None
 
     distances = [25, 50, 100, 250, 500, 1000]
@@ -1066,7 +1048,7 @@ def get_nearest_ripe_nodes(location, max_distance):
             }
 
         # TODO use wrapper class
-        nodes = ProbeRequest(**params)
+        nodes = ripe_atlas.ProbeRequest(**params)
 
         if nodes.total_count > 0:
             results = [node for node in nodes]
