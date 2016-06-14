@@ -12,7 +12,7 @@ import logging
 # import msgpack
 import json
 
-ACCEPTED_CHARACTER = set('{0}.-_'.format(string.printable[0:62]))
+ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
 
@@ -530,6 +530,7 @@ class Domain(JSONBase):
         obj = Domain(dct[self.PropertyKey.domain_name], dct[self.PropertyKey.ip_address],
                      dct[self.PropertyKey.ipv6_address])
         if self.PropertyKey.domain_labels in dct:
+            del obj.domain_labels[:]
             for label_dct in dct[self.PropertyKey.domain_labels]:
                 label_obj = label_dct
                 label_obj.domain = obj
@@ -638,8 +639,8 @@ class DomainLabelMatch(JSONBase):
         code = '2'
         matching = '3'
 
-    def __init__(self, location_id: int, code_type: LocationCodeType, domain_label: str=None,
-                 code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType,
+                 domain_label: DomainLabel=None, code=None):
         """init"""
         self.domain_label = domain_label
         self.location_id = location_id

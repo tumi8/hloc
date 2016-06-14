@@ -78,7 +78,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'loc_found_count': 0, 'length': 0}
+    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'loc_found_count': 0, 'length': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '_found.json', 'w') as loc_found_file, open(
@@ -106,21 +106,28 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
             for domain in domains:
                 entries_stats['count'] += 1
                 entries_stats['length'] += len(domain.domain_name)
-                matches = []
+                matched = False
                 for rule in drop_rules:
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
-                            entries_stats['loc_found_count'] += 1
+                            matched = True
+                            entries_stats['unique_loc_found_count'] += 1
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
+                            entries_stats['loc_found_count'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
-                                matches.append(util.DomainMatch(location[0], code_type,
-                                                                matched_str, domain))
-                domain.matches = matches
-                if matches:
+                                for label in domain.domain_labels:
+                                    if matched_str in label.label:
+                                        label.matches.append(util.DomainLabelMatch(location[0],
+                                                                                   code_type,
+                                                                                   label,
+                                                                                   matched_str))
+                                        break
+
+                if matched:
                     save_domain_with_location(domain)
                 else:
                     save_domain_wo_location(domain)
