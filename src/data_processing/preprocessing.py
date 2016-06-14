@@ -92,8 +92,17 @@ def main():
                                       name='preprocessing_{}'.format(i))
         processes[i].start()
 
-    for process in processes:
-        process.join()
+    alive = len(processes)
+    while alive > 0:
+        try:
+            for process in processes:
+                process.join()
+            process_sts = [pro.is_alive() for pro in processes]
+            if process_sts.count(True) != alive:
+                logging.info(process_sts.count(True), 'processes alive')
+                alive = process_sts.count(True)
+        except KeyboardInterrupt:
+            pass
 
     rdns_file.close()
     rdns_file_handle.close()
