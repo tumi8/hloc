@@ -82,13 +82,14 @@ def main():
     for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
             processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                   args=(rdns_file, i, file_lock, ipregex, tlds, args.destination,
-                                         args.cProfiling), name='preprocessing_{}'.format(i))
+                                      args=(rdns_file, rdns_file_handle.name, i, file_lock, ipregex,
+                                            tlds, args.destination, args.cProfiling),
+                                      name='preprocessing_{}'.format(i))
         else:
             processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                   args=(rdns_file, i, file_lock, ipregex, tlds, args.destination,
-                                         False),
-                                   name='preprocessing_{}'.format(i))
+                                      args=(rdns_file, rdns_file_handle.name, i, file_lock, ipregex,
+                                            tlds, args.destination, False),
+                                      name='preprocessing_{}'.format(i))
         processes[i].start()
 
     for process in processes:
@@ -118,8 +119,8 @@ def select_ip_regex(regexStrategy):
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipregex: re,
-                                 tlds: {str}, destination_dir: str, profile):
+def preprocess_file_part_profile(rdns_file: mmap.mmap, filepath: str, pnr: int, file_lock: mp.Lock,
+                                 ipregex: re, tlds: {str}, destination_dir: str, profile):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -129,19 +130,19 @@ def preprocess_file_part_profile(rdns_file: mmap.mmap, pnr: int, file_lock: mp.L
     startTime = time.monotonic()
     if profile:
         profiler = cProfile.Profile()
-        profiler.runctx('preprocess_file_part(rdns_file, pnr, file_lock,'
+        profiler.runctx('preprocess_file_part(rdns_file, filepath, pnr, file_lock,'
                         ' ipregex, tlds, destination_dir)',  globals(), locals())
         profiler.dump_stats('preprocess.profile')
     else:
-        preprocess_file_part(rdns_file, pnr, file_lock, ipregex, tlds, destination_dir)
+        preprocess_file_part(rdns_file, filepath, pnr, file_lock, ipregex, tlds, destination_dir)
 
     endTime = time.monotonic()
     logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
                  .format(pnr, (endTime - startTime), profile))
 
 
-def preprocess_file_part(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipregex: re,
-                         tlds: {str}, destination_dir: str):
+def preprocess_file_part(rdns_file: mmap.mmap, filepath: str, pnr: int, file_lock: mp.Lock,
+                         ipregex: re, tlds: {str}, destination_dir: str):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -149,7 +150,7 @@ def preprocess_file_part(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipr
     """
 
     logging.info('starting')
-    filename = util.get_path_filename(rdns_file.name)
+    filename = util.get_path_filename(filepath)
     labelDict = collections.defaultdict(int)
 
     with open(os.path.join(destination_dir, '{0}-{1}.cor'.format(filename, pnr)), 'w',
@@ -198,7 +199,6 @@ def preprocess_file_part(rdns_file: mmap.mmap, pnr: int, file_lock: mp.Lock, ipr
             """
             write lines to the badFile
             goodCharacters are all allowed Character
-            returns all bad Character found in the lines in a list
             """
             for line in lines:
                 for character in set(line).difference(goodCharacters):
