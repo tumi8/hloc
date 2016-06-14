@@ -193,7 +193,7 @@ def preprocess_file_part(rdns_file: mmap.mmap, filepath: str, pnr: int, file_loc
 
         def next_line() -> str:
             file_lock.acquire()
-            next_line_str = rdns_file.readline().decode('utf-8')
+            next_line_str = rdns_file.readline().decode('ISO-8859-1')
             file_lock.release()
             return next_line_str
 
