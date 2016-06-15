@@ -192,7 +192,7 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
                         lines.append(line)
                 if not lines:
                     break
-                seek_mmap(10*amount_processes-10*(pnr+1)))
+                seek_mmap(10*amount_processes-10*(pnr+1))
                 yield lines
 
         def add_labels(new_rdns_record):
