@@ -104,8 +104,6 @@ def json_object_decoding(dct):
             return LocationResult.create_object_from_dict(dct)
         if dct[CLASS_IDENTIFIER] == Domain.class_name_identifier:
             return Domain.create_object_from_dict(dct)
-        if dct[CLASS_IDENTIFIER] == DomainMatch.class_name_identifier:
-            return DomainMatch.create_object_from_dict(dct)
         if dct[CLASS_IDENTIFIER] == DomainLabel.class_name_identifier:
             return DomainLabel.create_object_from_dict(dct)
         if dct[CLASS_IDENTIFIER] == DomainLabelMatch.class_name_identifier:
