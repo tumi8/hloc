@@ -12,8 +12,7 @@ import logging
 # import msgpack
 import json
 
-ACCEPTED_CHARACTER = '{0},.-_'.format(string.printable[0:62])
-DNS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE)
+ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
 
@@ -153,6 +152,7 @@ def json_loads(json_str):
 #######################################
 #       Models and Interfaces         #
 #######################################
+@enum.unique
 class LocationCodeType(enum.Enum):
     iata = 0
     icao = 1
@@ -183,6 +183,14 @@ class LocationCodeType(enum.Enum):
             return
 
         return r'(?P<type>' + pattern + r')'
+
+
+@enum.unique
+class DomainType(enum.Enum):
+    correct = 0
+    not_responding = 1
+    no_location = 2
+    blacklisted = 3
 
 
 class JSONBase(object):
@@ -485,14 +493,13 @@ class Domain(JSONBase):
     class_name_identifier = 'd'
 
     __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
-                 'location', 'matches']
+                 'location']
 
     class PropertyKey:
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
         domain_labels = '3'
-        matches = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -508,7 +515,6 @@ class Domain(JSONBase):
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
         self.location = None
-        self.matches = []
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
@@ -519,7 +525,6 @@ class Domain(JSONBase):
             self.PropertyKey.ipv6_address: self.ipv6_address,
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
-            self.PropertyKey.matches: [match.dict_representation() for match in self.matches]
         }
         if self.location:
             ret_dict[self.PropertyKey.location] = self.location.id
@@ -531,15 +536,11 @@ class Domain(JSONBase):
         obj = Domain(dct[self.PropertyKey.domain_name], dct[self.PropertyKey.ip_address],
                      dct[self.PropertyKey.ipv6_address])
         if self.PropertyKey.domain_labels in dct:
+            del obj.domain_labels[:]
             for label_dct in dct[self.PropertyKey.domain_labels]:
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
-        if self.PropertyKey.matches in dct:
-            for match_dct in dct[self.PropertyKey.matches]:
-                match_obj = match_dct
-                match_obj.domain_label = obj
-                obj.matches.append(match_obj)
 
         return obj
 
@@ -568,8 +569,8 @@ class DomainLabel(JSONBase):
         """Returns a dictionary with the information of the object"""
         return {
             CLASS_IDENTIFIER: self.class_name_identifier,
-            'label': self.label,
-            'matches': [match.dict_representation() for match in self.matches]
+            self.PropertyKey.label: self.label,
+            self.PropertyKey.matches: [match.dict_representation() for match in self.matches]
         }
 
     @staticmethod
@@ -581,48 +582,6 @@ class DomainLabel(JSONBase):
             match_obj.domain = obj
             obj.matches.append(match_obj)
 
-        return obj
-
-
-class DomainMatch(JSONBase):
-    """The model for a Match between a domain name and a location code for DRopRules"""
-
-    class_name_identifier = 'dm'
-
-    __slots__ = ['location_id', 'code_type', 'code', 'domain', 'matching']
-
-    class PropertyKey:
-        location_id = '0'
-        code_type = '1'
-        code = '2'
-        matching = '3'
-
-    def __init__(self, location_id: int, code_type: LocationCodeType, code: str,
-                 domain: Domain=None):
-        """init"""
-        self.domain = domain
-        self.location_id = location_id
-        self.code_type = code_type
-        self.code = code
-        self.matching = False
-
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        return {
-            CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.location_id: self.location_id,
-            self.PropertyKey.code_type: self.code_type.value,
-            self.PropertyKey.code: self.code,
-            self.PropertyKey.matching: self.matching
-        }
-
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a DomainLabel object from a dictionary"""
-        obj = DomainMatch(dct[self.PropertyKey.location_id],
-                          LocationCodeType(dct[self.PropertyKey.code_type]),
-                          dct[self.PropertyKey.code])
-        obj.matching = dct[self.PropertyKey.matching]
         return obj
 
 
@@ -639,8 +598,8 @@ class DomainLabelMatch(JSONBase):
         code = '2'
         matching = '3'
 
-    def __init__(self, location_id: int, code_type: LocationCodeType, domain_label: str=None,
-                 code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType,
+                 domain_label: DomainLabel=None, code=None):
         """init"""
         self.domain_label = domain_label
         self.location_id = location_id
@@ -678,7 +637,7 @@ class LocationResult(JSONBase):
         location_id = '0'
         rtt = '1'
 
-    def __init__(self, location_id: int, rtt, location=None):
+    def __init__(self, location_id: str, rtt: float, location=None):
         """init"""
         self.location_id = location_id
         self.location = location

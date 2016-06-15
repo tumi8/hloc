@@ -3,8 +3,8 @@
 import pickle
 import argparse
 
-from marisa_trie import RecordTrie
-from ..data_processing import util
+import marisa_trie
+import src.data_processing.util as util
 
 
 def main():
@@ -33,7 +33,7 @@ def create_trie(locations):
     for location in locations.values():
         code_id_type_tuples.extend(location.code_id_type_tuples())
 
-    return RecordTrie('<HH', code_id_type_tuples)
+    return marisa_trie.RecordTrie('<HH', code_id_type_tuples)
 
 if __name__ == '__main__':
     main()

@@ -10,9 +10,9 @@ import ujson as json
 import collections
 from multiprocessing import Process
 import logging
+import marisa_trie
 
-from ..data_processing import util
-from ..data_processing.util import DomainLabelMatch
+import src.data_processing.util as util
 
 
 def __create_parser_arguments(parser):
@@ -218,7 +218,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     logging.info('index', index, 'match count:\n', match_count)
 
 
-def search_in_label(o_label, trie):
+def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):
     """returns all matches for this label"""
     matches = []
     ids = {}
@@ -231,7 +231,8 @@ def search_in_label(o_label, trie):
             for location_id, code_type in matching_locations:
                 if location_id in ids:
                     continue
-                matches.append(DomainLabelMatch(location_id, code_type, domain_label=o_label))
+                matches.append(util.DomainLabelMatch(location_id, code_type, domain_label=o_label,
+                                                     code=key))
                 type_count[code_type] += 1
 
         label = label[1:]
