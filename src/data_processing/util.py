@@ -152,6 +152,7 @@ def json_loads(json_str):
 #######################################
 #       Models and Interfaces         #
 #######################################
+@enum.unique
 class LocationCodeType(enum.Enum):
     iata = 0
     icao = 1
@@ -182,6 +183,14 @@ class LocationCodeType(enum.Enum):
             return
 
         return r'(?P<type>' + pattern + r')'
+
+
+@enum.unique
+class DomainType(enum.Enum):
+    correct = 0
+    not_responding = 1
+    no_location = 2
+    blacklisted = 3
 
 
 class JSONBase(object):
@@ -584,48 +593,6 @@ class DomainLabel(JSONBase):
         return obj
 
 
-class DomainMatch(JSONBase):
-    """The model for a Match between a domain name and a location code for DRopRules"""
-
-    class_name_identifier = 'dm'
-
-    __slots__ = ['location_id', 'code_type', 'code', 'domain', 'matching']
-
-    class PropertyKey:
-        location_id = '0'
-        code_type = '1'
-        code = '2'
-        matching = '3'
-
-    def __init__(self, location_id: int, code_type: LocationCodeType, code: str,
-                 domain: Domain=None):
-        """init"""
-        self.domain = domain
-        self.location_id = location_id
-        self.code_type = code_type
-        self.code = code
-        self.matching = False
-
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        return {
-            CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.location_id: self.location_id,
-            self.PropertyKey.code_type: self.code_type.value,
-            self.PropertyKey.code: self.code,
-            self.PropertyKey.matching: self.matching
-        }
-
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a DomainLabel object from a dictionary"""
-        obj = DomainMatch(dct[self.PropertyKey.location_id],
-                          LocationCodeType(dct[self.PropertyKey.code_type]),
-                          dct[self.PropertyKey.code])
-        obj.matching = dct[self.PropertyKey.matching]
-        return obj
-
-
 class DomainLabelMatch(JSONBase):
     """The model for a Match between a domain name label and a location code"""
 
@@ -678,7 +645,7 @@ class LocationResult(JSONBase):
         location_id = '0'
         rtt = '1'
 
-    def __init__(self, location_id: str, rtt, location=None):
+    def __init__(self, location_id: str, rtt: float, location=None):
         """init"""
         self.location_id = location_id
         self.location = location
