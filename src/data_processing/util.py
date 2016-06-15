@@ -493,14 +493,13 @@ class Domain(JSONBase):
     class_name_identifier = 'd'
 
     __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
-                 'location', 'matches']
+                 'location']
 
     class PropertyKey:
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
         domain_labels = '3'
-        matches = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -516,7 +515,6 @@ class Domain(JSONBase):
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
         self.location = None
-        self.matches = []
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
@@ -527,7 +525,6 @@ class Domain(JSONBase):
             self.PropertyKey.ipv6_address: self.ipv6_address,
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
-            self.PropertyKey.matches: [match.dict_representation() for match in self.matches]
         }
         if self.location:
             ret_dict[self.PropertyKey.location] = self.location.id
@@ -544,11 +541,6 @@ class Domain(JSONBase):
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
-        if self.PropertyKey.matches in dct:
-            for match_dct in dct[self.PropertyKey.matches]:
-                match_obj = match_dct
-                match_obj.domain_label = obj
-                obj.matches.append(match_obj)
 
         return obj
 
@@ -577,8 +569,8 @@ class DomainLabel(JSONBase):
         """Returns a dictionary with the information of the object"""
         return {
             CLASS_IDENTIFIER: self.class_name_identifier,
-            'label': self.label,
-            'matches': [match.dict_representation() for match in self.matches]
+            self.PropertyKey.label: self.label,
+            self.PropertyKey.matches: [match.dict_representation() for match in self.matches]
         }
 
     @staticmethod

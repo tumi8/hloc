@@ -95,7 +95,7 @@ def main():
                 process.join()
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
-                logging.info(process_sts.count(True), 'processes alive')
+                logging.info('{} processes alive'.format(process_sts.count(True)))
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
@@ -158,14 +158,14 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
 
     with open(os.path.join(destination_dir, '{0}-{1}.cor'.format(filename, pnr)), 'w',
               encoding='utf-8') as correctFile, open(os.path.join(
-                destination_dir, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
-                encoding='utf-8') as ipEncodedFile, open(os.path.join(
-                destination_dir, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
-                encoding='utf-8') as hexIpEncodedFile, open(os.path.join(
-                destination_dir, '{0}-{1}.bad'.format(filename, pnr)), 'w',
-                encoding='utf-8') as badFile, open(os.path.join(
-                destination_dir, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
-                encoding='utf-8') as badDnsFile:
+            destination_dir, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
+            encoding='utf-8') as ipEncodedFile, open(os.path.join(
+            destination_dir, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
+            encoding='utf-8') as hexIpEncodedFile, open(os.path.join(
+            destination_dir, '{0}-{1}.bad'.format(filename, pnr)), 'w',
+            encoding='utf-8') as badFile, open(os.path.join(
+            destination_dir, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
+            encoding='utf-8') as badDnsFile:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
@@ -176,7 +176,7 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
             badLines.append(domain_line)
             if len(badLines) > 10 ** 3:
                 write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
-                badLines = []
+                del badLines[:]
 
         def line_blocks():
             def seek_mmap(amount):
@@ -217,17 +217,16 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
             hexIpRecords.append(app_line)
             if len(hexIpRecords) >= 10 ** 5:
                 hexIpEncodedFile.write('\n'.join(hexIpRecords))
-                hexIpRecords = []
+                del hexIpRecords[:]
 
         def append_good_record(record):
-            nonlocal goodRecords, countGoodLines
+            nonlocal goodRecords
             goodRecords.append(record)
-            countGoodLines += 1
             add_labels(record)
             if len(goodRecords) >= 10 ** 5:
                 util.json_dump(goodRecords, correctFile)
                 correctFile.write('\n')
-                goodRecords = []
+                del goodRecords[:]
 
         def append_bad_dns_record(record):
             nonlocal badDnsRecords
@@ -235,7 +234,7 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
             if len(badDnsRecords) >= 10 ** 5:
                 util.json_dump(badDnsRecords, badDnsFile)
                 badDnsFile.write('\n')
-                badDnsRecords = []
+                del badDnsRecords[:]
 
         badCharacterDict = collections.defaultdict(int)
         badLines = []
@@ -263,6 +262,7 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
                             if util.is_ip_hex_encoded_simple(ipAddress, domain):
                                 append_hex_ip_line(line)
                             else:
+                                countGoodLines += 1
                                 append_good_record(rdnsRecord)
 
                         else:
@@ -271,6 +271,9 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
         util.json_dump(goodRecords, correctFile)
         util.json_dump(badDnsRecords, badDnsFile)
         util.json_dump(hexIpRecords, hexIpEncodedFile)
+
+        rdns_file.close()
+        rdns_file_handle.close()
 
         write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
 
