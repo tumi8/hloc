@@ -296,9 +296,9 @@ class GPSLocation(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = GPSLocation(dct[self.PropertyKey.lat], dct[self.PropertyKey.lon])
-        if self.PropertyKey.id in dct:
-            obj.id = dct[self.PropertyKey.id]
+        obj = GPSLocation(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon])
+        if GPSLocation.PropertyKey.id in dct:
+            obj.id = dct[GPSLocation.PropertyKey.id]
         return obj
 
 
@@ -402,15 +402,15 @@ class Location(GPSLocation):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct[self.PropertyKey.lat], dct[self.PropertyKey.lon],
-                       dct[self.PropertyKey.city_name], dct[self.PropertyKey.state],
-                       dct[self.PropertyKey.state_code], dct[self.PropertyKey.population])
-        if self.PropertyKey.id in dct:
-            obj.id = dct[self.PropertyKey.id]
-        if self.PropertyKey.airport_info in dct:
-            obj.airport_info = dct[self.PropertyKey.airport_info]
-        if self.PropertyKey.locode in dct:
-            obj.locode = dct[self.PropertyKey.locode]
+        obj = Location(dct[Location.PropertyKey.lat], dct[Location.PropertyKey.lon],
+                       dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
+                       dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
+        if Location.PropertyKey.id in dct:
+            obj.id = dct[Location.PropertyKey.id]
+        if Location.PropertyKey.airport_info in dct:
+            obj.airport_info = dct[Location.PropertyKey.airport_info]
+        if Location.PropertyKey.locode in dct:
+            obj.locode = dct[Location.PropertyKey.locode]
         return obj
 
 
@@ -445,9 +445,9 @@ class AirportInfo(JSONBase):
     def create_object_from_dict(dct):
         """Creates a AirportInfo object from a dictionary"""
         obj = AirportInfo()
-        obj.faa_codes = dct[self.PropertyKey.faa_codes]
-        obj.iata_codes = dct[self.PropertyKey.iata_codes]
-        obj.icao_codes = dct[self.PropertyKey.icao_codes]
+        obj.faa_codes = dct[AirportInfo.PropertyKey.faa_codes]
+        obj.iata_codes = dct[AirportInfo.PropertyKey.iata_codes]
+        obj.icao_codes = dct[AirportInfo.PropertyKey.icao_codes]
         return obj
 
 
@@ -479,8 +479,8 @@ class LocodeInfo(JSONBase):
     def create_object_from_dict(dct):
         """Creates a LocodeInfo object from a dictionary"""
         obj = LocodeInfo()
-        obj.place_codes = dct[self.PropertyKey.place_codes]
-        obj.subdivision_codes = dct[self.PropertyKey.subdivision_codes]
+        obj.place_codes = dct[LocodeInfo.PropertyKey.place_codes]
+        obj.subdivision_codes = dct[LocodeInfo.PropertyKey.subdivision_codes]
         return obj
 
 
@@ -533,11 +533,11 @@ class Domain(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Domain object from a dictionary"""
-        obj = Domain(dct[self.PropertyKey.domain_name], dct[self.PropertyKey.ip_address],
-                     dct[self.PropertyKey.ipv6_address])
-        if self.PropertyKey.domain_labels in dct:
+        obj = Domain(dct[Domain.PropertyKey.domain_name], dct[Domain.PropertyKey.ip_address],
+                     dct[Domain.PropertyKey.ipv6_address])
+        if Domain.PropertyKey.domain_labels in dct:
             del obj.domain_labels[:]
-            for label_dct in dct[self.PropertyKey.domain_labels]:
+            for label_dct in dct[Domain.PropertyKey.domain_labels]:
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
@@ -576,8 +576,8 @@ class DomainLabel(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabel(dct[self.PropertyKey.label])
-        for match in dct[self.PropertyKey.matches]:
+        obj = DomainLabel(dct[DomainLabel.PropertyKey.label])
+        for match in dct[DomainLabel.PropertyKey.matches]:
             match_obj = match
             match_obj.domain = obj
             obj.matches.append(match_obj)
@@ -620,9 +620,9 @@ class DomainLabelMatch(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
-        obj = DomainLabelMatch(dct[self.PropertyKey.location_id],
-                               LocationCodeType(dct[self.PropertyKey.code_type]))
-        obj.matching = dct[self.PropertyKey.matching]
+        obj = DomainLabelMatch(dct[DomainLabelMatch.PropertyKey.location_id],
+                               LocationCodeType(dct[DomainLabelMatch.PropertyKey.code_type]))
+        obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
         return obj
 
 
@@ -654,7 +654,8 @@ class LocationResult(JSONBase):
     @staticmethod
     def create_object_from_dict(dct: dict):
         """Creates a LocationResult object from a dictionary"""
-        return LocationResult(dct[self.PropertyKey.location_id], dct[self.PropertyKey.rtt])
+        return LocationResult(dct[LocationResult.PropertyKey.location_id],
+                              dct[LocationResult.PropertyKey.rtt])
 
 
 class DRoPRule(JSONBase):
@@ -714,8 +715,8 @@ class DRoPRule(JSONBase):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DroPRuler object from a dictionary"""
-        obj = DRoPRule(dct[self.PropertyKey.name], dct[self.PropertyKey.source])
-        for rule in dct[self.PropertyKey.rules]:
+        obj = DRoPRule(dct[DRoPRule.PropertyKey.name], dct[DRoPRule.PropertyKey.source])
+        for rule in dct[DRoPRule.PropertyKey.rules]:
             obj.add_rule(rule[Rule.PropertyKey.rule],
                          LocationCodeType(rule[Rule.PropertyKey.rule_type]))
         return obj
