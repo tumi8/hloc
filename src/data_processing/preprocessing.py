@@ -58,7 +58,7 @@ def main():
 
     ipregexText = select_ip_regex(args.regexStrategy)
     if not args.ip_filter:
-        ipregexText = r''
+        ipregexText = r'$^'
 
     if args.ip_filter:
         logging.info('using strategy: {}'.format(args.regexStrategy))
