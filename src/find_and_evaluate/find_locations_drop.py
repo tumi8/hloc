@@ -5,9 +5,10 @@ import argparse
 import collections
 import time
 import src.data_processing.util as util
-from multiprocessing import Process
+import multiprocessing as mp
 import logging
 import pprint
+from src.data_processing.preprocess_drop_rules import RULE_NAME
 
 
 def __create_parser_arguments(parser):
@@ -50,10 +51,10 @@ def main():
 
     processes = []
     for index in range(0, args.fileCount):
-        process = Process(target=start_search_in_file,
-                          args=(args.doaminfilename_proto, index, trie,
-                                drop_rules, args.amount),
-                          name='find_drop_{}'.format(index))
+        process = mp.Process(target=start_search_in_file,
+                             args=(args.doaminfilename_proto, index, trie,
+                                   drop_rules, args.amount),
+                             name='find_drop_{}'.format(index))
         processes.append(process)
 
     for process in processes:
@@ -73,7 +74,7 @@ def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [s
     logging.info('running time: {}'.format((end_time - start_time)))
 
 
-def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DRoPRule],
+def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
@@ -99,14 +100,24 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
                 no_loc_found_file.write('\n')
                 del domains_wo_location[:]
 
+        def find_rules_for_domain(domain_obj: util.Domain):
+            tmp_dct = drop_rules
+            for next_key in domain_obj.drop_domain_keys:
+                if next_key not in tmp_dct:
+                    break
+                if RULE_NAME in tmp_dct[next_key]:
+                    yield tmp_dct[next_key][RULE_NAME]
+                tmp_dct = tmp_dct[next_key]
+
         for line in domain_file:
             amount -= 1
-            domains  = util.json_loads(line)
+            domains = util.json_loads(line)
             for domain in domains:
                 entries_stats['count'] += 1
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
-                for rule in drop_rules:
+                rules = find_rules_for_domain(domain)
+                for rule in rules:
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:

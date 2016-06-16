@@ -490,19 +490,19 @@ class Domain(JSONBase):
 
     class_name_identifier = 'd'
 
-    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels',
-                 'location']
+    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location']
 
     class PropertyKey:
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
         domain_labels = '3'
+        location = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
 
-        def create_labels():
+        def create_labels() -> [DomainLabel]:
             labels = []
             for label in domain_name.split('.')[::-1]:
                 labels.append(DomainLabel(label, domain=self))
@@ -514,7 +514,18 @@ class Domain(JSONBase):
         self.domain_labels = create_labels()
         self.location = None
 
-    def dict_representation(self):
+    @property
+    def drop_domain_keys(self):
+        """returns only the first level domain and the top level domain"""
+        domain_parts = self.domain_name.split('.')
+        if len(rule_domain_parts) <= 1:
+            return domain_parts
+        main_domain = '.'.join(domain_parts[-2:])
+        domain_parts.pop()
+        domain_parts[-1] = main_domain
+        return domain_parts
+
+    def dict_representation(self) -> [str, object]:
         """Returns a dictionary with the information of the object"""
         ret_dict = {
             CLASS_IDENTIFIER: self.class_name_identifier,
@@ -529,7 +540,7 @@ class Domain(JSONBase):
         return ret_dict
 
     @staticmethod
-    def create_object_from_dict(dct):
+    def create_object_from_dict(dct, locations: [str, Location]=None):
         """Creates a Domain object from a dictionary"""
         obj = Domain(dct[Domain.PropertyKey.domain_name], dct[Domain.PropertyKey.ip_address],
                      dct[Domain.PropertyKey.ipv6_address])
@@ -539,6 +550,9 @@ class Domain(JSONBase):
                 label_obj = label_dct
                 label_obj.domain = obj
                 obj.domain_labels.append(label_obj)
+        if Domain.PropertyKey.location in dct and locations and \
+                dct[Domain.PropertyKey.location] in locations:
+            obj.location = locations[dct[Domain.PropertyKey.location]]
 
         return obj
 
@@ -708,7 +722,7 @@ class DRoPRule(JSONBase):
 
     def add_rule(self, rule: str, code_type: LocationCodeType):
         """adds a rule with the LocationCodeType set in type"""
-        self._rules.append(DRoPRule.Rule(rule, code_type))
+        self._rules.append(DRoPRule.NamedTupleRule(rule, code_type))
 
     @staticmethod
     def create_object_from_dict(dct):
@@ -742,7 +756,7 @@ class DRoPRule(JSONBase):
 
         return obj
 
-    class Rule(collections.namedtuple('Rule', ['rule', 'type'])):
+    class NamedTupleRule(collections.namedtuple('Rule', ['rule', 'type'])):
         __slots__ = ()
 
         class PropertyKey:
