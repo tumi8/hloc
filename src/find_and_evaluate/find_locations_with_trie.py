@@ -220,14 +220,14 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:
         pickle.dump(popular_labels, popular_file)
-    logging.info('total entries: {}', entries_count)
-    logging.info('total labels: {}', label_count)
-    logging.info('total label length: {}', label_length)
-    logging.info('popular_count: {}', popular_count)
-    logging.info('entries with location found: {}', entries_wl_count)
-    logging.info('label with location found: {}', label_wl_count)
-    logging.info('matches: {}', sum(match_count.values()))
-    logging.info('match count:\n{}', match_count)
+    logging.info('total entries: {}'.format(entries_count))
+    logging.info('total labels: {}'.format(label_count))
+    logging.info('total label length: {}'.format(label_length))
+    logging.info('popular_count: {}'.format(popular_count))
+    logging.info('entries with location found: {}'.format(entries_wl_count))
+    logging.info('label with location found: {}'.format(label_wl_count))
+    logging.info('matches: {}'.format(sum(match_count.values())))
+    logging.info('match count:\n{}'.format(match_count))
 
 
 def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):
