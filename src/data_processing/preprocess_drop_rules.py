@@ -41,7 +41,7 @@ def main():
 
     end_time = time.time()
     logging.info('Collected {} DRoP rule objects'.format(len(rules)))
-    logging.info('Collected {} DRoP rules'.format(len([rule.rules for rule in rules])))
+    logging.info('Collected {} DRoP rules'.format(sum([len(rule.rules) for rule in rules])))
     logging.info('{} different first level domain name rules exist'.format(len(rules_trie)))
     logging.info('running time: {}'.format((end_time - start_time)))
 
