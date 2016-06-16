@@ -722,7 +722,7 @@ class DRoPRule(JSONBase):
     @staticmethod
     def create_rule_from_yaml_dict(dct):
         """Creates a DroPRule object from a DRoP-Yaml dictionary"""
-        obj = DRoPRule(dct['name'], dct['source'])
+        obj = DRoPRule(dct['name'][5:], dct['source'])
         for rule in dct['rules']:
             if rule['mapping_required'] != 1:
                 logging.warning('mapping required != 1 for ' + rule)

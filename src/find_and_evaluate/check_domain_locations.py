@@ -164,19 +164,22 @@ def main():
                                        locations,
                                        args.rtt_proto,
                                        ripe_create_sema,
-                                       ripe_slow_down_sema))
+                                       ripe_slow_down_sema),
+                                 name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.geoipFile))
+                                       args.geoipFile),
+                                 name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'ip2location':
             process = mp.Process(target=ip2location_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.ip2locFile))
+                                       args.ip2locFile),
+                                 name='domain_checking_{}'.format(pid))
         processes.append(process)
 
     for process in processes:

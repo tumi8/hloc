@@ -6,10 +6,10 @@ import argparse
 import cProfile
 import time
 import os
+import logging
 from multiprocessing import Process
 
-from ..data_processing import util
-from ..data_processing.util import DomainLabelMatch
+import src.data_processing.util as util
 
 
 def __create_parser_arguments(parser):
@@ -71,7 +71,8 @@ def main():
                           args=(args.doaminfilename_proto, index, regexes,
                                 popular_labels,
                                 args.profile),
-                          kwargs={'amount': args.amount})
+                          kwargs={'amount': args.amount},
+                          name='find_normal_{}'.format(index))
         process.start()
         processes.append(process)
 
@@ -105,8 +106,7 @@ def start_search_in_file(filename_proto, index, regexes, popular_labels,
         search_in_file(filename_proto, index, regexes, popular_labels,
                        amount=amount)
     end_time = time.time()
-    print('index {0}: search_in_file running time: {1}'
-          .format(index, (end_time - start_time)))
+    logging.info('running time: {}'.format(index, (end_time - start_time)))
 
 
 def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
@@ -194,8 +194,6 @@ def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
                     save_entrie(domain, location_found, loc_found_file)
 
                 entries_count += 1
-                # if entries_count % 200 == 0:
-                #     print('index ', index, ' at ', entries_count, ' entries')
                 if entries_count == amount:
                     break
 
@@ -210,14 +208,14 @@ def search_in_file(filename_proto, index, regexes, popular_labels, amount=1000):
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:
         pickle.dump(popular_labels, popular_file)
-    print('index', index, 'total entries:', entries_count)
-    print('index', index, 'total labels:', label_count)
-    print('index', index, 'total label length:', label_length)
-    print('index', index, 'popular_count:', popular_count)
-    print('index', index, 'entries with location found:', entries_wl_count)
-    print('index', index, 'label with location found:', label_wl_count)
-    print('index', index, 'matches:', sum(match_count.values()))
-    print('index', index, 'match count:\n', match_count)
+    logging.info('total entries: {}'.format(entries_count))
+    logging.info('total labels: {}'.format(label_count))
+    logging.info('total label length: {}'.format(label_length))
+    logging.info('popular_count: {}'.format(popular_count))
+    logging.info('entries with location found: {}'.format(entries_wl_count))
+    logging.info('label with location found: {}'.format(label_wl_count))
+    logging.info('matches: {}'.format(sum(match_count.values())))
+    logging.info('match count:\n {}'.format(match_count))
 
 
 def search_in_label(o_label, regexes):
@@ -225,8 +223,7 @@ def search_in_label(o_label, regexes):
     labels = o_label.label.split('-')
     matches = []
     type_count = {
-        'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
-        'locode': 0
+        'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
     }
     count = 0
     for label in labels:
@@ -239,11 +236,10 @@ def search_in_label(o_label, regexes):
                 for group_key, code in group_dict.items():
                     if code is not None:
                         type_count[group_key] += 1
-                        group = group_key
+                        group = util.LocationCodeType[group_key]
                         break
 
-                matches.append(
-                    DomainLabelMatch(location_id, group, domain_label=o_label))
+                matches.append(util.DomainLabelMatch(location_id, group, domain_label=o_label))
 
     return count, type_count, matches
 
