@@ -518,7 +518,7 @@ class Domain(JSONBase):
     def drop_domain_keys(self):
         """returns only the first level domain and the top level domain"""
         domain_parts = self.domain_name.split('.')
-        if len(rule_domain_parts) <= 1:
+        if len(domain_parts) <= 1:
             return domain_parts
         main_domain = '.'.join(domain_parts[-2:])
         domain_parts.pop()
