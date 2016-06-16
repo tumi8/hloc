@@ -729,8 +729,8 @@ class DRoPRule(JSONBase):
         """Creates a DroPRuler object from a dictionary"""
         obj = DRoPRule(dct[DRoPRule.PropertyKey.name], dct[DRoPRule.PropertyKey.source])
         for rule in dct[DRoPRule.PropertyKey.rules]:
-            obj.add_rule(rule[Rule.PropertyKey.rule],
-                         LocationCodeType(rule[Rule.PropertyKey.rule_type]))
+            obj.add_rule(rule[NamedTupleRule.PropertyKey.rule],
+                         LocationCodeType(rule[NamedTupleRule.PropertyKey.rule_type]))
         return obj
 
     @staticmethod
