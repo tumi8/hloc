@@ -63,15 +63,14 @@ def main():
         process.join()
 
 
-def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DRoPRule],
+def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
                          amount: int):
     """Start searching in file and timer to know the elapsed time"""
     start_time = time.time()
     search_in_file(domainfile_proto, index, trie, drop_rules, amount)
 
     end_time = time.time()
-    logging.info('index {0}: search_in_file running time: {1}'
-                 .format(index, (end_time - start_time)))
+    logging.info('running time: {}'.format((end_time - start_time)))
 
 
 def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DRoPRule],
@@ -102,7 +101,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
 
         for line in domain_file:
             amount -= 1
-            domains = util.json_loads(line)
+            domains  = util.json_loads(line)
             for domain in domains:
                 entries_stats['count'] += 1
                 entries_stats['length'] += len(domain.domain_name)
