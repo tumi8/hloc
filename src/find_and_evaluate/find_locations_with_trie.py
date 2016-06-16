@@ -6,6 +6,7 @@ import argparse
 import cProfile
 import time
 import os
+import mmap
 import ujson as json
 import collections
 from multiprocessing import Process
@@ -135,13 +136,24 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                 entrie_file.write('\n')
             entries[:] = []
 
-    with open(filename) as dnsFile, open(
+    with open(filename) as dns_file_handle, open(
                     '.'.join(filename.split('.')[:-1]) + '-found.json',
             'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-not-found.json', 'w') as locn_found_file:
+                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
+            'w') as locn_found_file, mmap.mmap(dns_file_handle.fileno(), 0,
+                                               access=mmap.ACCESS_READ) as dns_file:
+
+        def lines(mmap_file: mmap.mmap):
+            while True:
+                mmap_line = mmap_file.readline().decode('ISO-8859-1')
+                if not mmap_line:
+                    break
+                yield mmap_line
+
         no_location_found = []
         location_found = []
-        for line in dnsFile:
+
+        for line in lines(dns_file):
             dns_entries = util.json_loads(line)
 
             for domain in dns_entries:
