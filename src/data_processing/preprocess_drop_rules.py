@@ -2,8 +2,12 @@
 
 import argparse
 import yaml
-import src.data_processing.util as util
+import time
 import logging
+import src.data_processing.util as util
+
+RULE_NAME = '__rule__'
+
 
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
@@ -20,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
     args = parser.parse_args()
-
+    start_time = time.time()
     util.setup_logging(args.log_file)
 
     rules = []
@@ -30,10 +34,40 @@ def main():
             if 'source' in doc and doc['name'].find('DRoP') >= 0:
                 rules.append(util.DRoPRule.create_rule_from_yaml_dict(doc))
 
-    with open(args.output_filename, 'w') as output_file:
-        util.json_dump(rules, output_file)
+    rules_trie = create_trie_for_rules(rules)
 
-    logging.info('Collected {} DRoP rules'.format(len(rules)))
+    with open(args.output_filename, 'w') as output_file:
+        util.json_dump(rules_trie, output_file)
+
+    end_time = time.time()
+    logging.info('Collected {} DRoP rule objects'.format(len(rules)))
+    logging.info('Collected {} DRoP rules'.format(len([rule.rules for rule in rules])))
+    logging.info('{} different first level domain name rules exist'.format(len(rules_trie)))
+    logging.info('running time: {}'.format((end_time - start_time)))
+
+
+def create_trie_for_rules(rules: [util.DRoPRule]) -> [str, object]:
+    """
+    Creates a trie like structure in a dict for the drop rules
+    :returns the rule trie
+    :return: [str, object]
+    """
+    dct = {}
+    for rule in rules:
+        rule_domain_parts = rule.name.split('.')
+        assert len(rule_domain_parts) > 1
+        main_domain = '.'.join(rule_domain_parts[-2:])
+        rule_domain_parts.pop()
+        rule_domain_parts[-1] = main_domain
+        if main_domain not in dct:
+            dct[main_domain] = {}
+        tmp = dct[main_domain]
+        for part in rule_domain_parts[::-1]:
+            tmp[part] = {}
+            tmp = tmp[part]
+        tmp[RULE_NAME] = rule
+
+    return dct
 
 
 if __name__ == '__main__':
