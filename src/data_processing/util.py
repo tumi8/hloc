@@ -523,7 +523,7 @@ class Domain(JSONBase):
         main_domain = '.'.join(domain_parts[-2:])
         domain_parts.pop()
         domain_parts[-1] = main_domain
-        return domain_parts
+        return domain_parts[::-1]
 
     def dict_representation(self) -> [str, object]:
         """Returns a dictionary with the information of the object"""
