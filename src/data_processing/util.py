@@ -166,15 +166,15 @@ class LocationCodeType(enum.Enum):
         :return: str
         """
         base = r'[a-zA-Z]'
-        if self == iata:
+        if self == self.iata:
             pattern = base + r'{3}'
-        elif self == icao:
+        elif self == self.icao:
             pattern = base + r'{4}'
-        elif self == clli:
+        elif self == self.clli:
             pattern = base + r'{6}'
-        elif self == locode:
+        elif self == self.locode:
             pattern = base + r'{5}'
-        elif self == geonames:
+        elif self == self.geonames:
             pattern = r'[a-zA-Z ]+'
         else:
             logging.error('WTF? should not be possible')
