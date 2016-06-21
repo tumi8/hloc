@@ -78,7 +78,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'loc_found_count': 0, 'length': 0, 'rules_found': 0}
+    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'unique_loc_trie_found_count': 0,
+                     'loc_found_count': 0, 'length': 0, 'rules_found': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '_found.json', 'w') as loc_found_file, open(
@@ -127,6 +128,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
+                            if locations:
+                                entries_stats['unique_loc_trie_found_count'] += 1
                             entries_stats['loc_found_count'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
