@@ -59,11 +59,10 @@ def create_trie_for_rules(rules: [util.DRoPRule]) -> [str, object]:
         main_domain = '.'.join(rule_domain_parts[-2:])
         rule_domain_parts.pop()
         rule_domain_parts[-1] = main_domain
-        if main_domain not in dct:
-            dct[main_domain] = {}
-        tmp = dct[main_domain]
+        tmp = dct
         for part in rule_domain_parts[::-1]:
-            tmp[part] = {}
+            if part not in dct:
+                dct[part] = {}
             tmp = tmp[part]
         tmp[RULE_NAME] = rule
 

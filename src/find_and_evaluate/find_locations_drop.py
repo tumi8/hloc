@@ -117,8 +117,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
                 rules = find_rules_for_domain(domain)
-                entries_stats['rules_found'] += 1
                 for rule in rules:
+                    entries_stats['rules_found'] += 1
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:

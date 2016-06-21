@@ -707,7 +707,7 @@ class DRoPRule(JSONBase):
         return self._rules
 
     @property
-    def regex_pattern_rules(self) -> ([re], LocationCodeType):
+    def regex_pattern_rules(self) -> [(re, LocationCodeType)]:
         """
         :returns all rules saved in this object as patterns for regex execution
         :return: list(String)
