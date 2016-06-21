@@ -82,10 +82,14 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                      'loc_found_count': 0, 'length': 0, 'rules_found': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
-            filename.split('.')[:-1]) + '_found.json', 'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '_not_found.json', 'w') as no_loc_found_file:
+            filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
+                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
+                'w') as no_loc_found_file, open(
+                '.'.join(filename.split('.')[:-1]) + '-found-wo-loc.json',
+                'w') as loc_found_wo_file:
         domains_w_location = []
         domains_wo_location = []
+        domains_no_location = []
 
         def save_domain_with_location(loc_domain):
             domains_w_location.append(loc_domain)
@@ -97,9 +101,16 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         def save_domain_wo_location(loc_domain):
             domains_wo_location.append(loc_domain)
             if len(domains_wo_location) >= 10 ** 4:
-                util.json_dump(domains_wo_location, no_loc_found_file)
+                util.json_dump(domains_wo_location, loc_found_wo_file)
                 no_loc_found_file.write('\n')
                 del domains_wo_location[:]
+
+        def save_domain_no_location(loc_domain):
+            domains_no_location.append(loc_domain)
+            if len(domains_no_location) >= 10 ** 4:
+                util.json_dump(domains_no_location, no_loc_found_file)
+                no_loc_found_file.write('\n')
+                del domains_no_location[:]
 
         def find_rules_for_domain(domain_obj: util.Domain):
             tmp_dct = drop_rules
@@ -117,6 +128,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 entries_stats['count'] += 1
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
+                locations_present = False
                 rules = find_rules_for_domain(domain)
                 for rule in rules:
                     entries_stats['rules_found'] += 1
@@ -130,6 +142,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                          if loc[1] == code_type.value]
                             if locations:
                                 entries_stats['unique_loc_trie_found_count'] += 1
+                                locations_present = True
                             entries_stats['loc_found_count'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
@@ -141,10 +154,12 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                                                                    matched_str))
                                         break
 
-                if matched:
+                if locations_present:
                     save_domain_with_location(domain)
-                else:
+                elif matched:
                     save_domain_wo_location(domain)
+                else:
+                    save_domain_no_location(domain)
 
             if amount == 0:
                 break
