@@ -78,7 +78,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'loc_found_count': 0, 'length': 0}
+    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'loc_found_count': 0, 'length': 0, 'rules_found': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '_found.json', 'w') as loc_found_file, open(
@@ -117,6 +117,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
                 rules = find_rules_for_domain(domain)
+                entries_stats['rules_found'] += 1
                 for rule in rules:
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
