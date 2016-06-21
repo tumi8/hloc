@@ -15,7 +15,6 @@ import sys
 import IP2Location
 import logging
 import collections
-import typing
 import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
 import threading
@@ -164,19 +163,22 @@ def main():
                                        locations,
                                        args.rtt_proto,
                                        ripe_create_sema,
-                                       ripe_slow_down_sema))
+                                       ripe_slow_down_sema),
+                                 name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.geoipFile))
+                                       args.geoipFile),
+                                 name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'ip2location':
             process = mp.Process(target=ip2location_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.ip2locFile))
+                                       args.ip2locFile),
+                                 name='domain_checking_{}'.format(pid))
         processes.append(process)
 
     for process in processes:
@@ -639,7 +641,7 @@ def test_netsec_server(ip_address: str, chair_server_locks: [str, threading.Lock
     return ret
 
 
-def ssh_ping(server_conf: [str, [str, typing.Any]], ip_address: str) -> str:
+def ssh_ping(server_conf: [str, [str, object]], ip_address: str) -> str:
     """Perform a ping from the server with server_conf over ssh"""
     # build ssh arguments
     args = ['ssh']
@@ -698,7 +700,7 @@ NON_WORKING_PROBES_LOCK = threading.Lock()
 def create_and_check_measurement(ip_addr: str, location: util.Location,
                                  ripe_create_sema: mp.Semaphore,
                                  ripe_slow_down_sema: mp.Semaphore) -> \
-        ([str, typing.Any], [str, typing.Any]):
+        ([str, object], [str, object]):
     """creates a measurement for the parameters and checks for the created measurement"""
     near_nodes = [node for node in location.available_nodes if
                   node not in NON_WORKING_PROBES]
@@ -769,7 +771,7 @@ def create_and_check_measurement(ip_addr: str, location: util.Location,
 USE_WRAPPER = True
 
 
-def create_ripe_measurement(ip_addr: str, location: util.Location, near_node: [str, typing.Any],
+def create_ripe_measurement(ip_addr: str, location: util.Location, near_node: [str, object],
                             ripe_slow_down_sema: mp.Semaphore) -> int:
     """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
@@ -916,8 +918,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
     return measurements
 
 
-def get_measurements_for_nodes(measurements: [[str, typing.Any]], ripe_slow_down_sema: mp.Semaphore,
-                               near_nodes: [str, typing.Any]):
+def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sema: mp.Semaphore,
+                               near_nodes: [str, object]):
     """Loads all results for all measurements if they are less than a year ago"""
 
     for measure in measurements:
@@ -945,7 +947,7 @@ def get_measurements_for_nodes(measurements: [[str, typing.Any]], ripe_slow_down
         yield {'msm_id': measure['id'], 'results': result_list}
 
 
-def check_measurements_for_nodes(measurements: [typing.Any], location: util.Location,
+def check_measurements_for_nodes(measurements: [object], location: util.Location,
                                  results: [util.LocationResult],
                                  ripe_slow_down_sema: mp.Semaphore) -> (float, int):
     """
@@ -1025,7 +1027,7 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
 
 
 def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
-        ([[str, typing.Any]], [[str, typing.Any]]):
+        ([[str, object]], [[str, object]]):
     """
     Searches for ripe nodes near the location
     :rtype: (list, list)

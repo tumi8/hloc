@@ -6,6 +6,7 @@ import argparse
 import cProfile
 import time
 import os
+import mmap
 import ujson as json
 import collections
 from multiprocessing import Process
@@ -77,7 +78,8 @@ def main():
                           args=(args.doaminfilename_proto, index, trie,
                                 popular_labels,
                                 args.profile),
-                          kwargs={'amount': args.amount})
+                          kwargs={'amount': args.amount},
+                          name='find_locations_{}'.format(index))
         process.start()
         processes.append(process)
 
@@ -118,8 +120,6 @@ def start_search_in_file(filename_proto, index, trie, popular_labels,
 def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     """for all amount=0"""
     filename = filename_proto.format(index)
-    loc_found_file = open('.'.join(filename.split('.')[:-1]) + '_found.json', 'w')
-    locn_found_file = open('.'.join(filename.split('.')[:-1]) + '_not_found.json', 'w')
     match_count = collections.defaultdict(int)
     entries_count = 0
     label_count = 0
@@ -136,10 +136,24 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                 entrie_file.write('\n')
             entries[:] = []
 
-    with open(filename) as dnsFile:
+    with open(filename) as dns_file_handle, open(
+                    '.'.join(filename.split('.')[:-1]) + '-found.json',
+            'w') as loc_found_file, open(
+                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
+            'w') as locn_found_file, mmap.mmap(dns_file_handle.fileno(), 0,
+                                               access=mmap.ACCESS_READ) as dns_file:
+
+        def lines(mmap_file: mmap.mmap):
+            while True:
+                mmap_line = mmap_file.readline().decode('ISO-8859-1')
+                if not mmap_line:
+                    break
+                yield mmap_line
+
         no_location_found = []
         location_found = []
-        for line in dnsFile:
+
+        for line in lines(dns_file):
             dns_entries = util.json_loads(line)
 
             for domain in dns_entries:
@@ -203,19 +217,17 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
         util.json_dump(location_found, loc_found_file)
         util.json_dump(no_location_found, locn_found_file)
 
-    loc_found_file.close()
-    locn_found_file.close()
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:
         pickle.dump(popular_labels, popular_file)
-    logging.info('index', index, 'total entries:', entries_count)
-    logging.info('index', index, 'total labels:', label_count)
-    logging.info('index', index, 'total label length:', label_length)
-    logging.info('index', index, 'popular_count:', popular_count)
-    logging.info('index', index, 'entries with location found:', entries_wl_count)
-    logging.info('index', index, 'label with location found:', label_wl_count)
-    logging.info('index', index, 'matches:', sum(match_count.values()))
-    logging.info('index', index, 'match count:\n', match_count)
+    logging.info('total entries: {}'.format(entries_count))
+    logging.info('total labels: {}'.format(label_count))
+    logging.info('total label length: {}'.format(label_length))
+    logging.info('popular_count: {}'.format(popular_count))
+    logging.info('entries with location found: {}'.format(entries_wl_count))
+    logging.info('label with location found: {}'.format(label_wl_count))
+    logging.info('matches: {}'.format(sum(match_count.values())))
+    logging.info('match count:\n{}'.format(match_count))
 
 
 def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):
@@ -229,11 +241,12 @@ def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):
         for key in matching_keys:
             matching_locations = trie[key]
             for location_id, code_type in matching_locations:
+                real_code_type = util.LocationCodeType(code_type)
                 if location_id in ids:
                     continue
-                matches.append(util.DomainLabelMatch(location_id, code_type, domain_label=o_label,
+                matches.append(util.DomainLabelMatch(location_id, real_code_type, domain_label=o_label,
                                                      code=key))
-                type_count[code_type] += 1
+                type_count[real_code_type] += 1
 
         label = label[1:]
 

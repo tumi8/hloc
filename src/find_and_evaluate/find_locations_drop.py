@@ -5,9 +5,10 @@ import argparse
 import collections
 import time
 import src.data_processing.util as util
-from multiprocessing import Process
+import multiprocessing as mp
 import logging
 import pprint
+from src.data_processing.preprocess_drop_rules import RULE_NAME
 
 
 def __create_parser_arguments(parser):
@@ -50,10 +51,10 @@ def main():
 
     processes = []
     for index in range(0, args.fileCount):
-        process = Process(target=start_search_in_file,
-                          args=(args.doaminfilename_proto, index, trie,
-                                drop_rules, args.amount),
-                          name='find_drop_{}'.format(index))
+        process = mp.Process(target=start_search_in_file,
+                             args=(args.doaminfilename_proto, index, trie,
+                                   drop_rules, args.amount),
+                             name='find_drop_{}'.format(index))
         processes.append(process)
 
     for process in processes:
@@ -63,28 +64,33 @@ def main():
         process.join()
 
 
-def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DRoPRule],
+def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
                          amount: int):
     """Start searching in file and timer to know the elapsed time"""
     start_time = time.time()
     search_in_file(domainfile_proto, index, trie, drop_rules, amount)
 
     end_time = time.time()
-    logging.info('index {0}: search_in_file running time: {1}'
-                 .format(index, (end_time - start_time)))
+    logging.info('running time: {}'.format((end_time - start_time)))
 
 
-def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DRoPRule],
+def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'loc_found_count': 0, 'length': 0}
+    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'unique_loc_trie_found_count': 0,
+                     'loc_found_count': 0, 'length': 0, 'rules_found': 0, 'false_positives': 0,
+                     'false_positive_with_hint': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
-            filename.split('.')[:-1]) + '_found.json', 'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '_not_found.json', 'w') as no_loc_found_file:
+            filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
+                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
+                'w') as no_loc_found_file, open(
+                '.'.join(filename.split('.')[:-1]) + '-found-wo-loc.json',
+                'w') as loc_found_wo_file:
         domains_w_location = []
         domains_wo_location = []
+        domains_no_location = []
 
         def save_domain_with_location(loc_domain):
             domains_w_location.append(loc_domain)
@@ -96,9 +102,25 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
         def save_domain_wo_location(loc_domain):
             domains_wo_location.append(loc_domain)
             if len(domains_wo_location) >= 10 ** 4:
-                util.json_dump(domains_wo_location, no_loc_found_file)
-                no_loc_found_file.write('\n')
+                util.json_dump(domains_wo_location, loc_found_wo_file)
+                loc_found_wo_file.write('\n')
                 del domains_wo_location[:]
+
+        def save_domain_no_location(loc_domain):
+            domains_no_location.append(loc_domain)
+            if len(domains_no_location) >= 10 ** 4:
+                util.json_dump(domains_no_location, no_loc_found_file)
+                no_loc_found_file.write('\n')
+                del domains_no_location[:]
+
+        def find_rules_for_domain(domain_obj: util.Domain):
+            tmp_dct = drop_rules
+            for next_key in domain_obj.drop_domain_keys:
+                if next_key not in tmp_dct:
+                    break
+                if RULE_NAME in tmp_dct[next_key]:
+                    yield tmp_dct[next_key][RULE_NAME]
+                tmp_dct = tmp_dct[next_key]
 
         for line in domain_file:
             amount -= 1
@@ -107,15 +129,25 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
                 entries_stats['count'] += 1
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
-                for rule in drop_rules:
+                locations_present = False
+                found_false_positive = False
+                rules = find_rules_for_domain(domain)
+                for rule in rules:
+                    entries_stats['rules_found'] += 1
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
-                            matched = True
-                            entries_stats['unique_loc_found_count'] += 1
+                            if not matched:
+                                entries_stats['unique_loc_found_count'] += 1
+                                matched = True
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
+                            if locations and not locations_present:
+                                entries_stats['unique_loc_trie_found_count'] += 1
+                                locations_present = True
+                            else:
+                                found_false_positive = True
                             entries_stats['loc_found_count'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
@@ -127,16 +159,24 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [util.DR
                                                                                    matched_str))
                                         break
 
-                if matched:
+                if found_false_positive and locations_present:
+                    entries_stats['false_positive_with_hint'] += 1
+                if found_false_positive:
+                    entries_stats['false_positives'] += 1
+
+                if locations_present:
                     save_domain_with_location(domain)
-                else:
+                elif matched:
                     save_domain_wo_location(domain)
+                else:
+                    save_domain_no_location(domain)
 
             if amount == 0:
                 break
 
         util.json_dump(domains_w_location, loc_found_file)
-        util.json_dump(domains_wo_location, no_loc_found_file)
+        util.json_dump(domains_wo_location, loc_found_wo_file)
+        util.json_dump(domains_no_location, no_loc_found_file)
 
         logging.info('entries stats {}'.format(pprint.pformat(entries_stats, indent=4)))
         logging.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
