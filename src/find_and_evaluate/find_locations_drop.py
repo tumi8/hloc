@@ -79,7 +79,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
     """Search in file"""
     match_count = collections.defaultdict(int)
     entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'unique_loc_trie_found_count': 0,
-                     'loc_found_count': 0, 'length': 0, 'rules_found': 0}
+                     'loc_found_count': 0, 'length': 0, 'rules_found': 0, 'false_positives': 0}
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
@@ -129,6 +129,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 entries_stats['length'] += len(domain.domain_name)
                 matched = False
                 locations_present = False
+                found_false_positive = False
                 rules = find_rules_for_domain(domain)
                 for rule in rules:
                     entries_stats['rules_found'] += 1
@@ -141,9 +142,11 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
-                            if locations:
+                            if locations and not locations_present:
                                 entries_stats['unique_loc_trie_found_count'] += 1
                                 locations_present = True
+                            else:
+                                found_false_positive = True
                             entries_stats['loc_found_count'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
@@ -155,6 +158,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                                                                    matched_str))
                                         break
 
+                if found_false_positive:
+                    entries_stats['false_positives'] += 1
                 if locations_present:
                     save_domain_with_location(domain)
                 elif matched:
