@@ -135,8 +135,9 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
-                            matched = True
-                            entries_stats['unique_loc_found_count'] += 1
+                            if not matched:
+                                entries_stats['unique_loc_found_count'] += 1
+                                matched = True
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
