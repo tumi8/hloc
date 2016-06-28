@@ -596,6 +596,7 @@ def parse_metropolitan_codes(metropolitan_filepath: str) -> [Location]:
         for line in metropolitan_file:
             code, lat, lon = line.split(',')
             location = Location(lat=float(lat), lon=float(lon))
+            location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
 
