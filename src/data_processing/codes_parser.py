@@ -589,12 +589,28 @@ def print_stats(location_codes):
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
 
 
+def parse_metropolitan_codes(metropolitan_filepath: str) -> [Location]:
+    """Parses the Iata metropolitan codes"""
+    metropolitan_locations = []
+    with open(metropolitan_filepath) as metropolitan_file:
+        for line in metropolitan_file:
+            code, lat, lon = line.split(',')
+            location = Location(lat=float(lat), lon=float(lon))
+            location.airport_info.iata_codes.append(code)
+            metropolitan_locations.append(location)
+
+    return metropolitan_locations
+
+
 def parse_codes(args):
     """start real parsing"""
     startTime = time.clock()
     startRTime = time.time()
     if args.airport_codes:
         parse_airport_codes(args)
+        if args.metropolitan_file:
+            metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
+            add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius, create_new_locations=False)
 
     if args.locode:
         parse_locode_codes(args.locode)
@@ -611,7 +627,7 @@ def parse_codes(args):
 
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')
-    util.json_dump(locations, characterCodesFile, indent=4)
+    util.json_dump(locations, characterCodesFile)
     characterCodesFile.close()
     endTime = time.clock()
     endRTime = time.time()
@@ -651,6 +667,8 @@ def __create_parser_arguments(parser):
     parser.add_argument('-f', '--output-filename', type=str,
                         default='collectedData.json',
                         dest='filename', help='Specify the output filename')
+    parser.add_argument('-e', '--metropolitan-codes-file', dest='metropolitan_file', type=str,
+                        help='Specify the metropolitan codes file')
     # TODO config file
 
 
