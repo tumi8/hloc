@@ -400,11 +400,11 @@ class Location(GPSLocation):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct[Location.PropertyKey.lat], dct[Location.PropertyKey.lon],
+        obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
-        if Location.PropertyKey.id in dct:
-            obj.id = dct[Location.PropertyKey.id]
+        if GPSLocation.PropertyKey.id in dct:
+            obj.id = dct[GPSLocation.PropertyKey.id]
         if Location.PropertyKey.airport_info in dct:
             obj.airport_info = dct[Location.PropertyKey.airport_info]
         if Location.PropertyKey.locode in dct:
