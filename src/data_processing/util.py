@@ -283,11 +283,11 @@ class GPSLocation(JSONBase):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
             CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.lat: self.lat,
-            self.PropertyKey.lon: self.lon
+            GPSLocation.PropertyKey.lat: self.lat,
+            GPSLocation.PropertyKey.lon: self.lon
         }
         if self.id is not None:
-            ret_dict[self.PropertyKey.id] = self.id
+            ret_dict[GPSLocation.PropertyKey.id] = self.id
 
         return ret_dict
 
