@@ -78,9 +78,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'unique_loc_trie_found_count': 0,
-                     'loc_found_count': 0, 'length': 0, 'rules_found': 0, 'false_positives': 0,
-                     'false_positive_with_hint': 0}
+    entries_stats = collections.defaultdict(int)
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
@@ -126,29 +124,28 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             amount -= 1
             domains = util.json_loads(line)
             for domain in domains:
-                entries_stats['count'] += 1
-                entries_stats['length'] += len(domain.domain_name)
+                entries_stats['count_domains'] += 1
                 matched = False
                 locations_present = False
                 found_false_positive = False
                 rules = find_rules_for_domain(domain)
                 for rule in rules:
-                    entries_stats['rules_found'] += 1
+                    entries_stats['rules_found_total'] += 1
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
                             if not matched:
-                                entries_stats['unique_loc_found_count'] += 1
+                                entries_stats['domains_with_rule_match_count'] += 1
                                 matched = True
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
                             if locations and not locations_present:
-                                entries_stats['unique_loc_trie_found_count'] += 1
+                                entries_stats['domains_with_location_count'] += 1
                                 locations_present = True
-                            else:
+                            elif not locations_present:
                                 found_false_positive = True
-                            entries_stats['loc_found_count'] += len(locations)
+                            entries_stats['total_amount_found_locations'] += len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
                                 for label in domain.domain_labels:
@@ -160,7 +157,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                         break
 
                 if found_false_positive and locations_present:
-                    entries_stats['false_positive_with_hint'] += 1
+                    entries_stats['false_positive_with_found_location'] += 1
                 if found_false_positive:
                     entries_stats['false_positives'] += 1
 
