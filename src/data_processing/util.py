@@ -715,7 +715,7 @@ class DRoPRule(JSONBase):
         if self._regex_rules is None:
             ret_rules = []
             for rule in self._rules:
-                ret_rules.append((re.compile(rule.rule.format(rule.type.regex)), rule.type))
+                ret_rules.append((re.compile(rule.rule.replace('{}', rule.type.regex)), rule.type))
             self._regex_rules = ret_rules
 
         return self._regex_rules
