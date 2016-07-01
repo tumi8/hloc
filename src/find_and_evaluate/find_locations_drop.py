@@ -8,6 +8,7 @@ import src.data_processing.util as util
 import multiprocessing as mp
 import logging
 import pprint
+import heapq
 from src.data_processing.preprocess_drop_rules import RULE_NAME
 
 
@@ -31,6 +32,8 @@ def __create_parser_arguments(parser):
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-l', '--logging-file', type=str, default='find_drop.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-s', '--statistics-file', type=str, default='drop_statistics.log',
+                        dest='statistics_file_path', help='Specify a statistics logging file')
     # parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
     #                     dest='profile', action='store_true')
 
@@ -53,7 +56,7 @@ def main():
     for index in range(0, args.fileCount):
         process = mp.Process(target=start_search_in_file,
                              args=(args.doaminfilename_proto, index, trie,
-                                   drop_rules, args.amount),
+                                   drop_rules, args.amount, args.statistics_file_path),
                              name='find_drop_{}'.format(index))
         processes.append(process)
 
@@ -65,17 +68,17 @@ def main():
 
 
 def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                         amount: int):
+                         amount: int, log_file_path: str):
     """Start searching in file and timer to know the elapsed time"""
     start_time = time.time()
-    search_in_file(domainfile_proto, index, trie, drop_rules, amount)
+    search_in_file(domainfile_proto, index, trie, drop_rules, amount, log_file_path)
 
     end_time = time.time()
     logging.info('running time: {}'.format((end_time - start_time)))
 
 
 def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                   amount: int):
+                   amount: int,  log_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
     entries_stats = collections.defaultdict(int)
@@ -130,22 +133,23 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 found_false_positive = False
                 rules = find_rules_for_domain(domain)
                 for rule in rules:
-                    entries_stats['rules_found_total'] += 1
+                    entries_stats[rule.name]['rules_used_count'] += 1
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
                             if not matched:
-                                entries_stats['domains_with_rule_match_count'] += 1
+                                entries_stats[rule.name]['domains_with_rule_match_count'] += 1
                                 matched = True
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
                             if locations and not locations_present:
-                                entries_stats['domains_with_location_count'] += 1
+                                entries_stats[rule.name]['domains_with_location_count'] += 1
                                 locations_present = True
                             elif not locations_present:
                                 found_false_positive = True
-                            entries_stats['total_amount_found_locations'] += len(locations)
+                            entries_stats[rule.name]['total_amount_found_locations'] += \
+                                len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
                                 for label in domain.domain_labels:
@@ -157,9 +161,9 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                         break
 
                 if found_false_positive and locations_present:
-                    entries_stats['false_positive_with_found_location'] += 1
+                    entries_stats[rule.name]['false_positive_with_found_location'] += 1
                 if found_false_positive:
-                    entries_stats['false_positives'] += 1
+                    entries_stats[rule.name]['false_positives'] += 1
 
                 if locations_present:
                     save_domain_with_location(domain)
@@ -175,7 +179,36 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         util.json_dump(domains_wo_location, loc_found_wo_file)
         util.json_dump(domains_no_location, no_loc_found_file)
 
-        logging.info('entries stats {}'.format(pprint.pformat(entries_stats, indent=4)))
+        new_better_stats = {}
+        for rule_name, rule_stat in entries_stats.items():
+            if not isinstance(rule_stat, dict):
+                continue
+            new_better_stats[rule_name] = {}
+            new_better_stats[rule_name]['matching_percent'] = \
+                rule_stat['rules_used_count'] / rule_stat['domains_with_rule_match_count']
+            new_better_stats[rule_name]['true_matching_percent'] = \
+                rule_stat['rules_used_count'] / rule_stat['domains_with_location_count']
+
+        with open(log_file_path) as stats_file:
+            util.json_dump(new_better_stats, stats_file)
+
+        ten_most_matching = heapq.nlargest(10, new_better_stats,
+                                           key=lambda stat: stat[1]['matching_percent'])
+        ten_most_true_matching = heapq.nlargest(10, new_better_stats,
+                                                key=lambda stat: stat[1]['true_matching_percent'])
+        ten_least_matching = heapq.nsmallest(10, new_better_stats,
+                                           key=lambda stat: stat[1]['matching_percent'])
+        ten_least_true_matching = heapq.nsmallest(10, new_better_stats,
+                                                key=lambda stat: stat[1]['true_matching_percent'])
+        logging.info('10 rules with highest matching percent: {}'.format(
+            pprint.pformat(ten_most_matching, indent=4)))
+        logging.info('10 rules with highest true matching percent: {}'.format(
+            pprint.pformat(ten_most_true_matching, indent=4)))
+        logging.info('10 rules with lowest matching percent: {}'.format(
+            pprint.pformat(ten_least_matching, indent=4)))
+        logging.info('10 rules with lowest true matching percent: {}'.format(
+            pprint.pformat(ten_least_true_matching, indent=4)))
+
         logging.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
 
 if __name__ == '__main__':
