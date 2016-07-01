@@ -81,7 +81,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int,  log_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = collections.defaultdict(object)
+    entries_stats = {'count_domains': 0}
 
     def generate_def_dcts(gen_rules: [str, object]):
         for gen_rule in gen_rules.values():
