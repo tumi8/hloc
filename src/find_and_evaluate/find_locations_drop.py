@@ -83,7 +83,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
     match_count = collections.defaultdict(int)
     entries_stats = collections.defaultdict(object)
 
-    for rule in drop_rules:
+    for rule in drop_rules.values():
         entries_stats[rule.name] = collections.defaultdict(int)
 
     filename = domainfile_proto.format(index)
