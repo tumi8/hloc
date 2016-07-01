@@ -83,8 +83,14 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
     match_count = collections.defaultdict(int)
     entries_stats = collections.defaultdict(object)
 
-    for rule in drop_rules.values():
-        entries_stats[rule.name] = collections.defaultdict(int)
+    def generate_def_dcts(gen_rules: [str, object]):
+        for gen_rule in gen_rules.values():
+            if isinstance(gen_rule, dict):
+                generate_def_dcts(gen_rule)
+                continue
+            entries_stats[gen_rule.name] = collections.defaultdict(int)
+
+    generate_def_dcts(drop_rules)
 
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
