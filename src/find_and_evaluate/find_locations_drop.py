@@ -81,7 +81,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int,  log_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count_domains': 0}
+    count_domains = 0
+    entries_stats = collections.defaultdict(dict)
 
     def generate_def_dcts(gen_rules: [str, object]):
         for gen_rule in gen_rules.values():
@@ -137,7 +138,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             amount -= 1
             domains = util.json_loads(line)
             for domain in domains:
-                entries_stats['count_domains'] += 1
+                count_domains += 1
                 matched = False
                 locations_present = False
                 found_false_positive = False
@@ -211,7 +212,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         ten_least_true_matching = heapq.nsmallest(10, new_better_stats,
                                                   key=lambda stat: stat[1]['true_matching_percent'])
 
-        logging.info('Total amount domains: {}'.format(entries_stats['count_domains']))
+        logging.info('Total amount domains: {}'.format(count_domains))
         logging.info('10 rules with highest matching percent: {}'.format(
             pprint.pformat(ten_most_matching, indent=4)))
         logging.info('10 rules with highest true matching percent: {}'.format(
