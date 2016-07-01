@@ -81,7 +81,11 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                    amount: int,  log_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = collections.defaultdict(int)
+    entries_stats = collections.defaultdict(object)
+
+    for rule in drop_rules:
+        entries_stats[rule.name] = collections.defaultdict(int)
+
     filename = domainfile_proto.format(index)
     with open(filename) as domain_file, open('.'.join(
             filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
@@ -197,9 +201,11 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         ten_most_true_matching = heapq.nlargest(10, new_better_stats,
                                                 key=lambda stat: stat[1]['true_matching_percent'])
         ten_least_matching = heapq.nsmallest(10, new_better_stats,
-                                           key=lambda stat: stat[1]['matching_percent'])
+                                             key=lambda stat: stat[1]['matching_percent'])
         ten_least_true_matching = heapq.nsmallest(10, new_better_stats,
-                                                key=lambda stat: stat[1]['true_matching_percent'])
+                                                  key=lambda stat: stat[1]['true_matching_percent'])
+
+        logging.info('Total amount domains: {}'.format(entries_stats['count_domains']))
         logging.info('10 rules with highest matching percent: {}'.format(
             pprint.pformat(ten_most_matching, indent=4)))
         logging.info('10 rules with highest true matching percent: {}'.format(
