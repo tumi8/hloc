@@ -196,9 +196,9 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                 continue
             new_better_stats[rule_name] = {}
             new_better_stats[rule_name]['matching_percent'] = \
-                rule_stat['rules_used_count'] / rule_stat['domains_with_rule_match_count']
+                rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
             new_better_stats[rule_name]['true_matching_percent'] = \
-                rule_stat['rules_used_count'] / rule_stat['domains_with_location_count']
+                rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
 
         with open(log_file_path) as stats_file:
             util.json_dump(new_better_stats, stats_file)
