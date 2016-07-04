@@ -33,14 +33,15 @@ def __create_parser_arguments(parser):
                         dest='tlds_file', help='Set the path to the tlds file')
     parser.add_argument('-s', '--strategy', type=str, dest='regexStrategy',
                         choices=['strict', 'abstract', 'moderate'],
-                        default='abstract',
-                        help='Specify a regex Strategy')
+                        default='abstract',help='Specify a regex Strategy')
     parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
     parser.add_argument('-d', '--destination', type=str, default='rdns_results',
                         dest='destination', help='Set the desination directory (must exist)')
     parser.add_argument('-i', '--ip-filter', action='store_true', dest='ip_filter',
                         help='set if you want to filter isp ip domain names')
+    parser.add_argument('-v', '--ip-version', type=str, dest='ipVesrion',
+                        choices=['ipv4', 'ipv6'], default='ipv4', help='specify the ipVersion')
     parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
@@ -123,7 +124,7 @@ def select_ip_regex(regexStrategy):
 
 
 def preprocess_file_part_profile(filepath: str, pnr: int, amount_processes: int, ipregex: re,
-                                 tlds: {str},  destination_dir: str, profile):
+                                 tlds: {str},  destination_dir: str, ip_version: str, profile):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -134,18 +135,19 @@ def preprocess_file_part_profile(filepath: str, pnr: int, amount_processes: int,
     if profile:
         profiler = cProfile.Profile()
         profiler.runctx('preprocess_file_part(filepath, pnr, amount_processes, ipregex'
-                        ', tlds, destination_dir)', globals(), locals())
+                        ', tlds, destination_dir, ip_version)', globals(), locals())
         profiler.dump_stats('preprocess.profile')
     else:
-        preprocess_file_part(filepath, pnr, amount_processes, ipregex, tlds, destination_dir)
+        preprocess_file_part(filepath, pnr, amount_processes, ipregex, tlds, destination_dir,
+                             ip_version)
 
     endTime = time.monotonic()
-    logging.info('pnr {0}: preprocess_file_part running time: {1} profiled: {2}'
-                 .format(pnr, (endTime - startTime), profile))
+    logging.info('preprocess_file_part running time: {} profiled: {}'
+                 .format((endTime - startTime), profile))
 
 
 def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex: re,
-                         tlds: {str}, destination_dir: str):
+                         tlds: {str}, destination_dir: str, ip_version: str):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -156,6 +158,7 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
     rdns_file = mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
     filename = util.get_path_filename(filepath)
     labelDict = collections.defaultdict(int)
+    is_ipv6 = ip_version == 'ipv6'
 
     with open(os.path.join(destination_dir, '{0}-{1}.cor'.format(filename, pnr)), 'w',
               encoding='utf-8') as correctFile, open(os.path.join(
@@ -255,12 +258,15 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
                     add_bad_line(line)
                 else:
                     ipAddress, domain = line.split(',', 1)
-                    if is_standart_isp_domain(line):
+                    if not is_ipv6 and is_standart_isp_domain(line):
                         ipEncodedFile.write('{0}\n'.format(line))
                     else:
-                        rdnsRecord = Domain(domain, ip_address=ipAddress)
+                        if is_ipv6:
+                            rdnsRecord = Domain(domain, ipv6_address=ipAddress)
+                        else:
+                            rdnsRecord = Domain(domain, ip_address=ipAddress)
                         if rdnsRecord.domain_labels[0].label.lower() in tlds:
-                            if util.is_ip_hex_encoded_simple(ipAddress, domain):
+                            if not is_ipv6 and util.is_ip_hex_encoded_simple(ipAddress, domain):
                                 append_hex_ip_line(line)
                             else:
                                 countGoodLines += 1
