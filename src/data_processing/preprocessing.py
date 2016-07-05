@@ -177,7 +177,7 @@ def main():
     if args.white_list_file_path:
         del config.white_list
         config.white_list = []
-        with open(args.white_list_file_path) as filter_list_file:
+        with open(args.white_list_file_path, 'w') as filter_list_file:
             for line in filter_list_file:
                 config.white_list.append(line.strip())
 
