@@ -165,7 +165,7 @@ def main():
                 tlds.add(line.lower())
 
     config.filename = args.filename
-    if config.amount_processes:
+    if args.numProcesses:
         config.amount_processes = args.numProcesses
     if args.destination:
         config.destination = args.destination
