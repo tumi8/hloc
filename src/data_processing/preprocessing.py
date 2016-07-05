@@ -102,7 +102,7 @@ def main():
                       'in config a default one will be created')
             else:
                 default_section = config_parser[ConfigPropertyKey.default_section_key]
-                if ConfigPropertyKey.amount_processes_key in config_parser and \
+                if ConfigPropertyKey.amount_processes_key in default_section and \
                         default_section.get(ConfigPropertyKey.amount_processes_key):
                     config.amount_processes = int(default_section.get(
                         ConfigPropertyKey.amount_processes_key))
@@ -110,28 +110,28 @@ def main():
                     print('{} key is required to have a value (Default: 8)'.format(
                         ConfigPropertyKey.amount_processes_key), file=sys.stderr)
                     return
-                if ConfigPropertyKey.destination_key in config_parser and \
+                if ConfigPropertyKey.destination_key in default_section and \
                         default_section.get(ConfigPropertyKey.destination_key):
                     config.destination = default_section.get(ConfigPropertyKey.destination_key)
                 else:
                     print('{} key is required to have a value (Default: rdns_parse)'.format(
                         ConfigPropertyKey.destination_key), file=sys.stderr)
                     return
-                if ConfigPropertyKey.isp_ip_filter_key in config_parser:
+                if ConfigPropertyKey.isp_ip_filter_key in default_section:
                     config.isp_ip_filter = default_section.getboolean(
                         ConfigPropertyKey.isp_ip_filter_key)
                 else:
                     print('{} key is required to have a value (Default: False)'.format(
                         ConfigPropertyKey.isp_ip_filter_key), file=sys.stderr)
                     return
-                if ConfigPropertyKey.ip_version_key in config_parser and \
+                if ConfigPropertyKey.ip_version_key in default_section and \
                         default_section.get(ConfigPropertyKey.ip_version_key) in ['ipv4', 'ipv6']:
                     config.ip_version = default_section.get('ip version')
                 else:
                     print('{} key is required to have a value (choices: ipv4, ipv6)(Default: ipv4)'
                           .format(ConfigPropertyKey.destination_key), file=sys.stderr)
                     return
-                if ConfigPropertyKey.white_list_key in config_parser:
+                if ConfigPropertyKey.white_list_key in default_section:
                     if os.path.isfile(default_section.get(ConfigPropertyKey.white_list_key)):
                         with open(default_section.get(ConfigPropertyKey.white_list_key)) as f_file:
                             config.white_list = []
