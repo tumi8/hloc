@@ -195,24 +195,31 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             if not isinstance(rule_stat, dict):
                 continue
             new_better_stats[rule_name] = {}
-            new_better_stats[rule_name]['matching_percent'] = \
-                rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
-            new_better_stats[rule_name]['true_matching_percent'] = \
-                rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
+            if rule_stat['rules_used_count'] > 0:
+                new_better_stats[rule_name]['matching_percent'] = \
+                    rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
+                new_better_stats[rule_name]['true_matching_percent'] = \
+                    rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
+            new_better_stats['unused'] = True
 
         with open(log_file_path) as stats_file:
             util.json_dump(new_better_stats, stats_file)
 
-        ten_most_matching = heapq.nlargest(10, new_better_stats,
+        stats_for_used_rules = [rule_stat for rule_stat in new_better_stats
+                                if 'unused' not in rule_stat]
+
+        ten_most_matching = heapq.nlargest(10, stats_for_used_rules,
                                            key=lambda stat: stat[1]['matching_percent'])
-        ten_most_true_matching = heapq.nlargest(10, new_better_stats,
+        ten_most_true_matching = heapq.nlargest(10, stats_for_used_rules,
                                                 key=lambda stat: stat[1]['true_matching_percent'])
-        ten_least_matching = heapq.nsmallest(10, new_better_stats,
+        ten_least_matching = heapq.nsmallest(10, stats_for_used_rules,
                                              key=lambda stat: stat[1]['matching_percent'])
-        ten_least_true_matching = heapq.nsmallest(10, new_better_stats,
+        ten_least_true_matching = heapq.nsmallest(10, stats_for_used_rules,
                                                   key=lambda stat: stat[1]['true_matching_percent'])
 
         logging.info('Total amount domains: {}'.format(count_domains))
+        logging.info('Total amount rules: {}'.format(len(new_better_stats)))
+        logging.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
         logging.info('10 rules with highest matching percent: {}'.format(
             pprint.pformat(ten_most_matching, indent=4)))
         logging.info('10 rules with highest true matching percent: {}'.format(
