@@ -183,7 +183,7 @@ def main():
     processes = [None] * config.amount_processes
 
     for i in range(0, len(processes)):
-        if i == (args.numProcesses - 1):
+        if i == (config.amount_processes - 1):
             processes[i] = mp.Process(target=preprocess_file_part_profile,
                                       args=(config, i, ipregex, tlds, args.cProfiling),
                                       name='preprocessing_{}'.format(i))
