@@ -68,17 +68,17 @@ def main():
 
 
 def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                         amount: int, log_file_path: str):
+                         amount: int, stats_file_path: str):
     """Start searching in file and timer to know the elapsed time"""
     start_time = time.time()
-    search_in_file(domainfile_proto, index, trie, drop_rules, amount, log_file_path)
+    search_in_file(domainfile_proto, index, trie, drop_rules, amount, stats_file_path)
 
     end_time = time.time()
     logging.info('running time: {}'.format((end_time - start_time)))
 
 
 def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                   amount: int,  log_file_path: str):
+                   amount: int,  stats_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
     count_domains = 0
@@ -202,7 +202,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                     rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
             new_better_stats['unused'] = True
 
-        with open(log_file_path) as stats_file:
+        with open(stats_file_path, 'w') as stats_file:
             util.json_dump(new_better_stats, stats_file)
 
         stats_for_used_rules = [rule_stat for rule_stat in new_better_stats
