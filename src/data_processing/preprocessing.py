@@ -75,11 +75,10 @@ def create_default_config(config_parser: configparser.ConfigParser):
     """Adds all default values to the config_parser"""
     config_parser[ConfigPropertyKey.default_section_key] = {}
     default_section = config_parser[ConfigPropertyKey.default_section_key]
-    default_section[ConfigPropertyKey.amount_processes_key] = 8
+    default_section[ConfigPropertyKey.amount_processes_key] = str(8)
     default_section[ConfigPropertyKey.destination_key] = 'rdns_parse'
-    default_section[ConfigPropertyKey.isp_ip_filter_key] = False
+    default_section[ConfigPropertyKey.isp_ip_filter_key] = str(False)
     default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
-    default_section[ConfigPropertyKey.white_list_key] = None
 
 
 def main():
