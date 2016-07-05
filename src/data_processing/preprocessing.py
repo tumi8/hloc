@@ -43,8 +43,8 @@ def __create_parser_arguments(parser):
                         help='set if you want to filter isp ip domain names')
     parser.add_argument('-v', '--ip-version', type=str, dest='ip_vesrion',
                         choices=['ipv4', 'ipv6'], help='specify the ipVersion')
-    parser.add_argument('-f', '--filter_list', type=str, dest='filter_list_path',
-                        help='path to a file with a list of IPs to filter')
+    parser.add_argument('-f', '--white-list-file', type=str, dest='white_list_file_path',
+                        help='path to a file with a white list of IPs')
     parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
@@ -58,7 +58,7 @@ class Config(object):
     destination = None
     isp_ip_filter = False
     ip_version = None
-    filter_list = []
+    white_list = None
 
 
 class ConfigPropertyKey(object):
@@ -68,7 +68,7 @@ class ConfigPropertyKey(object):
     destination_key = 'destination'
     isp_ip_filter_key = 'isp ip filter'
     ip_version_key = 'ip version'
-    filter_file_key = 'filter file'
+    white_list_key = 'white list file'
 
 
 def create_default_config(config_parser: configparser.ConfigParser):
@@ -79,7 +79,7 @@ def create_default_config(config_parser: configparser.ConfigParser):
     default_section[ConfigPropertyKey.destination_key] = 'rdns_parse'
     default_section[ConfigPropertyKey.isp_ip_filter_key] = False
     default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
-    default_section[ConfigPropertyKey.filter_file_key] = None
+    default_section[ConfigPropertyKey.white_list_key] = None
 
 
 def main():
@@ -132,14 +132,15 @@ def main():
                     print('{} key is required to have a value (choices: ipv4, ipv6)(Default: ipv4)'
                           .format(ConfigPropertyKey.destination_key), file=sys.stderr)
                     return
-                if ConfigPropertyKey.filter_file_key in config_parser:
-                    if not os.path.isfile(default_section.get(ConfigPropertyKey.filter_file_key)):
-                        with open(default_section.get('filter file')) as filter_file:
-                            for line in filter_file:
-                                config.filter_list.append(line.strip())
+                if ConfigPropertyKey.white_list_key in config_parser:
+                    if os.path.isfile(default_section.get(ConfigPropertyKey.white_list_key)):
+                        with open(default_section.get(ConfigPropertyKey.white_list_key)) as f_file:
+                            config.white_list = []
+                            for line in f_file:
+                                config.white_list.append(line.strip())
                     else:
                         print('{} key has to be a valid file if specified!'
-                              .format(ConfigPropertyKey.destination_key), file=sys.stderr)
+                              .format(ConfigPropertyKey.white_list_key), file=sys.stderr)
                         return
         else:
             logging.info('Creating new default config file')
@@ -174,11 +175,12 @@ def main():
         config.isp_ip_filter = args.isp_ip_filter
     if args.ip_version:
         config.ip_version = args.ip_version
-    if args.filter_list_path:
-        del config.filter_list[:]
-        with open(args.filter_list_path) as filter_list_file:
+    if args.white_list_file_path:
+        del config.white_list
+        config.white_list = []
+        with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
-                config.filter_list.append(line.strip())
+                config.white_list.append(line.strip())
 
     for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
@@ -266,7 +268,9 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
             encoding='utf-8') as badFile, open(os.path.join(
             config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
-            encoding='utf-8') as badDnsFile:
+            encoding='utf-8') as badDnsFile, open(os.path.join(
+            config.destination, '{0}-{1}-custom-filerd'.format(filename, pnr)), 'w',
+            encoding='utf-8') as customFilterFile:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
@@ -355,7 +359,11 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     add_bad_line(line)
                 else:
                     ipAddress, domain = line.split(',', 1)
-                    if not is_ipv6 and is_standart_isp_domain(line):
+                    # is not None is correct because it could also be an empty list and that is
+                    # allowed
+                    if config.white_list is not None and ipAddress not in config.white_list:
+                        customFilterFile.write('{}\n'.format(line))
+                    elif not is_ipv6 and config.isp_ip_filter and is_standart_isp_domain(line):
                         ipEncodedFile.write('{0}\n'.format(line))
                     else:
                         if is_ipv6:
