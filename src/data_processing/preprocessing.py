@@ -75,7 +75,7 @@ def create_default_config(config_parser: configparser.ConfigParser):
     """Adds all default values to the config_parser"""
     config_parser[ConfigPropertyKey.default_section_key] = {}
     default_section = config_parser[ConfigPropertyKey.default_section_key]
-    default_section[ConfigPropertyKey.amount_processes_key] = 16
+    default_section[ConfigPropertyKey.amount_processes_key] = 8
     default_section[ConfigPropertyKey.destination_key] = 'rdns_parse'
     default_section[ConfigPropertyKey.isp_ip_filter_key] = False
     default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
@@ -108,7 +108,7 @@ def main():
                     config.amount_processes = int(default_section.get(
                         ConfigPropertyKey.amount_processes_key))
                 else:
-                    print('{} key is required to have a value (Default: 16)'.format(
+                    print('{} key is required to have a value (Default: 8)'.format(
                         ConfigPropertyKey.amount_processes_key), file=sys.stderr)
                     return
                 if ConfigPropertyKey.destination_key in config_parser and \
