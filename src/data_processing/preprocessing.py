@@ -144,7 +144,7 @@ def main():
         else:
             logging.info('Creating new default config file')
             create_default_config(config_parser)
-            with open(args.config_filepath) as config_file:
+            with open(args.config_filepath, 'w') as config_file:
                 config_parser.write(config_file)
 
     ipregex_text = select_ip_regex(args.regexStrategy)
@@ -177,7 +177,7 @@ def main():
     if args.white_list_file_path:
         del config.white_list
         config.white_list = []
-        with open(args.white_list_file_path, 'w') as filter_list_file:
+        with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
                 config.white_list.append(line.strip())
 
