@@ -151,7 +151,7 @@ def main():
     if not args.isp_ip_filter:
         logging.info('processing without ip filtering')
 
-    if args.ip_filter:
+    if args.isp_ip_filter:
         logging.info('using strategy: {}'.format(args.regexStrategy))
     else:
         logging.info('not filtering ip domain names')
