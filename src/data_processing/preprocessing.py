@@ -18,6 +18,8 @@ import multiprocessing as mp
 import ujson as json
 import logging
 import mmap
+import configparser
+import sys
 
 from . import util
 from .util import Domain
@@ -26,24 +28,58 @@ from .util import Domain
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('filename', help='filename to sanitize', type=str)
-    parser.add_argument('-n', '--num-processes', default=16, type=int,
-                        dest='numProcesses',
+    parser.add_argument('-n', '--num-processes', type=int, dest='numProcesses',
                         help='Specify the maximal amount of processes')
     parser.add_argument('-t', '--tlds-file', type=str, required=True,
                         dest='tlds_file', help='Set the path to the tlds file')
     parser.add_argument('-s', '--strategy', type=str, dest='regexStrategy',
                         choices=['strict', 'abstract', 'moderate'],
-                        default='abstract',help='Specify a regex Strategy')
+                        default='abstract', help='Specify a regex Strategy')
     parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
-    parser.add_argument('-d', '--destination', type=str, default='rdns_results',
-                        dest='destination', help='Set the desination directory (must exist)')
-    parser.add_argument('-i', '--ip-filter', action='store_true', dest='ip_filter',
+    parser.add_argument('-d', '--destination', type=str, dest='destination',
+                        help='Set the desination directory (must exist)')
+    parser.add_argument('-i', '--isp-ip-filter', action='store_true', dest='isp_ip_filter',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-v', '--ip-version', type=str, dest='ipVesrion',
-                        choices=['ipv4', 'ipv6'], default='ipv4', help='specify the ipVersion')
+    parser.add_argument('-v', '--ip-version', type=str, dest='ip_vesrion',
+                        choices=['ipv4', 'ipv6'], help='specify the ipVersion')
+    parser.add_argument('-f', '--filter_list', type=str, dest='filter_list_path',
+                        help='path to a file with a list of IPs to filter')
     parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
+                        help='The path to a config file')
+
+
+class Config(object):
+    """The Config object"""
+    filename = None
+    amount_processes = None
+    destination = None
+    isp_ip_filter = False
+    ip_version = None
+    filter_list = []
+
+
+class ConfigPropertyKey(object):
+    """Propertykeys"""
+    default_section_key = 'DEFAULT'
+    amount_processes_key = 'amount processes'
+    destination_key = 'destination'
+    isp_ip_filter_key = 'isp ip filter'
+    ip_version_key = 'ip version'
+    filter_file_key = 'filter file'
+
+
+def create_default_config(config_parser: configparser.ConfigParser):
+    """Adds all default values to the config_parser"""
+    config_parser[ConfigPropertyKey.default_section_key] = {}
+    default_section = config_parser[ConfigPropertyKey.default_section_key]
+    default_section[ConfigPropertyKey.amount_processes_key] = 16
+    default_section[ConfigPropertyKey.destination_key] = 'rdns_parse'
+    default_section[ConfigPropertyKey.isp_ip_filter_key] = False
+    default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
+    default_section[ConfigPropertyKey.filter_file_key] = None
 
 
 def main():
@@ -57,16 +93,69 @@ def main():
 
     os.mkdir(args.destination)
 
-    ipregexText = select_ip_regex(args.regexStrategy)
-    if not args.ip_filter:
+    config = Config()
+    if args.config_filepath:
+        config_parser = configparser.ConfigParser()
+        if os.path.isfile(args.config_filepath):
+            config_parser.read(args.config_filepath)
+            if ConfigPropertyKey.default_section_key not in config_parser:
+                print('{} section missing in config file! Tip: if you specify a non existent file '
+                      'in config a default one will be created')
+            else:
+                default_section = config_parser[ConfigPropertyKey.default_section_key]
+                if ConfigPropertyKey.amount_processes_key in config_parser and \
+                        default_section.get(ConfigPropertyKey.amount_processes_key):
+                    config.amount_processes = int(default_section.get(
+                        ConfigPropertyKey.amount_processes_key))
+                else:
+                    print('{} key is required to have a value (Default: 16)'.format(
+                        ConfigPropertyKey.amount_processes_key), file=sys.stderr)
+                    return
+                if ConfigPropertyKey.destination_key in config_parser and \
+                        default_section.get(ConfigPropertyKey.destination_key):
+                    config.destination = default_section.get(ConfigPropertyKey.destination_key)
+                else:
+                    print('{} key is required to have a value (Default: rdns_parse)'.format(
+                        ConfigPropertyKey.destination_key), file=sys.stderr)
+                    return
+                if ConfigPropertyKey.isp_ip_filter_key in config_parser:
+                    config.isp_ip_filter = default_section.getboolean(
+                        ConfigPropertyKey.isp_ip_filter_key)
+                else:
+                    print('{} key is required to have a value (Default: False)'.format(
+                        ConfigPropertyKey.isp_ip_filter_key), file=sys.stderr)
+                    return
+                if ConfigPropertyKey.ip_version_key in config_parser and \
+                        default_section.get(ConfigPropertyKey.ip_version_key) in ['ipv4', 'ipv6']:
+                    config.ip_version = default_section.get('ip version')
+                else:
+                    print('{} key is required to have a value (choices: ipv4, ipv6)(Default: ipv4)'
+                          .format(ConfigPropertyKey.destination_key), file=sys.stderr)
+                    return
+                if ConfigPropertyKey.filter_file_key in config_parser:
+                    if not os.path.isfile(default_section.get(ConfigPropertyKey.filter_file_key)):
+                        with open(default_section.get('filter file')) as filter_file:
+                            for line in filter_file:
+                                config.filter_list.append(line.strip())
+                    else:
+                        print('{} key has to be a valid file if specified!'
+                              .format(ConfigPropertyKey.destination_key), file=sys.stderr)
+                        return
+        else:
+            logging.info('Creating new default config file')
+            create_default_config(config_parser)
+            with open(args.config_filepath) as config_file:
+                config_parser.write(config_file)
+
+    ipregex_text = select_ip_regex(args.regexStrategy)
+    if not args.isp_ip_filter:
         logging.info('processing without ip filtering')
-        ipregexText = r'$^'
 
     if args.ip_filter:
         logging.info('using strategy: {}'.format(args.regexStrategy))
     else:
         logging.info('not filtering ip domain names')
-    ipregex = re.compile(ipregexText, flags=re.MULTILINE)
+    ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
 
     tlds = set()
     with open(args.tlds_file) as tldFile:
@@ -76,17 +165,29 @@ def main():
                 tlds.add(line.lower())
 
     processes = [None] * args.numProcesses
+    config.filename = args.filename
+    if config.amount_processes:
+        config.amount_processes = args.numProcesses
+    if args.destination:
+        config.destination = args.destination
+    if args.isp_ip_filter:
+        config.isp_ip_filter = args.isp_ip_filter
+    if args.ip_version:
+        config.ip_version = args.ip_version
+    if args.filter_list_path:
+        del config.filter_list[:]
+        with open(args.filter_list_path) as filter_list_file:
+            for line in filter_list_file:
+                config.filter_list.append(line.strip())
 
     for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
             processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                      args=(args.filename, i, args.numProcesses, ipregex,
-                                            tlds, args.destination, args.cProfiling),
+                                      args=(config, i, ipregex, tlds, args.cProfiling),
                                       name='preprocessing_{}'.format(i))
         else:
             processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                      args=(args.filename, i, args.numProcesses, ipregex,
-                                            tlds, args.destination, False),
+                                      args=(config, i, ipregex, tlds, False),
                                       name='preprocessing_{}'.format(i))
         processes[i].start()
 
@@ -106,69 +207,65 @@ def main():
     logging.info('Running time: {0}'.format((end - start)))
 
 
-def select_ip_regex(regexStrategy):
+def select_ip_regex(regex_strategy):
     """Selects the regular expression according to the option set in the arguments"""
-    if regexStrategy == 'abstract':
+    if regex_strategy == 'abstract':
         # most abstract regex
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(\1.*\2.*\3.*\4|\4.*\3.*\2.*\1).*$'
-    elif regexStrategy == 'moderate':
+    elif regex_strategy == 'moderate':
         # slightly stricter regex
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(\1.+\2.+\3.+\4|\4.+\3.+\2.+\1).*$'
-    elif regexStrategy == 'strict':
+    elif regex_strategy == 'strict':
         # regex with delimiters restricted to '.','-' and '_'
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(0{0,2}?\1[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\3[\.\-_]' \
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(filepath: str, pnr: int, amount_processes: int, ipregex: re,
-                                 tlds: {str},  destination_dir: str, ip_version: str, profile):
+def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {str}, profile: bool):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
     if profile is set CProfile will profile the sanitizing
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
-    startTime = time.monotonic()
+    start_time = time.monotonic()
     if profile:
         profiler = cProfile.Profile()
-        profiler.runctx('preprocess_file_part(filepath, pnr, amount_processes, ipregex'
-                        ', tlds, destination_dir, ip_version)', globals(), locals())
+        profiler.runctx('preprocess_file_part(config, pnr, ipregex, tlds)', globals(), locals())
         profiler.dump_stats('preprocess.profile')
     else:
-        preprocess_file_part(filepath, pnr, amount_processes, ipregex, tlds, destination_dir,
-                             ip_version)
+        preprocess_file_part(config, pnr, ipregex, tlds)
 
-    endTime = time.monotonic()
+    end_time = time.monotonic()
     logging.info('preprocess_file_part running time: {} profiled: {}'
-                 .format((endTime - startTime), profile))
+                 .format((end_time - start_time), profile))
 
 
-def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex: re,
-                         tlds: {str}, destination_dir: str, ip_version: str):
+def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
     logging.info('starting')
-    rdns_file_handle = open(filepath, encoding='ISO-8859-1')
+    rdns_file_handle = open(config.filename, encoding='ISO-8859-1')
     rdns_file = mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
-    filename = util.get_path_filename(filepath)
-    labelDict = collections.defaultdict(int)
-    is_ipv6 = ip_version == 'ipv6'
+    filename = util.get_path_filename(config.filename)
+    label_stats = collections.defaultdict(int)
+    is_ipv6 = config.ip_version == 'ipv6'
 
-    with open(os.path.join(destination_dir, '{0}-{1}.cor'.format(filename, pnr)), 'w',
+    with open(os.path.join(config.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
               encoding='utf-8') as correctFile, open(os.path.join(
-            destination_dir, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
+            config.destination, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
             encoding='utf-8') as ipEncodedFile, open(os.path.join(
-            destination_dir, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
+            config.destination, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
             encoding='utf-8') as hexIpEncodedFile, open(os.path.join(
-            destination_dir, '{0}-{1}.bad'.format(filename, pnr)), 'w',
+            config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
             encoding='utf-8') as badFile, open(os.path.join(
-            destination_dir, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
+            config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
             encoding='utf-8') as badDnsFile:
 
         def is_standart_isp_domain(domain_line):
@@ -191,30 +288,30 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
                 lines = []
                 seek_mmap(10*pnr)
                 for _ in range(0, 10):
-                    line = rdns_file.readline().decode('ISO-8859-1')
-                    if line:
-                        lines.append(line)
+                    seek_line = rdns_file.readline().decode('ISO-8859-1')
+                    if seek_line:
+                        lines.append(seek_line)
                 if not lines:
                     break
-                seek_mmap(10*amount_processes-10*(pnr+1))
+                seek_mmap(10*config.amount_processes-10*(pnr+1))
                 yield lines
 
         def add_labels(new_rdns_record):
-            for index, label in enumerate(new_rdns_record.domain_labels):
+            for label_index, label in enumerate(new_rdns_record.domain_labels):
                 # skip if tld
-                if index == 0:
+                if label_index == 0:
                     continue
-                labelDict[label.label] += 1
+                label_stats[label.label] += 1
 
-        def write_bad_lines(badFile, lines, goodCharacters):
+        def write_bad_lines(bad_file, lines, good_characters):
             """
             write lines to the badFile
             goodCharacters are all allowed Character
             """
-            for line in lines:
-                for character in set(line).difference(goodCharacters):
+            for bad_line in lines:
+                for character in set(bad_line).difference(good_characters):
                     badCharacterDict[character] += 1
-                badFile.write('{0}\n'.format(line))
+                bad_file.write('{0}\n'.format(bad_line))
 
         def append_hex_ip_line(app_line):
             nonlocal hexIpRecords
@@ -285,13 +382,14 @@ def preprocess_file_part(filepath: str, pnr: int, amount_processes: int, ipregex
         write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
 
         logging.info('good lines: {}'.format(countGoodLines))
-        with open(os.path.join(destination_dir, '{0}-{1}-character.stats'.format(filename, pnr)),
+        with open(os.path.join(config.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(badCharacterDict, characterStatsFile)
 
-        with open(os.path.join(destination_dir, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
+        with open(os.path.join(config.destination,
+                               '{0}-{1}-domain-label.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as labelStatFile:
-            json.dump(labelDict, labelStatFile)
+            json.dump(label_stats, labelStatFile)
 
         # for character, count in badCharacterDict.items():
         #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \
