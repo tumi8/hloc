@@ -76,7 +76,7 @@ def create_default_config(config_parser: configparser.ConfigParser):
     config_parser[ConfigPropertyKey.default_section_key] = {}
     default_section = config_parser[ConfigPropertyKey.default_section_key]
     default_section[ConfigPropertyKey.amount_processes_key] = str(8)
-    default_section[ConfigPropertyKey.destination_key] = 'rdns_parse'
+    default_section[ConfigPropertyKey.destination_key] = 'rdns-results'
     default_section[ConfigPropertyKey.isp_ip_filter_key] = str(False)
     default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
 
@@ -89,8 +89,6 @@ def main():
     args = parser.parse_args()
 
     util.setup_logging(args.log_file)
-
-    os.mkdir(args.destination)
 
     config = Config()
     if args.config_filepath:
@@ -114,7 +112,7 @@ def main():
                         default_section.get(ConfigPropertyKey.destination_key):
                     config.destination = default_section.get(ConfigPropertyKey.destination_key)
                 else:
-                    print('{} key is required to have a value (Default: rdns_parse)'.format(
+                    print('{} key is required to have a value (Default: rdns-results)'.format(
                         ConfigPropertyKey.destination_key), file=sys.stderr)
                     return
                 if ConfigPropertyKey.isp_ip_filter_key in default_section:
@@ -179,6 +177,8 @@ def main():
         with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
                 config.white_list.append(line.strip())
+
+    os.mkdir(config.destination)
 
     processes = [None] * config.amount_processes
 
