@@ -164,7 +164,6 @@ def main():
             if line[0] != '#':
                 tlds.add(line.lower())
 
-    processes = [None] * args.numProcesses
     config.filename = args.filename
     if config.amount_processes:
         config.amount_processes = args.numProcesses
@@ -180,6 +179,8 @@ def main():
         with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
                 config.white_list.append(line.strip())
+
+    processes = [None] * config.amount_processes
 
     for i in range(0, len(processes)):
         if i == (args.numProcesses - 1):
