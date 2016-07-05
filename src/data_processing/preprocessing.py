@@ -41,7 +41,7 @@ def __create_parser_arguments(parser):
                         help='Set the desination directory (must exist)')
     parser.add_argument('-i', '--isp-ip-filter', action='store_true', dest='isp_ip_filter',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-v', '--ip-version', type=str, dest='ip_vesrion',
+    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
                         choices=['ipv4', 'ipv6'], help='specify the ipVersion')
     parser.add_argument('-f', '--white-list-file', type=str, dest='white_list_file_path',
                         help='path to a file with a white list of IPs')
