@@ -194,7 +194,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         for rule_name, rule_stat in entries_stats.items():
             if not isinstance(rule_stat, dict):
                 continue
-            new_better_stats[rule_name] = {}
+            new_better_stats[rule_name] = {'count': rule_stat['rules_used_count']}
             if rule_stat['rules_used_count'] > 0:
                 new_better_stats[rule_name]['matching_percent'] = \
                     rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
