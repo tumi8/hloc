@@ -206,7 +206,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             util.json_dump(new_better_stats, stats_file)
 
         stats_for_used_rules = {}
-        for rule_name, stats in new_better_stats:
+        for rule_name, stats in new_better_stats.items():
             if 'unused' not in stats:
                 stats_for_used_rules[rule_name] = stats
 
