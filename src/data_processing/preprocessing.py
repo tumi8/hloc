@@ -253,35 +253,35 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
     logging.info('starting')
-    rdns_file_handle = open(config.filename, encoding='ISO-8859-1')
-    rdns_file = mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ)
     filename = util.get_path_filename(config.filename)
     label_stats = collections.defaultdict(int)
     is_ipv6 = config.ip_version == 'ipv6'
 
     with open(os.path.join(config.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
-              encoding='utf-8') as correctFile, open(os.path.join(
+              encoding='utf-8') as correct_file, open(os.path.join(
             config.destination, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
-            encoding='utf-8') as ipEncodedFile, open(os.path.join(
+            encoding='utf-8') as ip_encoded_file, open(os.path.join(
             config.destination, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
-            encoding='utf-8') as hexIpEncodedFile, open(os.path.join(
+            encoding='utf-8') as hex_ip_encoded_file, open(os.path.join(
             config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
-            encoding='utf-8') as badFile, open(os.path.join(
+            encoding='utf-8') as bad_file, open(os.path.join(
             config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
-            encoding='utf-8') as badDnsFile, open(os.path.join(
+            encoding='utf-8') as bad_dns_file, open(os.path.join(
             config.destination, '{0}-{1}-custom-filerd'.format(filename, pnr)), 'w',
-            encoding='utf-8') as customFilterFile:
+            encoding='utf-8') as custom_filter_file, open(
+            config.filename, encoding='ISO-8859-1') as rdns_file_handle, mmap.mmap(
+            rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
             return ipregex.search(domain_line)
 
         def add_bad_line(domain_line):
-            nonlocal badLines
-            badLines.append(domain_line)
-            if len(badLines) > 10 ** 3:
-                write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
-                del badLines[:]
+            nonlocal bad_lines
+            bad_lines.append(domain_line)
+            if len(bad_lines) > 10 ** 3:
+                write_bad_lines(util.ACCEPTED_CHARACTER)
+                del bad_lines[:]
 
         def line_blocks():
             def seek_mmap(amount):
@@ -307,46 +307,66 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     continue
                 label_stats[label.label] += 1
 
-        def write_bad_lines(bad_file, lines, good_characters):
+        def write_bad_lines(good_characters):
             """
-            write lines to the badFile
+            write lines to the bad_file
             goodCharacters are all allowed Character
             """
-            for bad_line in lines:
+            nonlocal bad_lines
+            for bad_line in bad_lines:
                 for character in set(bad_line).difference(good_characters):
-                    badCharacterDict[character] += 1
+                    bad_characters[character] += 1
                 bad_file.write('{0}\n'.format(bad_line))
 
-        def append_hex_ip_line(app_line):
-            nonlocal hexIpRecords
-            hexIpRecords.append(app_line)
-            if len(hexIpRecords) >= 10 ** 5:
-                hexIpEncodedFile.write('\n'.join(hexIpRecords))
-                del hexIpRecords[:]
+        def append_isp_ip_line(isp_line: str):
+            nonlocal isp_ip_lines
+            isp_ip_lines.append(isp_line)
+            if len(isp_ip_lines) >= 10 ** 3:
+                ip_encoded_file.write('\n'.join(isp_ip_lines))
+                ip_encoded_file.write('\n')
+                del isp_ip_lines[:]
 
-        def append_good_record(record):
-            nonlocal goodRecords
-            goodRecords.append(record)
+        def append_hex_ip_line(hex_line: str):
+            nonlocal hex_ip_lines
+            hex_ip_lines.append(hex_line)
+            if len(hex_ip_lines) >= 10 ** 3:
+                hex_ip_encoded_file.write('\n'.join(hex_ip_lines))
+                hex_ip_encoded_file.write('\n')
+                del hex_ip_lines[:]
+
+        def append_custom_filter_line(custom_filter_line: str):
+            nonlocal custom_filter_lines
+            custom_filter_lines.append(custom_filter_line)
+            if len(custom_filter_lines) >= 10 ** 3:
+                custom_filter_file.write('\n'.join(custom_filter_lines))
+                custom_filter_file.write('\n')
+                del custom_filter_lines[:]
+
+        def append_good_record(record: util.Domain):
+            nonlocal good_records
+            good_records.append(record)
             add_labels(record)
-            if len(goodRecords) >= 10 ** 5:
-                util.json_dump(goodRecords, correctFile)
-                correctFile.write('\n')
-                del goodRecords[:]
+            if len(good_records) >= 10 ** 3:
+                util.json_dump(good_records, correct_file)
+                correct_file.write('\n')
+                del good_records[:]
 
-        def append_bad_dns_record(record):
-            nonlocal badDnsRecords
-            badDnsRecords.append(record)
-            if len(badDnsRecords) >= 10 ** 5:
-                util.json_dump(badDnsRecords, badDnsFile)
-                badDnsFile.write('\n')
-                del badDnsRecords[:]
+        def append_bad_dns_record(record: util.Domain):
+            nonlocal bad_dns_records
+            bad_dns_records.append(record)
+            if len(bad_dns_records) >= 10 ** 3:
+                util.json_dump(bad_dns_records, bad_dns_file)
+                bad_dns_file.write('\n')
+                del bad_dns_records[:]
 
-        badCharacterDict = collections.defaultdict(int)
-        badLines = []
-        countGoodLines = 0
-        goodRecords = []
-        badDnsRecords = []
-        hexIpRecords = []
+        bad_characters = collections.defaultdict(int)
+        bad_lines = []
+        count_good_lines = 0
+        good_records = []
+        bad_dns_records = []
+        hex_ip_lines = []
+        isp_ip_lines = []
+        custom_filter_lines = []
 
         file_line_blocks = line_blocks()
         for line_block in file_line_blocks:
@@ -358,48 +378,44 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 if set(line[(index + 1):]).difference(util.ACCEPTED_CHARACTER):
                     add_bad_line(line)
                 else:
-                    ipAddress, domain = line.split(',', 1)
+                    ip_address, domain = line.split(',', 1)
                     # is not None is correct because it could also be an empty list and that is
                     # allowed
-                    if config.white_list is not None and ipAddress not in config.white_list:
-                        customFilterFile.write('{}\n'.format(line))
+                    if config.white_list is not None and ip_address not in config.white_list:
+                        append_custom_filter_line(line)
                     elif not is_ipv6 and config.isp_ip_filter and is_standart_isp_domain(line):
-                        ipEncodedFile.write('{0}\n'.format(line))
+                        append_isp_ip_line(line)
                     else:
                         if is_ipv6:
-                            rdnsRecord = Domain(domain, ipv6_address=ipAddress)
+                            rdns_record = Domain(domain, ipv6_address=ip_address)
                         else:
-                            rdnsRecord = Domain(domain, ip_address=ipAddress)
-                        if rdnsRecord.domain_labels[0].label.lower() in tlds:
-                            if not is_ipv6 and util.is_ip_hex_encoded_simple(ipAddress, domain):
+                            rdns_record = Domain(domain, ip_address=ip_address)
+                        if rdns_record.domain_labels[0].label.lower() in tlds:
+                            if not is_ipv6 and util.is_ip_hex_encoded_simple(ip_address, domain):
                                 append_hex_ip_line(line)
                             else:
-                                countGoodLines += 1
-                                append_good_record(rdnsRecord)
-
+                                count_good_lines += 1
+                                append_good_record(rdns_record)
                         else:
-                            append_bad_dns_record(rdnsRecord)
+                            append_bad_dns_record(rdns_record)
 
-        util.json_dump(goodRecords, correctFile)
-        util.json_dump(badDnsRecords, badDnsFile)
-        util.json_dump(hexIpRecords, hexIpEncodedFile)
+        util.json_dump(good_records, correct_file)
+        util.json_dump(bad_dns_records, bad_dns_file)
+        util.json_dump(hex_ip_lines, hex_ip_encoded_file)
 
-        rdns_file.close()
-        rdns_file_handle.close()
+        write_bad_lines(util.ACCEPTED_CHARACTER)
 
-        write_bad_lines(badFile, badLines, util.ACCEPTED_CHARACTER)
-
-        logging.info('good lines: {}'.format(countGoodLines))
+        logging.info('good lines: {}'.format(count_good_lines))
         with open(os.path.join(config.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
-            json.dump(badCharacterDict, characterStatsFile)
+            json.dump(bad_characters, characterStatsFile)
 
         with open(os.path.join(config.destination,
                                '{0}-{1}-domain-label.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as labelStatFile:
             json.dump(label_stats, labelStatFile)
 
-        # for character, count in badCharacterDict.items():
+        # for character, count in bad_characters.items():
         #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \
         #         character, ord(character), count))
 
