@@ -200,6 +200,9 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                     rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
                 new_better_stats[rule_name]['true_matching_percent'] = \
                     rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
+                new_better_stats[rule_name]['matching_percent_related'] = \
+                    rule_stat['domains_with_location_count'] / \
+                    rule_stat['domains_with_rule_match_count']
             new_better_stats[rule_name]['unused'] = True
 
         with open(stats_file_path, 'w') as stats_file:
@@ -218,6 +221,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                              key=lambda stat: stat[1]['matching_percent'])
         ten_least_true_matching = heapq.nsmallest(10, stats_for_used_rules.items(),
                                                   key=lambda stat: stat[1]['true_matching_percent'])
+        ten_lowest_related_matching = heapq.nsmallest(
+            10, stats_for_used_rules.items(), key=lambda stat: stat[1]['matching_percent_related'])
 
         logging.info('Total amount domains: {}'.format(count_domains))
         logging.info('Total amount rules: {}'.format(len(new_better_stats)))
@@ -230,6 +235,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             pprint.pformat(ten_least_matching, indent=4)))
         logging.info('10 rules with lowest true matching percent: {}'.format(
             pprint.pformat(ten_least_true_matching, indent=4)))
+        logging.info('10 rules with lowest related matching percent: {}'.format(
+            pprint.pformat(ten_lowest_related_matching, indent=4)))
 
         logging.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
 
