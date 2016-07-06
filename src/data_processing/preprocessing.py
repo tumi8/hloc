@@ -381,21 +381,21 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     ip_address, domain = line.split(',', 1)
                     # is not None is correct because it could also be an empty list and that is
                     # allowed
+                    filter_ips = not is_ipv6 and config.isp_ip_filter
                     if config.white_list is not None and ip_address not in config.white_list:
                         append_custom_filter_line(line)
-                    elif not is_ipv6 and config.isp_ip_filter and is_standart_isp_domain(line):
+                    elif filter_ips and is_standart_isp_domain(line):
                         append_isp_ip_line(line)
+                    elif filter_ips and util.is_ip_hex_encoded_simple(ip_address, domain):
+                        append_hex_ip_line(line)
                     else:
                         if is_ipv6:
                             rdns_record = Domain(domain, ipv6_address=ip_address)
                         else:
                             rdns_record = Domain(domain, ip_address=ip_address)
                         if rdns_record.domain_labels[0].label.lower() in tlds:
-                            if not is_ipv6 and util.is_ip_hex_encoded_simple(ip_address, domain):
-                                append_hex_ip_line(line)
-                            else:
-                                count_good_lines += 1
-                                append_good_record(rdns_record)
+                            count_good_lines += 1
+                            append_good_record(rdns_record)
                         else:
                             append_bad_dns_record(rdns_record)
 
