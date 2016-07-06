@@ -200,21 +200,23 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                     rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
                 new_better_stats[rule_name]['true_matching_percent'] = \
                     rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
-            new_better_stats['unused'] = True
+            new_better_stats[rule_name]['unused'] = True
 
         with open(stats_file_path, 'w') as stats_file:
             util.json_dump(new_better_stats, stats_file)
 
-        stats_for_used_rules = [rule_stat for rule_stat in new_better_stats
-                                if 'unused' not in rule_stat]
+        stats_for_used_rules = {}
+        for rule_name, stats in new_better_stats:
+            if 'unused' not in stats:
+                stats_for_used_rules[rule_name] = stats
 
-        ten_most_matching = heapq.nlargest(10, stats_for_used_rules,
+        ten_most_matching = heapq.nlargest(10, stats_for_used_rules.items(),
                                            key=lambda stat: stat[1]['matching_percent'])
-        ten_most_true_matching = heapq.nlargest(10, stats_for_used_rules,
+        ten_most_true_matching = heapq.nlargest(10, stats_for_used_rules.items(),
                                                 key=lambda stat: stat[1]['true_matching_percent'])
-        ten_least_matching = heapq.nsmallest(10, stats_for_used_rules,
+        ten_least_matching = heapq.nsmallest(10, stats_for_used_rules.items(),
                                              key=lambda stat: stat[1]['matching_percent'])
-        ten_least_true_matching = heapq.nsmallest(10, stats_for_used_rules,
+        ten_least_true_matching = heapq.nsmallest(10, stats_for_used_rules.items(),
                                                   key=lambda stat: stat[1]['true_matching_percent'])
 
         logging.info('Total amount domains: {}'.format(count_domains))
