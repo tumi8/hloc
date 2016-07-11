@@ -353,8 +353,8 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 def write_good_records():
                     util.json_dump(good_records, correct_file)
                     correct_file.write('\n')
+                    del good_records[:]
                 write_good_records()
-                del good_records[:]
 
         def append_bad_dns_record(record: util.Domain):
             nonlocal bad_dns_records
