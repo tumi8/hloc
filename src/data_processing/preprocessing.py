@@ -258,19 +258,28 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     is_ipv6 = config.ip_version == 'ipv6'
 
     with open(os.path.join(config.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
-              encoding='utf-8') as correct_file, open(os.path.join(
-            config.destination, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)), 'w',
-            encoding='utf-8') as ip_encoded_file, open(os.path.join(
-            config.destination, '{0}-{1}-hex-ip.domain'.format(filename, pnr)), 'w',
-            encoding='utf-8') as hex_ip_encoded_file, open(os.path.join(
-            config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
-            encoding='utf-8') as bad_file, open(os.path.join(
-            config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
-            encoding='utf-8') as bad_dns_file, open(os.path.join(
-            config.destination, '{0}-{1}-custom-filerd'.format(filename, pnr)), 'w',
-            encoding='utf-8') as custom_filter_file, open(
-            config.filename, encoding='ISO-8859-1') as rdns_file_handle, mmap.mmap(
-            rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file:
+              encoding='utf-8') as correct_file_handle, \
+            mmap.mmap(correct_file_handle.fileno(), 0, access=mmap.ACCESS_WRITE) as correct_file, \
+            open(os.path.join(config.destination, '{0}-{1}-ip-encoded.domain'.format(filename, pnr)),
+                 'w', encoding='utf-8') as ip_encoded_file_handle, \
+            mmap.mmap(ip_encoded_file_handle.fileno(), 0,
+                      access=mmap.ACCESS_WRITE) as ip_encoded_file, \
+            open(os.path.join(config.destination, '{0}-{1}-hex-ip.domain'.format(filename, pnr)),
+                 'w', encoding='utf-8') as hex_ip_encoded_file_handle, \
+            mmap.mmap(hex_ip_encoded_file_handle.fileno(), 0,
+                      access=mmap.ACCESS_WRITE) as hex_ip_encoded_file, \
+            open(os.path.join(config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
+                 encoding='utf-8') as bad_file_handle, \
+            mmap.mmap(bad_file_handle.fileno(), 0, access=mmap.ACCESS_WRITE) as bad_file, \
+            open(os.path.join(config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
+                 encoding='utf-8') as bad_dns_file_handle,  \
+            mmap.mmap(bad_dns_file_handle.fileno(), 0, access=mmap.ACCESS_WRITE) as bad_dns_file,\
+            open(os.path.join(config.destination, '{0}-{1}-custom-filerd'.format(filename, pnr)),
+                 'w', encoding='utf-8') as custom_filter_file_handle, \
+            mmap.mmap(custom_filter_file_handle.fileno(), 0,
+                      access=mmap.ACCESS_WRITE) as custom_filter_file, \
+            open(config.filename, encoding='ISO-8859-1') as rdns_file_handle, \
+            mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
