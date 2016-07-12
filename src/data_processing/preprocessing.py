@@ -20,7 +20,6 @@ import logging
 import mmap
 import configparser
 import sys
-from memory_profiler import profile
 
 from . import util
 from .util import Domain
@@ -247,6 +246,9 @@ def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {s
                  .format((end_time - start_time), profile))
 
 
+BLOCK_SIZE = 10
+
+
 def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     """
     Sanitize filepart from start to end
@@ -272,7 +274,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             open(os.path.join(config.destination, '{0}-{1}-custom-filterd'.format(filename, pnr)),
                  'w', encoding='utf-8') as custom_filter_file, \
             open(config.filename, encoding='ISO-8859-1') as rdns_file_handle, \
-            mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file:
+            mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file_mmap:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
@@ -285,21 +287,48 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 write_bad_lines(util.ACCEPTED_CHARACTER)
                 del bad_lines[:]
 
-        def line_blocks():
+        def line_blocks_mmap():
             def seek_mmap(amount):
                 for _ in range(0, amount):
-                    rdns_file.readline()
+                    rdns_file_mmap.readline()
 
             while True:
                 lines = []
-                seek_mmap(10*pnr)
-                for _ in range(0, 10):
-                    seek_line = rdns_file.readline().decode('ISO-8859-1')
+                seek_mmap(BLOCK_SIZE*pnr)
+                for _ in range(0, BLOCK_SIZE):
+                    seek_line = rdns_file_mmap.readline().decode('ISO-8859-1')
                     if seek_line:
                         lines.append(seek_line)
                 if not lines:
                     break
-                seek_mmap(10*config.amount_processes-10*(pnr+1))
+                seek_mmap(BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1))
+                yield lines
+
+        def line_blocks():
+            lines = []
+            seek_before = 0
+            seek_after = 0
+
+            def prepare():
+                nonlocal seek_before
+                nonlocal seek_after
+                nonlocal lines
+                seek_before = BLOCK_SIZE*pnr
+                seek_after = BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1)
+                lines = []
+
+            for seek_line in rdns_file_handle:
+                if seek_after == 0 and seek_before == 0:
+                    prepare()
+                if seek_before > 0:
+                    seek_before -= 1
+                elif len(lines) < BLOCK_SIZE:
+                    lines.append(seek_line)
+                elif seek_after > 0:
+                    seek_after -= 1
+                if seek_after == 0:
+                    yield lines
+            if lines:
                 yield lines
 
         def add_labels(new_rdns_record):
@@ -349,12 +378,9 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             good_records.append(record)
             add_labels(record)
             if len(good_records) >= 10 ** 3:
-                @profile
-                def write_good_records():
-                    util.json_dump(good_records, correct_file)
-                    correct_file.write('\n')
-                    del good_records[:]
-                write_good_records()
+                util.json_dump(good_records, correct_file)
+                correct_file.write('\n')
+                del good_records[:]
 
         def append_bad_dns_record(record: util.Domain):
             nonlocal bad_dns_records
