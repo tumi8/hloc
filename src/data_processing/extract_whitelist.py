@@ -27,7 +27,6 @@ def main():
     whitelist_trie = marisa_trie.Trie(whitelisted)
 
     output_file = open(args.output_file, 'w')
-    output_file_lock = mp.Lock()
     lines_array_lock = mp.Lock()
     lines_to_write = []
 
@@ -35,10 +34,10 @@ def main():
         nonlocal lines_to_write
         with lines_array_lock:
             lines_to_write.append(wlline)
-        if len(lines_to_write) >= 10**4:
-            to_write = '\n'.join(lines_to_write) + '\n'
-            with output_file_lock:
+            if len(lines_to_write) >= 10**4:
+                to_write = '\n'.join(lines_to_write) + '\n'
                 output_file.write(to_write)
+                del lines_to_write[:]
 
     processes = [None] * 8
 
