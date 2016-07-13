@@ -26,6 +26,8 @@ def main():
             whitelisted.append(line.strip())
     whitelist_trie = marisa_trie.Trie(whitelisted)
 
+    logging.info('finished with trie')
+
     output_file = open(args.output_file, 'w')
     lines_array_lock = mp.Lock()
     lines_to_write = []
@@ -45,11 +47,17 @@ def main():
         processes[i] = mp.Process(target=extract_lines,
                                   args=(i, args.filename, add_whitelisted, whitelist_trie),
                                   name='extracting_{}'.format(i))
+
+    logging.info('starting processes')
+
     for process in processes:
         process.start()
 
     for process in processes:
         process.join()
+
+    to_write = '\n'.join(lines_to_write) + '\n'
+    output_file.write(to_write)
 
     end_time = time.monotonic()
     logging.info('final running time: {}'
