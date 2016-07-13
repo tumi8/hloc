@@ -84,8 +84,9 @@ def extract_lines(pid: int, filename: str, save_func, whitelist_trie):
                 seek_before -= 1
             elif lines > 0:
                 lines -= 1
-                line = line.strip().split(',')[0]
-                if line in whitelist_trie:
+                line = line.strip()
+                ip = line.split(',')[0]
+                if ip in whitelist_trie:
                     save_func(line)
             elif seek_after > 0:
                 seek_after -= 1
