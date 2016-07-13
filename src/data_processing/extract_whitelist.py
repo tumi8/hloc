@@ -40,7 +40,7 @@ def main():
 
     for i in range(0, 8):
         processes[i] = mp.Process(target=extract_lines,
-                                  args=(i, args.filename, write_wl_lines(), whitelist_trie),
+                                  args=(i, args.filename, write_wl_lines, whitelist_trie),
                                   name='extracting_{}'.format(i))
 
     logging.info('starting processes')
