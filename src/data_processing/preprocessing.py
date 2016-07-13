@@ -315,10 +315,10 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 nonlocal lines
                 seek_before = BLOCK_SIZE*pnr
                 seek_after = BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1)
-                lines = []
+                del lines[:]
 
             for seek_line in rdns_file_handle:
-                if seek_after == 0 and seek_before == 0:
+                if seek_after == 0 and seek_before == 0 and len(lines) >= BLOCK_SIZE:
                     prepare()
                 if seek_before > 0:
                     seek_before -= 1
