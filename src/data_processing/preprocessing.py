@@ -326,7 +326,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     lines.append(seek_line)
                 elif seek_after > 0:
                     seek_after -= 1
-                if seek_after == 0:
+                if seek_after == 0 and len(lines) >= BLOCK_SIZE:
                     yield lines
             if lines:
                 yield lines
