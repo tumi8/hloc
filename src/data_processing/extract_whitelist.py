@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
     start_time = time.monotonic()
 
-    logging.basicConfig(filename='extract_whitelist', level=logging.DEBUG,
+    logging.basicConfig(filename='extract_whitelist.log', level=logging.DEBUG,
                         format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
                                '%(filename)s:%(lineno)d %(message)s', datefmt='%d.%m %H:%M:%S')
 
