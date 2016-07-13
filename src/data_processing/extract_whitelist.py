@@ -29,23 +29,18 @@ def main():
     logging.info('finished with trie')
 
     output_file = open(args.output_file, 'w')
-    lines_array_lock = mp.Lock()
+    output_file_lock = mp.Lock()
     lines_to_write = []
 
-    def add_whitelisted(wlline):
-        nonlocal lines_to_write
-        with lines_array_lock:
-            lines_to_write.append(wlline)
-            if len(lines_to_write) >= 10**4:
-                to_write = '\n'.join(lines_to_write) + '\n'
-                output_file.write(to_write)
-                del lines_to_write[:]
+    def write_wl_lines(to_write):
+        with output_file_lock:
+            output_file.write(to_write)
 
     processes = [None] * 8
 
     for i in range(0, 8):
         processes[i] = mp.Process(target=extract_lines,
-                                  args=(i, args.filename, add_whitelisted, whitelist_trie),
+                                  args=(i, args.filename, write_wl_lines(), whitelist_trie),
                                   name='extracting_{}'.format(i))
 
     logging.info('starting processes')
@@ -56,14 +51,13 @@ def main():
     for process in processes:
         process.join()
 
-    to_write = '\n'.join(lines_to_write) + '\n'
-    output_file.write(to_write)
+    my_to_write = '\n'.join(lines_to_write) + '\n'
+    output_file.write(my_to_write)
+    output_file.close()
 
     end_time = time.monotonic()
     logging.info('final running time: {}'
                  .format((end_time - start_time)))
-
-    output_file.close()
 
 
 BLOCK_SIZE = 100
@@ -76,6 +70,7 @@ def extract_lines(pid: int, filename: str, save_func, whitelist_trie):
         seek_before = 0
         seek_after = 0
         lines = 0
+        lines_to_write = []
 
         def prepare():
             nonlocal seek_after
@@ -95,9 +90,18 @@ def extract_lines(pid: int, filename: str, save_func, whitelist_trie):
                 line = line.strip()
                 ip = line.split(',')[0]
                 if ip in whitelist_trie:
-                    save_func(line)
+                    lines_to_write.append(line)
+                    if len(lines_to_write) >= 10 ** 4:
+                        to_write = '\n'.join(lines_to_write) + '\n'
+                        del lines_to_write[:]
+                        save_func(to_write)
             elif seek_after > 0:
                 seek_after -= 1
+
+        to_write = '\n'.join(lines_to_write) + '\n'
+        del lines_to_write[:]
+        save_func(to_write)
+
     end_time = time.monotonic()
     logging.info('finished with running time: {}'
                  .format((end_time - start_time)))
