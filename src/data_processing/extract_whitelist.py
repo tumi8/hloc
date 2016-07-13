@@ -28,15 +28,17 @@ def main():
 
     output_file = open(args.output_file, 'w')
     output_file_lock = mp.Lock()
+    lines_array_lock = mp.Lock()
     lines_to_write = []
-    def add_whitelisted(line):
+
+    def add_whitelisted(wlline):
         nonlocal lines_to_write
-        lines_to_write.append(line)
+        with lines_array_lock:
+            lines_to_write.append(wlline)
         if len(lines_to_write) >= 10**4:
             to_write = '\n'.join(lines_to_write) + '\n'
-            output_file_lock.acquire()
-            output_file.write(to_write)
-            output_file_lock.release()
+            with output_file_lock:
+                output_file.write(to_write)
 
     processes = [None] * 8
 
@@ -51,8 +53,8 @@ def main():
         process.join()
 
     end_time = time.monotonic()
-    logging.info('preprocess_file_part running time: {} profiled: {}'
-                 .format((end_time - start_time), profile))
+    logging.info('final running time: {}'
+                 .format((end_time - start_time)))
 
     output_file.close()
 
@@ -62,10 +64,12 @@ BLOCK_SIZE = 100
 
 def extract_lines(pid: int, filename: str, save_func, whitelist_trie):
     logging.info('starting')
+    start_time = time.monotonic()
     with open(filename) as sanitize_file:
         seek_before = 0
         seek_after = 0
         lines = 0
+
         def prepare():
             nonlocal seek_after
             nonlocal seek_before
@@ -86,7 +90,9 @@ def extract_lines(pid: int, filename: str, save_func, whitelist_trie):
                     save_func(line)
             elif seek_after > 0:
                 seek_after -= 1
-    logging.info('finished')
+    end_time = time.monotonic()
+    logging.info('finished with running time: {}'
+                 .format((end_time - start_time)))
 
 
 if __name__ == '__main__':
