@@ -200,9 +200,12 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                     rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
                 new_better_stats[rule_name]['true_matching_percent'] = \
                     rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
-                new_better_stats[rule_name]['matching_percent_related'] = \
-                    rule_stat['domains_with_location_count'] / \
-                    rule_stat['domains_with_rule_match_count']
+                if rule_stat['domains_with_rule_match_count'] > 0:
+                    new_better_stats[rule_name]['matching_percent_related'] = \
+                        rule_stat['domains_with_location_count'] / \
+                        rule_stat['domains_with_rule_match_count']
+                else:
+                    new_better_stats[rule_name]['matching_percent_related'] = 2
             new_better_stats[rule_name]['unused'] = True
 
         with open(stats_file_path, 'w') as stats_file:
