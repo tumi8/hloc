@@ -24,7 +24,7 @@ def main():
                         help='number of files from preprocessing')
     parser.add_argument('-o', '--output-filename', type=str, dest='output_filename',
                         help='the name of the outputfile')
-    parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
+    parser.add_argument('-l', '--logging-file', type=str, default='extract_ips.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
     args = parser.parse_args()
@@ -49,11 +49,9 @@ def main():
 
     processes = [None] * args.fileCount
     for pid in range(0, len(processes)):
-        process = Process(target=get_ips, args=(args.filename_proto.format(pid),
+        processes[pid] = Process(target=get_ips, args=(args.filename_proto.format(pid),
                                                 pid, blacklist_networks, whitelist_networks))
-        processes.append(process)
-
-
+        
     for process in processes:
         process.start()
 
