@@ -61,7 +61,7 @@ def main():
 
     for filename in filenames:
         location_name = __get_location_name(filename)
-        results = util.parse_zmap_results(filename, location_name, results)
+        results = util.parse_zmap_results(os.path.join(args.dirname, filename), location_name, results)
 
     with open(args.output_file, 'w') as output_file:
         util.json_dump(locations, output_file)
