@@ -17,7 +17,8 @@ def main():
     parser.add_argument('filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
                         ' in the name so it is possible to format the string')
-    parser.add_argument('blacklist', type=str,  help='The path to the ip blacklist')
+    parser.add_argument('-b', '--blacklist-file', type=str, dest='blacklist',
+                        help='The path to the ip blacklist')
     parser.add_argument('-w', '--whitelist-file', type=str, dest='whitelist',
                         help='Path to whitelist')
     parser.add_argument('-f', '--file-count', type=int, default=8, dest='fileCount',
@@ -31,12 +32,14 @@ def main():
 
     util.setup_logging(args.log_file)
 
-    blacklist_networks = []
-    with open(args.blacklist) as blacklist_file:
-        for line in blacklist_file:
-            line = line.strip()
-            if line:
-                blacklist_networks.append(IPNetwork(line))
+    blacklist_networks = None
+    if args.blacklist:
+        blacklist_networks = []
+        with open(args.blacklist) as blacklist_file:
+            for line in blacklist_file:
+                line = line.strip()
+                if line:
+                    blacklist_networks.append(IPNetwork(line))
 
     whitelist_networks = None
     if args.whitelist:
@@ -103,8 +106,9 @@ def get_ips(filename, pid, blacklist_networks, whitelist_networks):
                     del ips[:]
 
             for entry in entries:
-                if address_in_network_list(entry.ip_address, blacklist_networks):
-                    continue
+                if blacklist_networks
+                    if address_in_network_list(entry.ip_address, blacklist_networks):
+                        continue
                 if whitelist_networks:
                     if address_in_network_list(entry.ip_address, whitelist_networks):
                         add_ip(entry.ip_address)
