@@ -50,6 +50,7 @@ def main():
                     'lon' not in config_parser[location_name]):
                 logging.critical('{} not defined in config file or has not the right format! '
                                  'Aborting!'.format(location_name))
+                return 3
 
             locations[location_name] = util.GPSLocation(
                 config_parser[location_name]['lat'], config_parser[location_name]['lon'])
