@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-import json
 import argparse
 from multiprocessing import Process
 from netaddr import IPNetwork, IPAddress
+import src.data_processing.util as util
+import logging
+import os
 
 
-def address_in_network(ip, net):
-    return IPAddress(ip) in net
+TEMP_NAME_PROTOTYPE = 'ips_{}.temp'
 
 
 def main():
@@ -16,62 +17,108 @@ def main():
     parser.add_argument('filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
                         ' in the name so it is possible to format the string')
+    parser.add_argument('blacklist', type=str,  help='The path to the ip blacklist')
+    parser.add_argument('-w', '--whitelist-file', type=str, dest='whitelist',
+                        help='Path to whitelist')
     parser.add_argument('-f', '--file-count', type=int, default=8, dest='fileCount',
                         help='number of files from preprocessing')
-    parser.add_argument('blacklist', type=str,
-                        help='The path to the ip blacklist')
+    parser.add_argument('-o', '--output-filename', type=str, dest='output_filename',
+                        help='the name of the outputfile')
+    parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
+                        help='Specify a logging file where the log should be saved')
 
     args = parser.parse_args()
 
+    util.setup_logging(args.log_file)
+
     blacklist_networks = []
-    with open(args.blacklist, 'r') as blacklistFile:
-        for line in blacklistFile:
-            if len(line) > 0:
-                blacklist_networks.append(IPNetwork(line[:-1]))
+    with open(args.blacklist) as blacklist_file:
+        for line in blacklist_file:
+            line = line.strip()
+            if line:
+                blacklist_networks.append(IPNetwork(line))
 
-    processes = []
-    for pid in range(0, args.fileCount):
+    whitelist_networks = None
+    if args.whitelist:
+        whitelist_networks = []
+        with open(args.whitelist) as whitelist_file:
+            for line in whitelist_file:
+                line = line.strip()
+                if line:
+                    whitelist_networks.append(IPNetwork(line))
+
+    processes = [None] * args.fileCount
+    for pid in range(0, len(processes)):
         process = Process(target=get_ips, args=(args.filename_proto.format(pid),
-                                                pid, blacklist_networks))
+                                                pid, blacklist_networks, whitelist_networks))
         processes.append(process)
+
+
+    for process in processes:
         process.start()
-        if len(processes) == 4:
-            processes[0].join()
-            processes[1].join()
-            processes[2].join()
-            processes[3].join()
-            processes = []
+
+    for process in processes:
+        process.join()
+
+    with open(args.output_filename, 'w') as output_file:
+        for pid in range(0, len(processes)):
+            temp_filename = "ips_{}.temp".format(pid)
+            with open(temp_filename) as ip_file:
+                lines = ''
+                counter = 0
+                for line in ip_file:
+                    lines += line
+                    counter += 1
+                    if counter == 10**4:
+                        output_file.write(lines)
+                        lines = ''
+                        counter = 0
+
+                if lines:
+                    output_file.write(lines)
+
+            os.remove(temp_filename)
+
+    logging.info('finished extracting ips')
 
 
-def get_ips(filename, pid, blacklist_networks):
-    ip_file = open(filename, 'r', encoding='utf-8')
-    ip_w_file = open('ips_{}.json'.format(pid), 'w', encoding='utf-8')
-    print('started', pid, 'for filename', filename)
+def get_ips(filename, pid, blacklist_networks, whitelist_networks):
+    with open(filename) as ip_file, open(TEMP_NAME_PROTOTYPE.format(pid), 'w') as ip_w_file:
+        logging.info('started')
 
-    def address_in_blacklist(ip):
-        for net in blacklist_networks:
-            if address_in_network(ip, net):
-                return True
+        def address_in_network_list(ip, network_list):
+            for net in network_list:
+                if address_in_network(ip, net):
+                    return True
+            return False
 
-        return False
+        for line in ip_file:
+            entries = util.json_loads(line)
+            logging.info('has entries: {}'.format(len(entries)))
+            ips = []
 
-    for line in ip_file:
-        entries = json.loads(line)
-        print('pid', pid, 'len', len(entries))
-        ips = []
-        for entry in entries:
-            ips.append({'ip': entry['ip'], 'blacklisted': address_in_blacklist(entry['ip'])})
-            if len(ips) == 10**3:
-                json.dump(ips, ip_w_file)
-                ip_w_file.write('\n')
-                print('pid', pid, 'wrote', len(ips))
-                ips = []
-        json.dump(ips, ip_w_file)
-        ip_w_file.write('\n')
-        print('pid', pid, 'wrote', len(ips))
-    ip_w_file.close()
-    ip_file.close()
+            def add_ip(entry_ip):
+                nonlocal ips
+                ips.append(entry_ip)
+                if len(ips) == 10 ** 4:
+                    ip_w_file.write('\n'.join(ips) + '\n')
+                    del ips[:]
 
+            for entry in entries:
+                if address_in_network_list(entry.ip, blacklist_networks):
+                    continue
+                if whitelist_networks:
+                    if address_in_network_list(entry.ip, whitelist_networks):
+                        add_ip(entry.ip)
+                else:
+                    add_ip(entry.ip)
+
+            if ips:
+                ip_w_file.write('\n'.join(ips))
+
+
+def address_in_network(ip, net):
+    return IPAddress(ip) in net
 
 if __name__ == '__main__':
     main()
