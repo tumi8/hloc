@@ -100,14 +100,18 @@ def parse_zmap_results(zmap_filename: str, location_name: str, present_results: 
             zmap_result = parse_zmap_line(line)
             if zmap_result[0] in zmap_results:
                 if location_name:
-                    if zmap_result[1] < zmap_results[location_name][zmap_result[0]]:
-                        zmap_results[location_name][zmap_result[0]] = zmap_result[1]
+                    if location_name in zmap_results[zmap_result[0]]:
+                        if zmap_result[1] < zmap_results[zmap_result[0]][location_name]:
+                            zmap_results[zmap_result[0]][location_name] = zmap_result[1]
+                    else:
+                        zmap_results[zmap_result[0]][location_name] = zmap_result[1]
                 else:
                     if zmap_result[1] < zmap_results[zmap_result[0]]:
                         zmap_results[zmap_result[0]] = zmap_result[1]
             else:
                 if location_name:
-                    zmap_results[location_name][zmap_result[0]] = zmap_result[1]
+                    zmap_results[zmap_result[0]] = {}
+                    zmap_results[zmap_result[0]][location_name] = zmap_result[1]
                 else:
                     zmap_results[zmap_result[0]] = zmap_result[1]
 
