@@ -44,8 +44,7 @@ def main():
         config_parser.read(args.config_filename)
         for filename in filenames:
             location_name = __get_location_name(filename)
-            if (location_name not in config_parser or
-                    not isinstance(config_parser[location_name], dict) or
+            if (location_name not in config_parser  or
                     'lat' not in config_parser[location_name] or
                     'lon' not in config_parser[location_name]):
                 logging.critical('{} not defined in config file or has not the right format! '
