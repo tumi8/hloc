@@ -106,7 +106,7 @@ def get_ips(filename, pid, blacklist_networks, whitelist_networks):
                     del ips[:]
 
             for entry in entries:
-                if blacklist_networks
+                if blacklist_networks:
                     if address_in_network_list(entry.ip_address, blacklist_networks):
                         continue
                 if whitelist_networks:
