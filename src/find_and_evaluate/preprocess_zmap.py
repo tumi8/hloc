@@ -40,8 +40,8 @@ def main():
     results = {}
 
     config_parser = configparser.ConfigParser()
-    if os.path.isfile(args.config_filepath):
-        config_parser.read(args.config_filepath)
+    if os.path.isfile(args.config_filename):
+        config_parser.read(args.config_filename)
         for filename in filenames:
             location_name = __get_location_name(filename)
             if (location_name not in config_parser or
