@@ -1,4 +1,0 @@
-[INFO][16/06/2016 13:08:13]:[MainProcess] preprocess_drop_rules.py:43 Collected 2148 DRoP rule objects
-[INFO][16/06/2016 13:08:13]:[MainProcess] preprocess_drop_rules.py:44 Collected 3044 DRoP rules
-[INFO][16/06/2016 13:08:13]:[MainProcess] preprocess_drop_rules.py:45 1916 different first level domain name rules exist
-[INFO][16/06/2016 13:08:13]:[MainProcess] preprocess_drop_rules.py:46 running time: 6.669926166534424
