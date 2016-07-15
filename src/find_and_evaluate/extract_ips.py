@@ -25,6 +25,8 @@ def main():
                         help='number of files from preprocessing')
     parser.add_argument('-o', '--output-filename', type=str, dest='output_filename',
                         help='the name of the outputfile')
+    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
+                        choices=['ipv4', 'ipv6'], help='specify the ipVersion')
     parser.add_argument('-l', '--logging-file', type=str, default='extract_ips.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
@@ -53,7 +55,8 @@ def main():
     processes = [None] * args.fileCount
     for pid in range(0, len(processes)):
         processes[pid] = Process(target=get_ips, args=(args.filename_proto.format(pid),
-                                                pid, blacklist_networks, whitelist_networks))
+                                                       pid, blacklist_networks, whitelist_networks,
+                                                       args.ip_version == 'ipv4'))
 
     for process in processes:
         process.start()
@@ -83,7 +86,7 @@ def main():
     logging.info('finished extracting ips')
 
 
-def get_ips(filename, pid, blacklist_networks, whitelist_networks):
+def get_ips(filename, pid, blacklist_networks, whitelist_networks, is_ipv4):
     with open(filename) as ip_file, open(TEMP_NAME_PROTOTYPE.format(pid), 'w') as ip_w_file:
         logging.info('started')
 
@@ -106,14 +109,20 @@ def get_ips(filename, pid, blacklist_networks, whitelist_networks):
                     del ips[:]
 
             for entry in entries:
+                if is_ipv4:
+                    ip_address = entry.ip_address
+                else:
+                    ip_address = entry.ipv6_address
+                if not ip_address:
+                    continue
                 if blacklist_networks:
-                    if address_in_network_list(entry.ip_address, blacklist_networks):
+                    if address_in_network_list(ip_address, blacklist_networks):
                         continue
                 if whitelist_networks:
-                    if address_in_network_list(entry.ip_address, whitelist_networks):
-                        add_ip(entry.ip_address)
+                    if address_in_network_list(ip_address, whitelist_networks):
+                        add_ip(ip_address)
                 else:
-                    add_ip(entry.ip_address)
+                    add_ip(ip_address)
 
             if ips:
                 ip_w_file.write('\n'.join(ips))
