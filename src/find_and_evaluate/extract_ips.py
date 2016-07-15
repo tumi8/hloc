@@ -51,7 +51,7 @@ def main():
     for pid in range(0, len(processes)):
         processes[pid] = Process(target=get_ips, args=(args.filename_proto.format(pid),
                                                 pid, blacklist_networks, whitelist_networks))
-        
+
     for process in processes:
         process.start()
 
@@ -103,13 +103,13 @@ def get_ips(filename, pid, blacklist_networks, whitelist_networks):
                     del ips[:]
 
             for entry in entries:
-                if address_in_network_list(entry.ip, blacklist_networks):
+                if address_in_network_list(entry.ip_address, blacklist_networks):
                     continue
                 if whitelist_networks:
-                    if address_in_network_list(entry.ip, whitelist_networks):
-                        add_ip(entry.ip)
+                    if address_in_network_list(entry.ip_address, whitelist_networks):
+                        add_ip(entry.ip_address)
                 else:
-                    add_ip(entry.ip)
+                    add_ip(entry.ip_address)
 
             if ips:
                 ip_w_file.write('\n'.join(ips))
