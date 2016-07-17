@@ -3,12 +3,10 @@
 This module checks the location information found with different verifing methods
 """
 import argparse
-import ujson as json
 import requests
 import time
 import os.path
 import geoip2.database
-import subprocess
 import random
 import mmap
 import sys
@@ -34,14 +32,14 @@ MEASUREMENT_URL = ATLAS_URL + API_MEASUREMENT_POINT + '/'
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
 DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
-MUNICH_ID = 'munich'
-DALLAS_ID = 'dallas'
-SINGAPORE_ID = 'singapore'
-COORDS = {
-    MUNICH_ID: {'gps_coords': util.GPSLocation(lat=48.137357, lon=11.575288)},
-    DALLAS_ID: {'gps_coords': util.GPSLocation(lat=32.776664, lon=-96.796988)},
-    SINGAPORE_ID: {'gps_coords': util.GPSLocation(lat=1.352083, lon=103.874949)}
-}
+# MUNICH_ID = 'munich'
+# DALLAS_ID = 'dallas'
+# SINGAPORE_ID = 'singapore'
+# COORDS = {
+#     MUNICH_ID: {'gps_coords': util.GPSLocation(lat=48.137357, lon=11.575288)},
+#     DALLAS_ID: {'gps_coords': util.GPSLocation(lat=32.776664, lon=-96.796988)},
+#     SINGAPORE_ID: {'gps_coords': util.GPSLocation(lat=1.352083, lon=103.874949)}
+# }
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -71,10 +69,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='If you choose the ip2location as method you have to'
                              ' specify the path to the database in this argument.\n'
                              'Currently not tested, because no database is available')
-    parser.add_argument('-r', '--rtt-file-proto', type=str, dest='rtt_proto',
-                        help='If specified the rtt times will be read from the file '
-                             'prototype for every input file. It must '
-                             'contain a rtt for every ip in the input files')
+    parser.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename',
+                        help='The results of the zmap scan of the ip addresses')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
                         dest='ripeRequestLimit',
                         help='How many request should normally be allowed per second '
@@ -125,6 +121,9 @@ def main():
     ripe_create_sema = None
     ripe_slow_down_sema = None
     generator_thread = None
+    zmap_results = None
+    zmap_locations = None
+    distances = None
 
     if args.verifingMethod == 'ripe':
         ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
@@ -146,10 +145,21 @@ def main():
             if len(location.near_nodes) == 0:
                 null_locations.append(location)
 
+        if args.zmap_filename:
+            with open(args.zmap_filename) as zmap_file:
+                location_line = zmap_file.readline()
+                results_line = zmap_file.readline()
+
+            zmap_locations = util.json_loads(location_line)
+            zmap_results = util.json_loads(results_line)
+        else:
+            logging.critical('No zmap results file! Aborting!')
+            return 1
+
         with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
             util.json_dump(null_locations, loc_wo_nodes_file)
 
-        __init_coords_distances(locations)
+        distances = __init_coords_distances(zmap_locations, locations)
 
     logging.info('finished ripe after {}'.format((time.time() - start_time)))
 
@@ -161,7 +171,9 @@ def main():
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.rtt_proto,
+                                       zmap_locations,
+                                       zmap_results,
+                                       distances,
                                        ripe_create_sema,
                                        ripe_slow_down_sema),
                                  name='domain_checking_{}'.format(pid))
@@ -204,18 +216,18 @@ def main():
     sys.exit(0)
 
 
-def __init_coords_distances(locations: [str, util.Location]):
+def __init_coords_distances(zmap_locations: [str, util.GPSLocation],
+                            code_locations: [str, util.Location]):
     """computes all distances to all locations before the execution starts"""
-    COORDS[MUNICH_ID]['distances'] = {}
-    COORDS[DALLAS_ID]['distances'] = {}
-    COORDS[SINGAPORE_ID]['distances'] = {}
-    for location in locations.values():
-        COORDS[MUNICH_ID]['distances'][str(location.id)] = \
-            DISTANCE_METHOD(location, COORDS[MUNICH_ID]['gps_coords'])
-        COORDS[DALLAS_ID]['distances'][str(location.id)] = \
-            DISTANCE_METHOD(location, COORDS[DALLAS_ID]['gps_coords'])
-        COORDS[SINGAPORE_ID]['distances'][str(location.id)] = \
-            DISTANCE_METHOD(location, COORDS[SINGAPORE_ID]['gps_coords'])
+    distances = {}
+    for zmap_id in zmap_locations.keys():
+        distances[zmap_id] = {}
+
+    for location_id, location in code_locations.items():
+        for zmap_id, zmap_location in zmap_locations.items():
+            distances[zmap_id][location_id] = DISTANCE_METHOD(location, zmap_location)
+
+    return distances
 
 
 def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int):
@@ -338,8 +350,10 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
     return None
 
 
-def ripe_check_for_list(filename_proto: str, pid: int, locations: [util.Location], rtt_proto: str,
-                        ripe_create_sema: mp.Semaphore, ripe_slow_down_sema: mp.Semaphore):
+def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
+                        zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
+                        distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
+                        ripe_slow_down_sema: mp.Semaphore):
     """Checks for all domains if the suspected locations are correct"""
     thread_count = 25
     thread_semaphore = threading.Semaphore(thread_count)
@@ -348,10 +362,6 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [util.Location
     correct_type_count = collections.defaultdict(int)
 
     chair_server_locks = {'m': threading.Lock(), 's': threading.Lock(), 'd': threading.Lock()}
-    rtts = None
-    if rtt_proto is not None:
-        with open(rtt_proto.format(pid)) as rtt_file:
-            rtts = json.load(rtt_file)
 
     domain_lock = threading.Lock()
     domains = collections.defaultdict(list)
@@ -403,13 +413,19 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [util.Location
                         threads.remove(threads[r_index])
                 for domain in domain_location_list:
                     thread_semaphore.acquire()
-                    thread = threading.Thread(target=check_domain_location_ripe,
-                                              args=(domain, update_domains,
-                                                    update_count_for_type,
-                                                    thread_semaphore,
-                                                    locations, chair_server_locks, rtts,
-                                                    ripe_create_sema,
-                                                    ripe_slow_down_sema))
+                    if domain.ip in zmap_results:
+                        thread = threading.Thread(target=check_domain_location_ripe,
+                                                  args=(domain, update_domains,
+                                                        update_count_for_type,
+                                                        thread_semaphore,
+                                                        locations, chair_server_locks,
+                                                        zmap_locations,
+                                                        zmap_results[domain.ip],
+                                                        distances,
+                                                        ripe_create_sema,
+                                                        ripe_slow_down_sema))
+                    else:
+                        update_domains(domain, util.DomainType.not_responding)
                     thread.start()
                     threads.append(thread)
                     count_entries += 1
@@ -432,28 +448,31 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [util.Location
 def check_domain_location_ripe(domain: util.Domain,
                                update_domains: [[util.Domain, util.DomainType], ],
                                update_count_for_type: [[util.LocationCodeType], ],
-                               sema: threading.Semaphore, locations: [util.Location],
-                               chair_server_locks: [str, threading.Lock],
-                               rtts: [str, [str, [str, float]]],
-                               ripe_create_sema: mp.Semaphore, ripe_slow_down_sema: mp.Semaphore):
+                               sema: threading.Semaphore,
+                               locations: [str, util.Location],
+                               # chair_server_locks: [str, threading.Lock],
+                               zmap_locations: [str, util.GPSLocation],
+                               zmap_result: [str, float],
+                               distances: [str, [str, float]],
+                               ripe_create_sema: mp.Semaphore,
+                               ripe_slow_down_sema: mp.Semaphore):
     """checks if ip is at location"""
     try:
         matched = False
 
         results = None
-        if rtts is not None and domain['ip'] in rtts.keys():
-            if rtts[domain['ip']]['blacklisted']:
-                update_domains(domain, util.DomainType.blacklisted)
-                return
+        if zmap_result:
+            results = []
+            for zmap_id, zmap_location in zmap_locations.items():
+                if zmap_id in zmap_result:
+                    results.append(util.LocationResult(zmap_id, zmap_result[zmap_id],
+                                                       zmap_location))
 
-            results = [util.LocationResult(MUNICH_ID, rtts[domain['ip']]['rtt'][MUNICH_ID],
-                                           COORDS[MUNICH_ID]['gps_coords']),
-                       util.LocationResult(SINGAPORE_ID, rtts[domain['ip']]['rtt'][SINGAPORE_ID],
-                                           COORDS[SINGAPORE_ID]['gps_coords']),
-                       util.LocationResult(DALLAS_ID, rtts[domain['ip']]['rtt'][DALLAS_ID],
-                                           COORDS[DALLAS_ID]['gps_coords'])]
-        else:
-            results = test_netsec_server(domain['ip'], chair_server_locks)
+        if not results:
+            update_domains(domain, util.DomainType.not_responding)
+            return
+        # else:
+        #     results = test_netsec_server(domain['ip'], chair_server_locks)
         if results is None or len(
                 [res for res in results if res.rtt is not None]) == 0:
             update_domains(domain, util.DomainType.not_responding)
@@ -478,7 +497,16 @@ def check_domain_location_ripe(domain: util.Domain,
                 :rtype: DomainLabelMatch
                 """
                 nonlocal matches
-                matches = sort_matches(matches, results, locations)
+                matches = sort_matches(matches, results, locations, distances)
+                if isinstance(matches, tuple):
+                    result_location, match = matches
+                    update_count_for_type(match.code_type)
+                    match.matching = result_location
+                    domain.location = locations[match.location_id]
+                    update_domains(domain, util.DomainType.correct)
+                    nonlocal matched
+                    matched = True
+                    return None
                 ret = None
                 if len(matches) > 0:
                     ret = matches[0]
@@ -568,7 +596,8 @@ def check_domain_location_ripe(domain: util.Domain,
 
 
 def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
-                 locations: [util.Location]) -> [util.DomainLabelMatch]:
+                 locations: [str, util.Location],
+                 distances: [str, [str, float]]):
     """Sort the matches after their most probable location"""
     results = [result for result in results if result.rtt is not None]
     results.sort(key=lambda res: res.rtt)
@@ -577,25 +606,27 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
 
     near_matches = {}
     for match in matches:
-        distances = []
+        location_distances = []
         for result in results:
-            if result.location_id in COORDS.keys():
-                distance = COORDS[result.location_id]['distances'][
+            if result.location_id in distances.keys():
+                distance = distances[result.location_id]['distances'][
                     match.location_id]
-                if distance > (result.rtt * 100):
-                    break
-                distances.append((result, distance))
             else:
                 distance = \
                     locations[result.location_id].gps_distance_equirectangular(
                         locations[match.location_id])
-                if distance > (result.rtt * 100):
-                    break
-                distances.append((result, distance))
-        if len(distances) != len(results):
+
+            if distance > (result.rtt * 100):
+                break
+
+            if result.rtt < MAX_RTT + distance / 100:
+                return result.location, match
+
+            location_distances.append((result, distance))
+        if len(location_distances) != len(results):
             continue
 
-        min_res = min(distances, key=lambda res: res[1])[0]
+        min_res = min(location_distances, key=lambda res: res[1])[0]
 
         if min_res.location_id not in near_matches.keys():
             near_matches[min_res.location_id] = []
@@ -609,62 +640,62 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
     return ret
 
 
-def test_netsec_server(ip_address: str, chair_server_locks: [str, threading.Lock]) -> \
-        [util.LocationResult]:
-    """Test from the network chairs server the rtts and returns them in a dict"""
-    ret = []
-    server_configs = {
-        'm': {'user': 'root', 'port': 15901, 'server': 'planetlab7.net.in.tum.de'},
-        's': {'user': 'root', 'port': None, 'server': '139.162.29.117'},
-        'd': {'user': 'root', 'port': None, 'server': '45.33.5.55'}
-        }
-    chair_server_locks['m'].acquire()
-    ret.append(util.LocationResult(MUNICH_ID,
-                                   get_min_rtt(
-                                       ssh_ping(server_configs['m'], ip_address)),
-                                   COORDS[MUNICH_ID]['gps_coords']))
-    chair_server_locks['m'].release()
-    chair_server_locks['s'].acquire()
-    ret.append(util.LocationResult(SINGAPORE_ID,
-                                   get_min_rtt(
-                                       ssh_ping(server_configs['s'], ip_address)),
-                                   COORDS[SINGAPORE_ID]['gps_coords']))
-    chair_server_locks['s'].release()
-    chair_server_locks['d'].acquire()
-    ret.append(util.LocationResult(DALLAS_ID,
-                                   get_min_rtt(
-                                       ssh_ping(server_configs['d'], ip_address)),
-                                   COORDS[DALLAS_ID]['gps_coords']))
-    chair_server_locks['d'].release()
-    if ret[0].rtt is None and ret[1].rtt is None and ret[2].rtt is None:
-        return None
-    return ret
-
-
-def ssh_ping(server_conf: [str, [str, object]], ip_address: str) -> str:
-    """Perform a ping from the server with server_conf over ssh"""
-    # build ssh arguments
-    args = ['ssh']
-    if server_conf['port'] is not None:
-        args.append('-p')
-        args.append(str(server_conf['port']))
-    args.append('{0}@{1}'.format(server_conf['user'], server_conf['server']))
-    args.extend(['ping', '-fnc', '4', ip_address])  # '-W 1',
-    try:
-        output = subprocess.check_output(args, timeout=45)
-    except subprocess.CalledProcessError as error:
-        if error.returncode == 1:
-            return None
-        elif error.returncode == 255:
-            time.sleep(3)
-            return ssh_ping(server_conf, ip_address)
-        logging.error(error.output)
-        raise error
-    except subprocess.TimeoutExpired:
-        return None
-    except:
-        raise
-    return str(output)
+# def test_netsec_server(ip_address: str, chair_server_locks: [str, threading.Lock]) -> \
+#         [util.LocationResult]:
+#     """Test from the network chairs server the rtts and returns them in a dict"""
+#     ret = []
+#     server_configs = {
+#         'm': {'user': 'root', 'port': 15901, 'server': 'planetlab7.net.in.tum.de'},
+#         's': {'user': 'root', 'port': None, 'server': '139.162.29.117'},
+#         'd': {'user': 'root', 'port': None, 'server': '45.33.5.55'}
+#         }
+#     chair_server_locks['m'].acquire()
+#     ret.append(util.LocationResult(MUNICH_ID,
+#                                    get_min_rtt(
+#                                        ssh_ping(server_configs['m'], ip_address)),
+#                                    COORDS[MUNICH_ID]['gps_coords']))
+#     chair_server_locks['m'].release()
+#     chair_server_locks['s'].acquire()
+#     ret.append(util.LocationResult(SINGAPORE_ID,
+#                                    get_min_rtt(
+#                                        ssh_ping(server_configs['s'], ip_address)),
+#                                    COORDS[SINGAPORE_ID]['gps_coords']))
+#     chair_server_locks['s'].release()
+#     chair_server_locks['d'].acquire()
+#     ret.append(util.LocationResult(DALLAS_ID,
+#                                    get_min_rtt(
+#                                        ssh_ping(server_configs['d'], ip_address)),
+#                                    COORDS[DALLAS_ID]['gps_coords']))
+#     chair_server_locks['d'].release()
+#     if ret[0].rtt is None and ret[1].rtt is None and ret[2].rtt is None:
+#         return None
+#     return ret
+#
+#
+# def ssh_ping(server_conf: [str, [str, object]], ip_address: str) -> str:
+#     """Perform a ping from the server with server_conf over ssh"""
+#     # build ssh arguments
+#     args = ['ssh']
+#     if server_conf['port'] is not None:
+#         args.append('-p')
+#         args.append(str(server_conf['port']))
+#     args.append('{0}@{1}'.format(server_conf['user'], server_conf['server']))
+#     args.extend(['ping', '-fnc', '4', ip_address])  # '-W 1',
+#     try:
+#         output = subprocess.check_output(args, timeout=45)
+#     except subprocess.CalledProcessError as error:
+#         if error.returncode == 1:
+#             return None
+#         elif error.returncode == 255:
+#             time.sleep(3)
+#             return ssh_ping(server_conf, ip_address)
+#         logging.error(error.output)
+#         raise error
+#     except subprocess.TimeoutExpired:
+#         return None
+#     except:
+#         raise
+#     return str(output)
 
 
 def get_min_rtt(ping_output: str) -> float:
@@ -894,6 +925,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         }
     ripe_slow_down_sema.acquire()
     retries = 0
+    measurements = None
+
     while True:
         try:
             measurements = ripe_atlas.MeasurementRequest(**params)
