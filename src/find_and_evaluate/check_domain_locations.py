@@ -69,16 +69,20 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='If you choose the ip2location as method you have to'
                              ' specify the path to the database in this argument.\n'
                              'Currently not tested, because no database is available')
-    parser.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename',
-                        help='The results of the zmap scan of the ip addresses')
-    parser.add_argument('-q', '--ripe-request-limit', type=int,
-                        dest='ripeRequestLimit',
-                        help='How many request should normally be allowed per second '
-                             'to the ripe server', default=10)
-    parser.add_argument('-b', '--ripe-request-burst-limit', type=int,
-                        dest='ripeRequestBurstLimit',
-                        help='How many request should at maximum be allowed per second'
-                             ' to the ripe server', default=15)
+    ripe_group = parser.add_argument_group('RIPE method arguments')
+    ripe_group.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename',
+                            help='The results of the zmap scan of the ip addresses')
+    ripe_group.add_argument('-q', '--ripe-request-limit', type=int,
+                            dest='ripeRequestLimit',
+                            help='How many request should normally be allowed per second '
+                                 'to the ripe server', default=10)
+    ripe_group.add_argument('-b', '--ripe-request-burst-limit', type=int,
+                            dest='ripeRequestBurstLimit',
+                            help='How many request should at maximum be allowed per second'
+                                 ' to the ripe server', default=15)
+    ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
+                            help='Returns after the first time coputing the amount of '
+                                 'matches to check')
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
@@ -175,7 +179,8 @@ def main():
                                        zmap_results,
                                        distances,
                                        ripe_create_sema,
-                                       ripe_slow_down_sema),
+                                       ripe_slow_down_sema,
+                                       args.dry_run),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
@@ -353,7 +358,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
 def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
                         zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
-                        ripe_slow_down_sema: mp.Semaphore):
+                        ripe_slow_down_sema: mp.Semaphore, dry_run: bool):
     """Checks for all domains if the suspected locations are correct"""
     thread_count = 25
     thread_semaphore = threading.Semaphore(thread_count)
@@ -361,10 +366,17 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
     count_lock = threading.Lock()
     correct_type_count = collections.defaultdict(int)
 
-    chair_server_locks = {'m': threading.Lock(), 's': threading.Lock(), 'd': threading.Lock()}
+    # chair_server_locks = {'m': threading.Lock(), 's': threading.Lock(), 'd': threading.Lock()}
 
     domain_lock = threading.Lock()
     domains = collections.defaultdict(list)
+
+    dry_run_count = 0
+    dry_run_count_lock = threading.Lock()
+
+    if not dry_run:
+        del dry_run_count
+        del dry_run_count_lock
 
     domain_output_file = open('check_domains_output_{}.json'.format(pid), 'w',
                               buffering=1)
@@ -373,6 +385,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         """acquires lock and increments in count the type property"""
         with count_lock:
             correct_type_count[ctype.name] += 1
+
+    def add_dry_run_matches(count: int):
+        """aquires the dry run lock and increments the amount of matches by count"""
+        with dry_run_count_lock:
+            nonlocal dry_run_count
+            dry_run_count += count
 
     def dump_domain_list():
         """Write all domains in the buffer to the file and empty the lists"""
@@ -385,29 +403,29 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
     def update_domains(update_domain: util.Domain, dtype: util.DomainType):
         """Append current domain in the domain dict to the dtype"""
-        domain_lock.acquire()
-        domains[dtype].append(update_domain)
+        with domain_lock:
+            domains[dtype].append(update_domain)
 
-        if (len(domains[util.DomainType.correct]) + len(domains[util.DomainType.not_responding]) +
-                len(domains[util.DomainType.no_location]) +
-                len(domains[util.DomainType.blacklisted])) >= 10 ** 3:
-            dump_domain_list()
-
-        domain_lock.release()
+            if (len(domains[util.DomainType.correct]) +
+                    len(domains[util.DomainType.not_responding]) +
+                    len(domains[util.DomainType.no_location]) +
+                    len(domains[util.DomainType.blacklisted])) >= 10 ** 3:
+                dump_domain_list()
 
     threads = []
+    count_entries = 0
+
     try:
-        with open(filename_proto.format(pid)) as domainFile:
-            domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
+        with open(filename_proto.format(pid)) as domainFile, \
+                mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm:
             line = domain_file_mm.readline().decode('utf-8')
-            count_entries = 0
             while len(line) > 0:
                 domain_location_list = util.json_loads(line)
                 if len(threads) > thread_count:
                     remove_indexes = []
-                    for t_index in range(0, len(threads)):
-                        if not threads[t_index].is_alive():
-                            threads[t_index].join()
+                    for t_index, thread in enumerate(threads):
+                        if not thread.is_alive():
+                            thread.join()
                             remove_indexes.append(t_index)
                     for r_index in remove_indexes[::-1]:
                         threads.remove(threads[r_index])
@@ -418,28 +436,32 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                   args=(domain, update_domains,
                                                         update_count_for_type,
                                                         thread_semaphore,
-                                                        locations, chair_server_locks,
+                                                        locations,
                                                         zmap_locations,
                                                         zmap_results[domain.ip],
                                                         distances,
                                                         ripe_create_sema,
-                                                        ripe_slow_down_sema))
+                                                        ripe_slow_down_sema,
+                                                        dry_run,
+                                                        add_dry_run_matches))
                     else:
                         update_domains(domain, util.DomainType.not_responding)
                     thread.start()
                     threads.append(thread)
                     count_entries += 1
-                    if count_entries % 10000 == 0:
+                    if count_entries % 10000 == 0 and not dry_run:
                         logging.info('count {} correct_count {}'.format(count_entries,
                                                                         correct_type_count))
                 line = domain_file_mm.readline().decode('utf-8')
 
-            domain_file_mm.close()
+        for thread in threads:
+            thread.join()
+
     except KeyboardInterrupt:
         pass
 
-    for thread in threads:
-        thread.join()
+    if dry_run:
+        logging.info('{} matches for {} entries after dry run'.format(dry_run_count, count_entries))
 
     util.json_dump(domains, domain_output_file)
     logging.info('correct_count {}'.format(correct_type_count))
@@ -455,7 +477,9 @@ def check_domain_location_ripe(domain: util.Domain,
                                zmap_result: [str, float],
                                distances: [str, [str, float]],
                                ripe_create_sema: mp.Semaphore,
-                               ripe_slow_down_sema: mp.Semaphore):
+                               ripe_slow_down_sema: mp.Semaphore,
+                               dry_run: bool,
+                               add_dry_run_matches: [[int], ]):
     """checks if ip is at location"""
     try:
         matched = False
@@ -498,6 +522,9 @@ def check_domain_location_ripe(domain: util.Domain,
                 """
                 nonlocal matches
                 matches = sort_matches(matches, results, locations, distances)
+                if dry_run:
+                    add_dry_run_matches(len(matches))
+                    return None
                 if isinstance(matches, tuple):
                     result_location, match = matches
                     update_count_for_type(match.code_type)
@@ -513,6 +540,8 @@ def check_domain_location_ripe(domain: util.Domain,
                 return ret
 
             next_match = get_next_match()
+            if dry_run:
+                continue
             while next_match is not None:
                 location = locations[next_match.location_id]
                 near_nodes = location.nodes
