@@ -563,6 +563,14 @@ class Domain(JSONBase):
         domain_parts[-1] = main_domain
         return domain_parts[::-1]
 
+    @property
+    def matches_count(self) -> int:
+        """Counts the amount of matches for this domain"""
+        count = 0
+        for label in self.domain_labels:
+            count += len(label.matches)
+        return count
+
     def dict_representation(self) -> [str, object]:
         """Returns a dictionary with the information of the object"""
         ret_dict = {

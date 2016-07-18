@@ -136,18 +136,20 @@ def main():
                                             args=(ripe_slow_down_sema, args.ripeRequestLimit))
         generator_thread.deamon = True
 
-        if next(iter(locations.values())).nodes is None:
-            for location in locations.values():
-                nodes, available_nodes = get_nearest_ripe_nodes(location, 1000)
-                location.nodes = nodes
-                location.available_nodes = available_nodes
-            with open(args.locationFile, 'w') as locationFile:
-                util.json_dump(locations, locationFile)
+        if not args.dry_run:
+            if next(iter(locations.values())).nodes is None:
+                logging.info('Getting the nodes from RIPE Atlas')
+                for location in locations.values():
+                    nodes, available_nodes = get_nearest_ripe_nodes(location, 1000)
+                    location.nodes = nodes
+                    location.available_nodes = available_nodes
+                with open(args.locationFile, 'w') as locationFile:
+                    util.json_dump(locations, locationFile)
 
-        null_locations = []
-        for location in locations.values():
-            if len(location.available_nodes) == 0:
-                null_locations.append(location)
+            null_locations = []
+            for location in locations.values():
+                if not location.available_nodes:
+                    null_locations.append(location)
 
         if args.zmap_filename:
             with open(args.zmap_filename) as zmap_file:
@@ -414,6 +416,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
     threads = []
     count_entries = 0
+    count_matches = 0
 
     try:
         with open(filename_proto.format(pid)) as domainFile, \
@@ -448,6 +451,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         update_domains(domain, util.DomainType.not_responding)
                     thread.start()
                     threads.append(thread)
+                    count_matches += domain.matches_count
                     count_entries += 1
                     if count_entries % 10000 == 0 and not dry_run:
                         logging.info('count {} correct_count {}'.format(count_entries,
@@ -461,7 +465,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         pass
 
     if dry_run:
-        logging.info('{} matches for {} entries after dry run'.format(dry_run_count, count_entries))
+        logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(dry_run_count, count_entries, count_matches))
 
     util.json_dump(domains, domain_output_file)
     logging.info('correct_count {}'.format(correct_type_count))
