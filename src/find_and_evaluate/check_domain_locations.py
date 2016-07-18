@@ -151,6 +151,9 @@ def main():
                 if not location.available_nodes:
                     null_locations.append(location)
 
+            with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
+                util.json_dump(null_locations, loc_wo_nodes_file)
+
         if args.zmap_filename:
             with open(args.zmap_filename) as zmap_file:
                 location_line = zmap_file.readline()
@@ -161,9 +164,6 @@ def main():
         else:
             logging.critical('No zmap results file! Aborting!')
             return 1
-
-        with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
-            util.json_dump(null_locations, loc_wo_nodes_file)
 
         distances = __init_coords_distances(zmap_locations, locations)
 
