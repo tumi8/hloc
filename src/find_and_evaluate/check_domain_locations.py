@@ -50,7 +50,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-f', '--file-count', type=int, default=8,
                         dest='fileCount',
                         help='number of files from preprocessing')
-    parser.add_argument('-l', '--location-file-name', required=True, type=str,
+    parser.add_argument('-loc', '--location-file-name', required=True, type=str,
                         dest='locationFile',
                         help='The path to the location file.'
                              ' The output file from the codes_parser')
