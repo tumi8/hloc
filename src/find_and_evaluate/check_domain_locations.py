@@ -146,7 +146,7 @@ def main():
 
         null_locations = []
         for location in locations.values():
-            if len(location.near_nodes) == 0:
+            if len(location.available_nodes) == 0:
                 null_locations.append(location)
 
         if args.zmap_filename:
