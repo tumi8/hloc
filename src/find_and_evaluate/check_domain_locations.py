@@ -342,7 +342,7 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
 
 def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
     """checks the domains locations with the geoipreader"""
-    geoip_location = geoipreader.city(domain.ip)
+    geoip_location = geoipreader.city(domain.ip_address)
     if (
                 geoip_location.location is None or geoip_location.location.longitude is None or
             geoip_location.location.latitude is None):
@@ -497,6 +497,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                distances: [str, [str, float]],
                                ripe_create_sema: mp.Semaphore,
                                ripe_slow_down_sema: mp.Semaphore,
+                               ip_version: str,
                                dry_run: bool,
                                add_dry_run_matches: [[int], ]):
     """checks if ip is at location"""
@@ -523,7 +524,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
         # TODO refactoring measurements are in dict format
         measurements = [mes for mes in
-                        get_measurements(domain.ip, ripe_slow_down_sema)]
+                        get_measurements(domain.ip_for_version(ip_version), ripe_slow_down_sema)]
         logging.info('ip {} got measurements {}'.format(domain['ip'], len(measurements)))
 
         # TODO change algorithm to choose next match sort by longest match
@@ -581,7 +582,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 if chk_m is None or chk_m == -1:
                     # only if no old measurement exists
                     m_results, near_node = create_and_check_measurement(
-                        domain.ip,
+                        domain.ip_for_version(ip_version),
                         location,
                         ripe_create_sema,
                         ripe_slow_down_sema)
