@@ -663,11 +663,11 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
         location_distances = []
         for result in results:
             if result.location_id in distances:
-                distance = distances[result.location_id][ match.location_id]
+                distance = distances[result.location_id][str(match.location_id)]
             else:
                 distance = \
                     locations[result.location_id].gps_distance_equirectangular(
-                        locations[match.location_id])
+                        locations[str(match.location_id)])
 
             if distance > (result.rtt * 100):
                 break
@@ -681,14 +681,14 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
 
         min_res = min(location_distances, key=lambda res: res[1])[0]
 
-        if min_res.location_id not in near_matches.keys():
+        if min_res.location_id not in near_matches:
             near_matches[min_res.location_id] = []
 
         near_matches[min_res.location_id].append(match)
 
     ret = []
     for result in results:
-        if result.location_id in near_matches.keys():
+        if result.location_id in near_matches:
             ret.extend(near_matches[result.location_id])
     return ret
 
