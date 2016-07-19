@@ -662,9 +662,8 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
     for match in matches:
         location_distances = []
         for result in results:
-            if result.location_id in distances.keys():
-                distance = distances[result.location_id]['distances'][
-                    match.location_id]
+            if result.location_id in distances:
+                distance = distances[result.location_id][ match.location_id]
             else:
                 distance = \
                     locations[result.location_id].gps_distance_equirectangular(
