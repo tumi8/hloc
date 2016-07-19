@@ -434,7 +434,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         threads.remove(threads[r_index])
                 for domain in domain_location_list:
                     thread_semaphore.acquire()
-                    if domain.ip in zmap_results:
+                    if domain.ip_address in zmap_results:
                         thread = threading.Thread(target=check_domain_location_ripe,
                                                   args=(domain, update_domains,
                                                         update_count_for_type,
