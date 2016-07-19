@@ -94,12 +94,10 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
     generate_def_dcts(drop_rules)
 
     filename = domainfile_proto.format(index)
-    with open(filename) as domain_file, open('.'.join(
-            filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
-                'w') as no_loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-found-wo-loc.json',
-                'w') as loc_found_wo_file:
+    with open(filename) as domain_file, \
+            open(util.remove_file_ending(filename) + '.found', 'w') as loc_found_file, \
+            open(util.remove_file_ending(filename) + '.notfound', 'w') as no_loc_found_file, \
+            open(util.remove_file_ending(filename) + '.found-wo-trie', 'w') as loc_found_wo_file:
         domains_w_location = []
         domains_wo_location = []
         domains_no_location = []

@@ -385,96 +385,104 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         del dry_run_count
         del dry_run_count_lock
 
-    domain_output_file = open('check_domains_output_{}.json'.format(pid), 'w',
-                              buffering=1)
+    with open(util.remove_file_ending(filename_proto) + '.checked', 'w') as domain_output_file:
 
-    def update_count_for_type(ctype: util.LocationCodeType):
-        """acquires lock and increments in count the type property"""
-        with count_lock:
-            correct_type_count[ctype.name] += 1
+        def update_count_for_type(ctype: util.LocationCodeType):
+            """acquires lock and increments in count the type property"""
+            with count_lock:
+                correct_type_count[ctype.name] += 1
 
-    def add_dry_run_matches(count: int):
-        """aquires the dry run lock and increments the amount of matches by count"""
-        with dry_run_count_lock:
-            nonlocal dry_run_count
-            dry_run_count += count
+        def add_dry_run_matches(count: int):
+            """aquires the dry run lock and increments the amount of matches by count"""
+            with dry_run_count_lock:
+                nonlocal dry_run_count
+                dry_run_count += count
 
-    def dump_domain_list():
-        """Write all domains in the buffer to the file and empty the lists"""
-        logging.info('correct {} not_responding {} no_location {} blacklisted {}'.format(
-            len(domains[util.DomainType.correct]), len(domains[util.DomainType.not_responding]),
-            len(domains[util.DomainType.no_location]), len(domains[util.DomainType.blacklisted])))
-        util.json_dump(domains, domain_output_file)
-        domain_output_file.write('\n')
-        domains.clear()
+        def dump_domain_list():
+            """Write all domains in the buffer to the file and empty the lists"""
+            logging.info('correct {} not_responding {} no_location {} blacklisted {}'.format(
+                len(domains[util.DomainType.correct]), len(domains[util.DomainType.not_responding]),
+                len(domains[util.DomainType.no_location]),
+                len(domains[util.DomainType.blacklisted])))
+            util.json_dump(domains, domain_output_file)
+            domain_output_file.write('\n')
+            domains.clear()
 
-    def update_domains(update_domain: util.Domain, dtype: util.DomainType):
-        """Append current domain in the domain dict to the dtype"""
-        with domain_lock:
-            domains[dtype].append(update_domain)
+        def update_domains(update_domain: util.Domain, dtype: util.DomainType):
+            """Append current domain in the domain dict to the dtype"""
+            if dtype == util.DomainType.not_responding:
+                nonlocal count_unreachable
+                count_unreachable += 1
 
-            if (len(domains[util.DomainType.correct]) +
-                    len(domains[util.DomainType.not_responding]) +
-                    len(domains[util.DomainType.no_location]) +
-                    len(domains[util.DomainType.blacklisted])) >= 10 ** 3:
-                dump_domain_list()
+            if not dry_run:
+                with domain_lock:
+                    domains[dtype].append(update_domain)
 
-    threads = []
-    count_entries = 0
-    count_matches = 0
+                    if (len(domains[util.DomainType.correct]) +
+                            len(domains[util.DomainType.not_responding]) +
+                            len(domains[util.DomainType.no_location]) +
+                            len(domains[util.DomainType.blacklisted])) >= 10 ** 3:
+                        dump_domain_list()
 
-    try:
-        with open(filename_proto.format(pid)) as domainFile, \
-                mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm:
-            line = domain_file_mm.readline().decode('utf-8')
-            while len(line) > 0:
-                domain_location_list = util.json_loads(line)
-                if len(threads) > thread_count:
-                    remove_indexes = []
-                    for t_index, thread in enumerate(threads):
-                        if not thread.is_alive():
-                            thread.join()
-                            remove_indexes.append(t_index)
-                    for r_index in remove_indexes[::-1]:
-                        threads.remove(threads[r_index])
-                for domain in domain_location_list:
-                    thread_semaphore.acquire()
-                    if domain.ip_for_version(ip_version) in zmap_results:
-                        thread = threading.Thread(target=check_domain_location_ripe,
-                                                  args=(domain, update_domains,
-                                                        update_count_for_type,
-                                                        thread_semaphore,
-                                                        locations,
-                                                        zmap_locations,
-                                                        zmap_results[domain.ip_for_version(ip_version)],
-                                                        distances,
-                                                        ripe_create_sema,
-                                                        ripe_slow_down_sema,
-                                                        dry_run,
-                                                        add_dry_run_matches))
-                        thread.start()
-                        threads.append(thread)
-                        count_matches += domain.matches_count
-                        count_entries += 1
-                    else:
-                        update_domains(domain, util.DomainType.not_responding)
+        threads = []
+        count_entries = 0
+        count_matches = 0
+        count_unreachable = 0
 
-                    if count_entries % 10000 == 0 and not dry_run:
-                        logging.info('count {} correct_count {}'.format(count_entries,
-                                                                        correct_type_count))
+        try:
+            with open(filename_proto.format(pid)) as domainFile, \
+                    mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm:
                 line = domain_file_mm.readline().decode('utf-8')
+                while len(line) > 0:
+                    domain_location_list = util.json_loads(line)
+                    if len(threads) > thread_count:
+                        remove_indexes = []
+                        for t_index, thread in enumerate(threads):
+                            if not thread.is_alive():
+                                thread.join()
+                                remove_indexes.append(t_index)
+                        for r_index in remove_indexes[::-1]:
+                            threads.remove(threads[r_index])
+                    for domain in domain_location_list:
+                        thread_semaphore.acquire()
+                        if domain.ip_for_version(ip_version) in zmap_results:
+                            thread = threading.Thread(target=check_domain_location_ripe,
+                                                      args=(domain, update_domains,
+                                                            update_count_for_type,
+                                                            thread_semaphore,
+                                                            locations,
+                                                            zmap_locations,
+                                                            zmap_results[domain.ip_for_version(
+                                                                ip_version)],
+                                                            distances,
+                                                            ripe_create_sema,
+                                                            ripe_slow_down_sema,
+                                                            dry_run,
+                                                            add_dry_run_matches))
+                            thread.start()
+                            threads.append(thread)
+                            count_matches += domain.matches_count
+                            count_entries += 1
+                        else:
+                            update_domains(domain, util.DomainType.not_responding)
+                            count_unreachable += 1
 
-        for thread in threads:
-            thread.join()
+                        if count_entries % 10000 == 0 and not dry_run:
+                            logging.info('count {} correct_count {}'.format(count_entries,
+                                                                            correct_type_count))
+                    line = domain_file_mm.readline().decode('utf-8')
 
-    except KeyboardInterrupt:
-        pass
+            for thread in threads:
+                thread.join()
 
-    if dry_run:
-        logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(
-            dry_run_count, count_entries, count_matches))
+        except KeyboardInterrupt:
+            pass
 
-    util.json_dump(domains, domain_output_file)
+        if dry_run:
+            logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(
+                dry_run_count, count_entries, count_matches))
+        else:
+            util.json_dump(domains, domain_output_file)
     logging.info('correct_count {}'.format(correct_type_count))
 
 

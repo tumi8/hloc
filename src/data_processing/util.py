@@ -9,6 +9,7 @@ import collections
 import re
 import sys
 import logging
+import os
 # import msgpack
 import json
 
@@ -60,7 +61,7 @@ def is_ip_hex_encoded_simple(ip_address, domain):
     return hex_ip.upper() in domain.upper()
 
 
-def get_path_filename(path):
+def get_path_filename(path: str) -> str:
     """Extracts the filename from a path string"""
     # TODO use os.basename
     if path[-1] == '/':
@@ -75,7 +76,16 @@ def get_path_filename(path):
     return filename
 
 
-def setup_logging(filename):
+def remove_file_ending(filenamepath: str) -> str:
+    """Removes the fileending of the paths file"""
+    parts = filenamepath.split('/')
+    if parts[-1].find('.') > 0:
+        parts[-1] = parts[-1][0: parts[-1].find('.')]
+    return '/'.join(parts)
+
+
+
+def setup_logging(filename: str):
     """does the basic config on logging"""
     logging.basicConfig(filename=filename, level=logging.DEBUG,
                         format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
