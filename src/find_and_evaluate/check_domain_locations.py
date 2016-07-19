@@ -447,12 +447,13 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                         ripe_slow_down_sema,
                                                         dry_run,
                                                         add_dry_run_matches))
+                        thread.start()
+                        threads.append(thread)
+                        count_matches += domain.matches_count
+                        count_entries += 1
                     else:
                         update_domains(domain, util.DomainType.not_responding)
-                    thread.start()
-                    threads.append(thread)
-                    count_matches += domain.matches_count
-                    count_entries += 1
+
                     if count_entries % 10000 == 0 and not dry_run:
                         logging.info('count {} correct_count {}'.format(count_entries,
                                                                         correct_type_count))
@@ -465,7 +466,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         pass
 
     if dry_run:
-        logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(dry_run_count, count_entries, count_matches))
+        logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(
+            dry_run_count, count_entries, count_matches))
 
     util.json_dump(domains, domain_output_file)
     logging.info('correct_count {}'.format(correct_type_count))
