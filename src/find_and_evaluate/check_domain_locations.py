@@ -216,8 +216,8 @@ def main():
         try:
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
-                logging.info(process_sts.count(True), 'processes alive')
                 alive = process_sts.count(True)
+                logging.info('{} processes alive'.format(alive))
             for process in processes:
                 process.join()
         except KeyboardInterrupt:
