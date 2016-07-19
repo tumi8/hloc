@@ -441,7 +441,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                         thread_semaphore,
                                                         locations,
                                                         zmap_locations,
-                                                        zmap_results[domain.ip],
+                                                        zmap_results[domain.ip_address],
                                                         distances,
                                                         ripe_create_sema,
                                                         ripe_slow_down_sema,
