@@ -100,7 +100,7 @@ def parse_zmap_results(zmap_filename: str, location_name: str, present_results: 
         if success:
             sec_difference = int(rec_ts) - int(sent_ts)
             u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10**6
-            return rsaddr, sec_difference + u_sec_diference
+            return rsaddr, (sec_difference + u_sec_diference) * 1000
 
     zmap_results = {}
     if present_results:

@@ -648,6 +648,8 @@ def check_domain_location_ripe(domain: util.Domain,
     finally:
         sema.release()
 
+    return 0
+
 
 def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
                  locations: [str, util.Location],
