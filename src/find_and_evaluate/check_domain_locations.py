@@ -214,12 +214,12 @@ def main():
     alive = 8
     while alive > 0:
         try:
-            for process in processes:
-                process.join()
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
                 logging.info(process_sts.count(True), 'processes alive')
                 alive = process_sts.count(True)
+            for process in processes:
+                process.join()
         except KeyboardInterrupt:
             pass
 
@@ -457,6 +457,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                             distances,
                                                             ripe_create_sema,
                                                             ripe_slow_down_sema,
+                                                            ip_version,
                                                             dry_run,
                                                             add_dry_run_matches))
                             thread.start()
