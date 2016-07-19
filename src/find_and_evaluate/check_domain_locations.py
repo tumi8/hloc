@@ -69,6 +69,10 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='If you choose the ip2location as method you have to'
                              ' specify the path to the database in this argument.\n'
                              'Currently not tested, because no database is available')
+    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
+                        default=util.IPV4_IDENTIFIER,
+                        choices=[util.IPV4_IDENTIFIER, util.IPV6_IDENTIFIER],
+                        help='specify the ipVersion')
     ripe_group = parser.add_argument_group('RIPE method arguments')
     ripe_group.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename',
                             help='The results of the zmap scan of the ip addresses')
@@ -182,6 +186,7 @@ def main():
                                        distances,
                                        ripe_create_sema,
                                        ripe_slow_down_sema,
+                                       args.ip_version,
                                        args.dry_run),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
@@ -360,7 +365,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
 def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
                         zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
-                        ripe_slow_down_sema: mp.Semaphore, dry_run: bool):
+                        ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool):
     """Checks for all domains if the suspected locations are correct"""
     thread_count = 25
     thread_semaphore = threading.Semaphore(thread_count)
@@ -434,14 +439,14 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         threads.remove(threads[r_index])
                 for domain in domain_location_list:
                     thread_semaphore.acquire()
-                    if domain.ip_address in zmap_results:
+                    if domain.ip_for_version(ip_version) in zmap_results:
                         thread = threading.Thread(target=check_domain_location_ripe,
                                                   args=(domain, update_domains,
                                                         update_count_for_type,
                                                         thread_semaphore,
                                                         locations,
                                                         zmap_locations,
-                                                        zmap_results[domain.ip_address],
+                                                        zmap_results[domain.ip_for_version(ip_version)],
                                                         distances,
                                                         ripe_create_sema,
                                                         ripe_slow_down_sema,

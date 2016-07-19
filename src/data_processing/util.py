@@ -15,6 +15,8 @@ import json
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
+IPV4_IDENTIFIER = 'ipv4'
+IPV6_IDENTIFIER = 'ipv6'
 
 
 #######################################
@@ -570,6 +572,15 @@ class Domain(JSONBase):
         for label in self.domain_labels:
             count += len(label.matches)
         return count
+
+    def ip_for_version(self, version) -> str:
+        """returns the version corresponding ip address"""
+        if version == IPV4_IDENTIFIER:
+            return self.ip_address
+        elif version == IPV6_IDENTIFIER:
+            return self.ipv6_address
+        else:
+            raise ValueError('{} is not a valid IP version'.format(version))
 
     def dict_representation(self) -> [str, object]:
         """Returns a dictionary with the information of the object"""
