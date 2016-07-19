@@ -524,9 +524,13 @@ def check_domain_location_ripe(domain: util.Domain,
             return
 
         # TODO refactoring measurements are in dict format
-        measurements = [mes for mes in
-                        get_measurements(domain.ip_for_version(ip_version), ripe_slow_down_sema)]
-        logging.info('ip {} got measurements {}'.format(domain['ip'], len(measurements)))
+        if not dry_run:
+            measurements = [mes for mes in get_measurements(domain.ip_for_version(ip_version),
+                                                            ripe_slow_down_sema)]
+            logging.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
+                                                            len(measurements)))
+        else:
+            measurements = []
 
         # TODO change algorithm to choose next match sort by longest match
         for i, label in enumerate(domain.domain_labels):
