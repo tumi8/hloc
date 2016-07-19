@@ -480,8 +480,9 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
             pass
 
         if dry_run:
-            logging.info('{} matches for {} entries after dry run\nTotal amount matches: {}'.format(
-                dry_run_count, count_entries, count_matches))
+            logging.info('{} matches for {} entries after dry run. {} unreachable addresses. '
+                         'Total amount matches: {}'.format(dry_run_count, count_entries,
+                                                           count_unreachable, count_matches))
         else:
             util.json_dump(domains, domain_output_file)
     logging.info('correct_count {}'.format(correct_type_count))
