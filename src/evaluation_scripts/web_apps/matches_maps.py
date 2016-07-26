@@ -40,7 +40,8 @@ def drop_matches_map():
 
 
 def create_matches_map():
-    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lon=0, zoom=4, maptype='TERRAIN')
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN')
     default_dict = {
         'stroke_color': RED_COLOR,
         'stroke_opacity': 0.8,
@@ -50,9 +51,10 @@ def create_matches_map():
     }
     for location_id, location_count in location_counts.items():
         location_dct = default_dict.copy()
-        matches_map.add_circle(center_lat=locations[location_id].lat, center_lng=locations[location_id].lon,
-                       radius=location_count*100, **location_dct)
+        matches_map.add_circle(center_lat=locations[location_id].lat,
+                               center_lng=locations[location_id].lon,
+                               radius=location_count*100, **location_dct)
     return matches_map
 
 if __name__ == "__main__":
-    application.run(host='0.0.0.0', port=80)
+    application.run()
