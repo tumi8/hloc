@@ -196,26 +196,23 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             if rule_stat['rules_used_count'] < 10:
                 new_better_stats[rule_name]['low_usage'] = True
                 continue
-            if rule_stat['rules_used_count'] > 0:
-                new_better_stats[rule_name]['matching_percent'] = \
-                    rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
-                new_better_stats[rule_name]['true_matching_percent'] = \
-                    rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
-                if rule_stat['domains_with_rule_match_count'] > 0:
-                    new_better_stats[rule_name]['matching_percent_related'] = \
-                        rule_stat['domains_with_location_count'] / \
-                        rule_stat['domains_with_rule_match_count']
-                else:
-                    new_better_stats[rule_name]['matching_percent_related'] = 2
+            new_better_stats[rule_name]['matching_percent'] = \
+                rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
+            new_better_stats[rule_name]['true_matching_percent'] = \
+                rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
+            if rule_stat['domains_with_rule_match_count'] > 0:
+                new_better_stats[rule_name]['matching_percent_related'] = \
+                    rule_stat['domains_with_location_count'] / \
+                    rule_stat['domains_with_rule_match_count']
             else:
-                new_better_stats[rule_name]['unused'] = True
+                new_better_stats[rule_name]['matching_percent_related'] = 2
 
         with open(stats_file_path, 'w') as stats_file:
             util.json_dump(new_better_stats, stats_file)
 
         stats_for_used_rules = {}
         for rule_name, stats in new_better_stats.items():
-            if 'unused' not in stats and 'low_usage' not in stats:
+            if 'low_usage' not in stats:
                 stats_for_used_rules[rule_name] = stats
 
         ten_most_matching = heapq.nlargest(10, stats_for_used_rules.items(),
