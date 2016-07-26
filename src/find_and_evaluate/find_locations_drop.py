@@ -204,7 +204,8 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                         rule_stat['domains_with_rule_match_count']
                 else:
                     new_better_stats[rule_name]['matching_percent_related'] = 2
-            new_better_stats[rule_name]['unused'] = True
+            else:
+                new_better_stats[rule_name]['unused'] = True
 
         with open(stats_file_path, 'w') as stats_file:
             util.json_dump(new_better_stats, stats_file)
