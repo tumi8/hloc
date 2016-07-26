@@ -565,7 +565,7 @@ class Domain(JSONBase):
         return domain_parts[::-1]
 
     @property
-    def all_matches(self) -> [DomainLabelMatch]:
+    def all_matches(self):
         """Returns all matches of the domain"""
         matches = []
         for label in self.domain_labels:
@@ -604,7 +604,7 @@ class Domain(JSONBase):
         return ret_dict
 
     @staticmethod
-    def create_object_from_dict(dct, locations: [str, Location]=None):
+    def create_object_from_dict(dct, locations: [str, object]=None):
         """Creates a Domain object from a dictionary"""
         obj = Domain(dct[Domain.PropertyKey.domain_name], dct[Domain.PropertyKey.ip_address],
                      dct[Domain.PropertyKey.ipv6_address])
