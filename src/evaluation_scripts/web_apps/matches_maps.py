@@ -32,7 +32,7 @@ with open(args.location_filename) as location_file:
 
 high_locs = sorted(list(location_counts.items()), key=lambda x: x[1], reverse=True)[-20:]
 for loc_id, count in high_locs:
-    location = locations[loc_id]
+    location = locations[str(loc_id)]
     print(location.city_name, location.lat, location.lon, count)
 
 
