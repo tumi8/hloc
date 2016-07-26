@@ -66,23 +66,13 @@ def get_path_filename(path: str) -> str:
     # TODO use os.basename
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
-    file_index = path.find('/')
-    filename = path[:]
 
-    while file_index >= 0:
-        filename = filename[file_index + 1:]
-        file_index = filename.find('/')
-
-    return filename
+    return os.path.basename(filename)
 
 
 def remove_file_ending(filenamepath: str) -> str:
     """Removes the fileending of the paths file"""
-    parts = filenamepath.split('/')
-    if parts[-1].find('.') > 0:
-        parts[-1] = parts[-1][0: parts[-1].find('.')]
-    return '/'.join(parts)
-
+    return os.path.dirname(filenamepath) + '.'.join(get_path_filename(filenamepath).split('.')[:-1])
 
 
 def setup_logging(filename: str):

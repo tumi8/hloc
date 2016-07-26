@@ -9,7 +9,6 @@ import os.path
 import geoip2.database
 import random
 import mmap
-import sys
 import IP2Location
 import logging
 import collections
@@ -223,9 +222,10 @@ def main():
         except KeyboardInterrupt:
             pass
 
+    logging.info('{} processes alive'.format(alive))
     end_time = time.time()
     logging.info('running time: {}'.format((end_time - start_time)))
-    sys.exit(0)
+    return 0
 
 
 def __init_coords_distances(zmap_locations: [str, util.GPSLocation],
@@ -385,7 +385,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         del dry_run_count
         del dry_run_count_lock
 
-    with open(util.remove_file_ending(filename_proto) + '.checked', 'w') as domain_output_file:
+    with open(util.remove_file_ending(filename_proto).format(pid) + '.checked',
+              'w') as domain_output_file:
 
         def update_count_for_type(ctype: util.LocationCodeType):
             """acquires lock and increments in count the type property"""
@@ -460,13 +461,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                             ip_version,
                                                             dry_run,
                                                             add_dry_run_matches))
-                            thread.start()
                             threads.append(thread)
+                            thread.start()
                             count_matches += domain.matches_count
                             count_entries += 1
                         else:
                             update_domains(domain, util.DomainType.not_responding)
-                            count_unreachable += 1
 
                         if count_entries % 10000 == 0 and not dry_run:
                             logging.info('count {} correct_count {}'.format(count_entries,
@@ -477,6 +477,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 thread.join()
 
         except KeyboardInterrupt:
+            logging.warning('SIGINT recognized stopping Process')
             pass
 
         if dry_run:
@@ -485,6 +486,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                            count_unreachable, count_matches))
         else:
             util.json_dump(domains, domain_output_file)
+
+        count_alive = 0
+        for thread in threads:
+            if thread.is_alive():
+                count_alive += 1
+
     logging.info('correct_count {}'.format(correct_type_count))
 
 
@@ -505,8 +512,8 @@ def check_domain_location_ripe(domain: util.Domain,
     """checks if ip is at location"""
     try:
         matched = False
-
         results = None
+
         if zmap_result:
             results = []
             for zmap_id, zmap_location in zmap_locations.items():
@@ -519,6 +526,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return
         # else:
         #     results = test_netsec_server(domain['ip'], chair_server_locks)
+        
         if results is None or len(
                 [res for res in results if res.rtt is not None]) == 0:
             update_domains(domain, util.DomainType.not_responding)
@@ -548,6 +556,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 """
                 nonlocal matches
                 matches = sort_matches(matches, results, locations, distances)
+                # FIXME if matched do not count + 1
                 if dry_run:
                     add_dry_run_matches(len(matches))
                     return None
@@ -661,6 +670,8 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
     if len(results) == 0:
         return matches
 
+    # TODO nur results bestaetigen wenn auch ein match existiert
+    #
     near_matches = {}
     for match in matches:
         location_distances = []
