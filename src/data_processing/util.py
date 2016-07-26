@@ -23,7 +23,6 @@ IPV6_IDENTIFIER = 'ipv6'
 #######################################
 #    Different utility functions      #
 #######################################
-# TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = subprocess.check_output(['wc', '-l', filename])
@@ -63,11 +62,10 @@ def is_ip_hex_encoded_simple(ip_address, domain):
 
 def get_path_filename(path: str) -> str:
     """Extracts the filename from a path string"""
-    # TODO use os.basename
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
 
-    return os.path.basename(filename)
+    return os.path.basename(path)
 
 
 def remove_file_ending(filenamepath: str) -> str:

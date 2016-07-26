@@ -526,7 +526,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return
         # else:
         #     results = test_netsec_server(domain['ip'], chair_server_locks)
-        
+
         if results is None or len(
                 [res for res in results if res.rtt is not None]) == 0:
             update_domains(domain, util.DomainType.not_responding)
