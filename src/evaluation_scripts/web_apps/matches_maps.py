@@ -30,7 +30,7 @@ for index in range(0, args.file_count):
 with open(args.location_filename) as location_file:
     locations = util.json_load(location_file)
 
-high_locs = sorted(list(location_counts.items()), key=lambda x: x[1], reverse=True)[-20:]
+high_locs = sorted(list(location_counts.items()), key=lambda x: x[1], reverse=True)[:20]
 for loc_id, count in high_locs:
     location = locations[str(loc_id)]
     print(location.city_name, location.lat, location.lon, count)
