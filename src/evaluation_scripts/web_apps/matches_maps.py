@@ -51,8 +51,8 @@ def create_matches_map():
     }
     for location_id, location_count in location_counts.items():
         location_dct = default_dict.copy()
-        matches_map.add_circle(center_lat=locations[location_id].lat,
-                               center_lng=locations[location_id].lon,
+        matches_map.add_circle(center_lat=locations[str(location_id)].lat,
+                               center_lng=locations[str(location_id)].lon,
                                radius=location_count*100, **location_dct)
     return matches_map
 
