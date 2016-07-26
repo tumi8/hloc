@@ -41,7 +41,7 @@ def drop_matches_map():
 
 def create_matches_map():
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
-                                       maptype='TERRAIN', style='height:100%;width:100%;margin:0;')
+                                       maptype='TERRAIN', style='height:100%;')
     default_dict = {
         'stroke_color': RED_COLOR,
         'stroke_opacity': 0.8,
