@@ -53,3 +53,6 @@ def create_matches_map():
         matches_map.add_circle(center_lat=locations[location_id].lat, center_lng=locations[location_id].lon,
                        radius=location_count*100, **location_dct)
     return matches_map
+
+if __name__ == "__main__":
+    application.run()
