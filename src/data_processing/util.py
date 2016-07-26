@@ -70,7 +70,8 @@ def get_path_filename(path: str) -> str:
 
 def remove_file_ending(filenamepath: str) -> str:
     """Removes the fileending of the paths file"""
-    return os.path.dirname(filenamepath) + '/' + '.'.join(get_path_filename(filenamepath).split('.')[:-1])
+    return os.path.dirname(filenamepath) + '/' + \
+        '.'.join(get_path_filename(filenamepath).split('.')[:-1])
 
 
 def setup_logging(filename: str):
@@ -562,6 +563,14 @@ class Domain(JSONBase):
         domain_parts.pop()
         domain_parts[-1] = main_domain
         return domain_parts[::-1]
+
+    @property
+    def all_matches(self) -> [util.DomainLabelMatch]:
+        """Returns all matches of the domain"""
+        matches = []
+        for label in self.domain_labels:
+            matches.extend(label.matches)
+        return matches
 
     @property
     def matches_count(self) -> int:
