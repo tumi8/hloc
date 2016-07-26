@@ -27,10 +27,17 @@ for index in range(0, args.file_count):
                 for match in domain.all_matches:
                     location_counts[match.location_id] += 1
 
-application = flask.Flask(__name__)
-flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 with open(args.location_filename) as location_file:
     locations = util.json_load(location_file)
+
+high_locs = sorted(list(location_counts.items()), key=lambda x: x[1], reverse=True)[-20:]
+for loc_id, count in high_locs:
+    location = locations[loc_id]
+    print(location.city_name, location.lat, location.lon, count)
+
+
+application = flask.Flask(__name__)
+flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
 
 @application.route('/matches/drop')
