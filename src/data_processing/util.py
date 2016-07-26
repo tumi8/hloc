@@ -565,7 +565,7 @@ class Domain(JSONBase):
         return domain_parts[::-1]
 
     @property
-    def all_matches(self) -> [util.DomainLabelMatch]:
+    def all_matches(self) -> [DomainLabelMatch]:
         """Returns all matches of the domain"""
         matches = []
         for label in self.domain_labels:
