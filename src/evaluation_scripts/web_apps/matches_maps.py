@@ -42,7 +42,7 @@ for loc_id, count in high_locs:
 
 high_codes = heapq.nlargest(20, list(codes.items()), key=lambda x: x[1])
 print('most matched location codes')
-for code, code_count:
+for code, code_count in high_codes:
     print(code, code_count)
 
 if not args.analyze:
