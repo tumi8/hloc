@@ -700,6 +700,8 @@ class DomainLabelMatch(JSONBase):
         obj = DomainLabelMatch(dct[DomainLabelMatch.PropertyKey.location_id],
                                LocationCodeType(dct[DomainLabelMatch.PropertyKey.code_type]))
         obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
+        if DomainLabelMatch.PropertyKey.code in dct:
+            obj.code = dct[DomainLabelMatch.PropertyKey.code]
         return obj
 
 
