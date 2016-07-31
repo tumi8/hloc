@@ -3,6 +3,7 @@ import flask_googlemaps
 import argparse
 import src.data_processing.util as util
 import collections
+import heapq
 
 
 RED_COLOR = '#FF0000'
@@ -16,9 +17,11 @@ parser.add_argument('-f', '--file-count', type=int, default=8,
 parser.add_argument('-loc', '--location-file-name', required=True, type=str,
                     dest='location_filename', help='The path to the location file.'
                     ' The output file from the codes_parser')
+parser.add_argument('-a', action='store_true', dest='analyze')
 
 args = parser.parse_args()
 location_counts = collections.defaultdict(int)
+codes = collections.defaultdict(int)
 for index in range(0, args.file_count):
     with open(args.filename_proto.format(index)) as matches_file:
         for line in matches_file:
@@ -26,27 +29,34 @@ for index in range(0, args.file_count):
             for domain in domains:
                 for match in domain.all_matches:
                     location_counts[match.location_id] += 1
+                    codes[match.code] += 1
 
 with open(args.location_filename) as location_file:
     locations = util.json_load(location_file)
 
-high_locs = sorted(list(location_counts.items()), key=lambda x: x[1], reverse=True)[:20]
+high_locs = heapq.nlargest(20, list(location_counts.items()), key=lambda x: x[1])
+print('most matched locations')
 for loc_id, count in high_locs:
     location = locations[str(loc_id)]
     print(location.city_name, location.lat, location.lon, count)
 
+high_codes = heapq.nlargest(20, list(codes.items()), key=lambda x: x[1])
+print('most matched location codes')
+for code, code_count:
+    print(code, code_count)
 
-application = flask.Flask(__name__)
-flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
+if not args.analyze:
+    application = flask.Flask(__name__)
+    flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
 
-@application.route('/matches/drop')
-def drop_matches_map():
-    matches_map = create_matches_map()
-    return flask.render_template('matches_maps.html', matches_map=matches_map)
+    @application.route('/matches/drop')
+    def drop_matches_map():
+        matches_map = create_matches_map_with_marker()
+        return flask.render_template('matches_maps.html', matches_map=matches_map)
 
 
-def create_matches_map():
+def create_matches_map_with_radius():
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
                                        maptype='TERRAIN', style='height:100%;')
     default_dict = {
@@ -62,6 +72,17 @@ def create_matches_map():
                                center_lng=locations[str(location_id)].lon,
                                radius=location_count*100, **location_dct)
     return matches_map
+
+
+def create_matches_map_with_marker():
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN', style='height:100%;')
+    for location_id, location_count in location_counts.items():
+        location = locations[str(location_id)]
+        for _ in range(0, location_count):
+            matches_map.add_marker(lat=location.lat, lng=location.lon)
+    return matches_map
+
 
 if __name__ == "__main__":
     application.run()
