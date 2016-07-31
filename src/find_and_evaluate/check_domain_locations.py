@@ -17,7 +17,6 @@ import ripe.atlas.cousteau as ripe_atlas
 import threading
 from math import ceil
 
-
 import src.data_processing.util as util
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
@@ -168,7 +167,7 @@ def main():
             logging.critical('No zmap results file! Aborting!')
             return 1
 
-        distances = __init_coords_distances(zmap_locations, locations)
+        distances = init_coords_distances(zmap_locations, locations)
 
     logging.info('finished ripe after {}'.format((time.time() - start_time)))
 
@@ -228,8 +227,8 @@ def main():
     return 0
 
 
-def __init_coords_distances(zmap_locations: [str, util.GPSLocation],
-                            code_locations: [str, util.Location]):
+def init_coords_distances(zmap_locations: [str, util.GPSLocation],
+                          code_locations: [str, util.Location]):
     """computes all distances to all locations before the execution starts"""
     distances = {}
     for zmap_id in zmap_locations.keys():
@@ -380,24 +379,49 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
     dry_run_count = 0
     dry_run_count_lock = threading.Lock()
+    dry_run_matches = []
+    dry_run_veri_lock = threading.Lock()
+    dry_run_verifications = 0
+
+    count_matches = 0
+
+    file_ending = 'dryrun.matches'
 
     if not dry_run:
         del dry_run_count
         del dry_run_count_lock
+        del dry_run_matches
+        del dry_run_verifications
+        del count_matches
+        file_ending = 'checked'
 
-    with open(util.remove_file_ending(filename_proto).format(pid) + '.checked',
-              'w') as domain_output_file:
+    with open(util.remove_file_ending(filename_proto).format(pid) + '.' + file_ending,
+              'w') as output_file:
 
         def update_count_for_type(ctype: util.LocationCodeType):
             """acquires lock and increments in count the type property"""
             with count_lock:
                 correct_type_count[ctype.name] += 1
 
-        def add_dry_run_matches(count: int):
+        def increment_dry_run_verifications():
+            with dry_run_veri_lock:
+                nonlocal dry_run_verifications
+                dry_run_verifications += 1
+
+        def add_dry_run_matches(dry_run_rest: [object]):
             """aquires the dry run lock and increments the amount of matches by count"""
             with dry_run_count_lock:
                 nonlocal dry_run_count
-                dry_run_count += count
+                dry_run_matches.extend(dry_run_rest)
+                dry_run_count += len(dry_run_rest)
+                if len(dry_run_matches) >= 10**3:
+                    dump_dry_run_matches()
+
+        def dump_dry_run_matches():
+            """Write all domains in the buffer to the file and empty the lists"""
+            util.json_dump(dry_run_matches, output_file)
+            output_file.write('\n')
+            dry_run_matches.clear()
 
         def dump_domain_list():
             """Write all domains in the buffer to the file and empty the lists"""
@@ -405,8 +429,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 len(domains[util.DomainType.correct]), len(domains[util.DomainType.not_responding]),
                 len(domains[util.DomainType.no_location]),
                 len(domains[util.DomainType.blacklisted])))
-            util.json_dump(domains, domain_output_file)
-            domain_output_file.write('\n')
+            util.json_dump(domains, output_file)
+            output_file.write('\n')
             domains.clear()
 
         def update_domains(update_domain: util.Domain, dtype: util.DomainType):
@@ -414,6 +438,13 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
             if dtype == util.DomainType.not_responding:
                 nonlocal count_unreachable
                 count_unreachable += 1
+            elif dtype == util.DomainType.correct and dry_run:
+                increment_dry_run_verifications()
+            elif dry_run:
+                nonlocal count_matches
+                count_matches += update_domain.matches_count
+
+
 
             if not dry_run:
                 with domain_lock:
@@ -422,12 +453,11 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                     if (len(domains[util.DomainType.correct]) +
                             len(domains[util.DomainType.not_responding]) +
                             len(domains[util.DomainType.no_location]) +
-                            len(domains[util.DomainType.blacklisted])) >= 10 ** 3:
+                            len(domains[util.DomainType.blacklisted])) >= 10**3:
                         dump_domain_list()
 
         threads = []
         count_entries = 0
-        count_matches = 0
         count_unreachable = 0
 
         try:
@@ -460,14 +490,14 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                             ripe_slow_down_sema,
                                                             ip_version,
                                                             dry_run,
-                                                            add_dry_run_matches))
+                                                            add_dry_run_matches,
+                                                            increment_dry_run_verifications))
                             threads.append(thread)
                             thread.start()
-                            count_matches += domain.matches_count
-                            count_entries += 1
                         else:
                             update_domains(domain, util.DomainType.not_responding)
 
+                        count_entries += 1
                         if count_entries % 10000 == 0 and not dry_run:
                             logging.info('count {} correct_count {}'.format(count_entries,
                                                                             correct_type_count))
@@ -482,10 +512,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
         if dry_run:
             logging.info('{} matches for {} entries after dry run. {} unreachable addresses. '
-                         'Total amount matches: {}'.format(dry_run_count, count_entries,
-                                                           count_unreachable, count_matches))
+                         'Total amount matches: {}. directly verified {}'.format(
+                dry_run_count, (count_entries - count_unreachable - dry_run_verifications),
+                count_unreachable, count_matches, dry_run_verifications))
+            util.json_dump(dry_run_matches, output_file)
         else:
-            util.json_dump(domains, domain_output_file)
+            util.json_dump(domains, output_file)
 
         count_alive = 0
         for thread in threads:
@@ -508,7 +540,8 @@ def check_domain_location_ripe(domain: util.Domain,
                                ripe_slow_down_sema: mp.Semaphore,
                                ip_version: str,
                                dry_run: bool,
-                               add_dry_run_matches: [[int], ]):
+                               add_dry_run_matches: [[int], ],
+                               increment_dry_run_verifications: [[],]):
     """checks if ip is at location"""
     try:
         matched = False
@@ -536,122 +569,115 @@ def check_domain_location_ripe(domain: util.Domain,
         if not dry_run:
             measurements = [mes for mes in get_measurements(domain.ip_for_version(ip_version),
                                                             ripe_slow_down_sema)]
-            logging.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
-                                                            len(measurements)))
+            # logging.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
+            #                                                 len(measurements)))
         else:
             measurements = []
 
-        # TODO change algorithm to choose next match sort by longest match
-        for i, label in enumerate(domain.domain_labels):
-            # skip if tld
-            if i == 0:
-                continue
+        matches = domain.all_matches
 
-            matches = label.matches[:]
+        def get_next_match():
+            """
 
-            def get_next_match():
-                """
-
-                :rtype: DomainLabelMatch
-                """
-                nonlocal matches
-                matches = sort_matches(matches, results, locations, distances)
-                # FIXME if matched do not count + 1
-                if dry_run:
-                    add_dry_run_matches(len(matches))
-                    return None
+            :rtype: DomainLabelMatch
+            """
+            nonlocal matches
+            matches = sort_matches(matches, results, locations, distances)
+            if dry_run:
                 if isinstance(matches, tuple):
-                    result_location, match = matches
-                    update_count_for_type(match.code_type)
-                    match.matching = result_location
-                    domain.location = locations[match.location_id]
                     update_domains(domain, util.DomainType.correct)
                     nonlocal matched
                     matched = True
                     return None
-                ret = None
-                if len(matches) > 0:
-                    ret = matches[0]
-                return ret
+                add_dry_run_matches(matches)
+                return None
+            if isinstance(matches, tuple):
+                result_location, match = matches
+                update_count_for_type(match.code_type)
+                match.matching = result_location
+                domain.location = locations[match.location_id]
+                update_domains(domain, util.DomainType.correct)
+                nonlocal matched
+                matched = True
+                return None
+            ret = None
+            if len(matches) > 0:
+                ret = matches[0]
+            return ret
 
-            next_match = get_next_match()
-            if dry_run:
+        next_match = get_next_match()
+        while next_match is not None:
+            location = locations[next_match.location_id]
+            near_nodes = location.nodes
+
+            if len(near_nodes) == 0:
+                matches.remove(next_match)
+                next_match = get_next_match()
                 continue
-            while next_match is not None:
-                location = locations[next_match.location_id]
-                near_nodes = location.nodes
 
-                if len(near_nodes) == 0:
+            chk_m, node = check_measurements_for_nodes(measurements,
+                                                       location,
+                                                       results,
+                                                       ripe_slow_down_sema)
+
+            if node is not None:
+                node_location_dist = location.gps_distance_equirectangular(
+                    util.GPSLocation(node['latitude'], node['longitude']))
+            if chk_m is None or chk_m == -1:
+                # only if no old measurement exists
+                m_results, near_node = create_and_check_measurement(
+                    domain.ip_for_version(ip_version),
+                    location,
+                    ripe_create_sema,
+                    ripe_slow_down_sema)
+                if near_node is not None:
+                    node_location_dist = location.gps_distance_equirectangular(
+                        util.GPSLocation(near_node['latitude'], near_node['longitude']))
+
+                if m_results is None:
                     matches.remove(next_match)
                     next_match = get_next_match()
                     continue
 
-                chk_m, node = check_measurements_for_nodes(measurements,
-                                                           location,
-                                                           results,
-                                                           ripe_slow_down_sema)
+                result = next(iter(m_results))
 
-                if node is not None:
-                    node_location_dist = location.gps_distance_equirectangular(
-                        util.GPSLocation(node['latitude'], node['longitude']))
-                if chk_m is None or chk_m == -1:
-                    # only if no old measurement exists
-                    m_results, near_node = create_and_check_measurement(
-                        domain.ip_for_version(ip_version),
-                        location,
-                        ripe_create_sema,
-                        ripe_slow_down_sema)
-                    if near_node is not None:
-                        node_location_dist = location.gps_distance_equirectangular(
-                            util.GPSLocation(near_node['latitude'], near_node['longitude']))
+                if result is None:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
 
-                    if m_results is None:
-                        matches.remove(next_match)
-                        next_match = get_next_match()
-                        continue
+                chk_res = get_rtt_from_result(result)
 
-                    result = next(iter(m_results))
-
-                    if result is None:
-                        matches.remove(next_match)
-                        next_match = get_next_match()
-                        continue
-
-                    chk_res = get_rtt_from_result(result)
-
-                    if chk_res is None:
-                        matches.remove(next_match)
-                        next_match = get_next_match()
-                        continue
-                    elif chk_res == -1:
-                        update_domains(domain, util.DomainType.not_responding)
-                        return
-                    elif chk_res < (MAX_RTT + node_location_dist / 100):
-                        update_count_for_type(next_match.code_type)
-                        matched = True
-                        next_match.matching = near_node
-                        domain.location = location
-                        update_domains(domain, util.DomainType.correct)
-                        break
-                    else:
-                        n_res = util.LocationResult(location.id, chk_res, location)
-                        results.append(n_res)
-                elif chk_m < (MAX_RTT + node_location_dist / 100):
+                if chk_res is None:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
+                elif chk_res == -1:
+                    update_domains(domain, util.DomainType.not_responding)
+                    return
+                elif chk_res < (MAX_RTT + node_location_dist / 100):
                     update_count_for_type(next_match.code_type)
                     matched = True
-                    next_match.matching = node
+                    next_match.matching = near_node
                     domain.location = location
                     update_domains(domain, util.DomainType.correct)
                     break
                 else:
-                    n_res = util.LocationResult(location.id, chk_m, location)
+                    n_res = util.LocationResult(location.id, chk_res, location)
                     results.append(n_res)
-
-                matches.remove(next_match)
-                next_match = get_next_match()
-
-            if matched:
+            elif chk_m < (MAX_RTT + node_location_dist / 100):
+                update_count_for_type(next_match.code_type)
+                matched = True
+                next_match.matching = node
+                domain.location = location
+                update_domains(domain, util.DomainType.correct)
                 break
+            else:
+                n_res = util.LocationResult(location.id, chk_m, location)
+                results.append(n_res)
+
+            matches.remove(next_match)
+            next_match = get_next_match()
 
         if not matched:
             update_domains(domain, util.DomainType.no_location)
@@ -670,8 +696,6 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
     if len(results) == 0:
         return matches
 
-    # TODO nur results bestaetigen wenn auch ein match existiert
-    #
     near_matches = {}
     for match in matches:
         location_distances = []
@@ -686,7 +710,8 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
             if distance > (result.rtt * 100):
                 break
 
-            if result.rtt < MAX_RTT + distance / 100:
+            # Only verify location if there is also a match
+            if distance < 100 and result.rtt < MAX_RTT + distance / 100:
                 return result.location, match
 
             location_distances.append((result, distance))

@@ -568,17 +568,18 @@ class Domain(JSONBase):
     def all_matches(self):
         """Returns all matches of the domain"""
         matches = []
-        for label in self.domain_labels:
-            matches.extend(label.matches)
+        location_ids = set()
+        for label in self.domain_labels[::-1]:
+            for match in label.matches:
+                if match.location_id not in location_ids:
+                    location_ids.add(match.location_id)
+                    matches.append(match)
         return matches
 
     @property
     def matches_count(self) -> int:
         """Counts the amount of matches for this domain"""
-        count = 0
-        for label in self.domain_labels:
-            count += len(label.matches)
-        return count
+        return len(self.all_matches)
 
     def ip_for_version(self, version) -> str:
         """returns the version corresponding ip address"""
