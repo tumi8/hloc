@@ -46,7 +46,8 @@ for code, code_count in high_codes:
     print(code, code_count)
 
 if not args.analyze:
-    application = flask.Flask(__name__)
+    application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
+                                                      'web_apps/static')
     flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
 
@@ -77,7 +78,7 @@ def create_matches_map_with_radius():
 def create_matches_map_with_marker():
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
                                        maptype='TERRAIN', style='height:100%;', cluster=True,
-                                       cluster_imagepath='/images/m')
+                                       cluster_imagepath='/static/images/m')
     for location_id, location_count in location_counts.items():
         location = locations[str(location_id)]
         for _ in range(0, location_count):
