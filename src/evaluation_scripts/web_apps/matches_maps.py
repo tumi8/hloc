@@ -58,7 +58,8 @@ if not args.analyze:
 
 def create_matches_map_with_radius():
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
-                                       maptype='TERRAIN', style='height:100%;')
+                                       maptype='TERRAIN', style='height:100%;', cluster=True,
+                                       cluster_imagepath='images/m')
     default_dict = {
         'stroke_color': RED_COLOR,
         'stroke_opacity': 0.8,
