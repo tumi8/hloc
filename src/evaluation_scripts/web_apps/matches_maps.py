@@ -9,6 +9,8 @@ import sys
 
 
 RED_COLOR = '#FF0000'
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', dest='drop_filename_proto', type=str,
@@ -45,15 +47,13 @@ def main():
         print('### TRIE Statistics ###')
         calc_stats(trie_location_counts, trie_codes, locations, 'trie_codes.stats')
 
-
-
     if not args.analyze:
         application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
                                                           'web_apps/static')
         flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
-        @application.route('/matches/<any(drop,trie):method>/<any(circles,markers):type>')
-        def matches_map(method, type):
+        @application.route('/matches/<any(drop,trie):method>/<any(circles,markers):mark_type>')
+        def matches_map(method, mark_type):
             location_counts = None
             if method == 'drop':
                 location_counts = drop_location_counts
@@ -61,13 +61,13 @@ def main():
                 location_counts = trie_location_counts
 
             if location_counts:
-                if type == 'circles':
-                    matches_map = create_matches_map_with_radius(location_counts, locations)
+                if mark_type == 'circles':
+                    matches_map_obj = create_matches_map_with_radius(location_counts, locations)
                 else:
                     cluster = flask.request.args.get('cluster', None) is not None
-                    matches_map = create_matches_map_with_marker(location_counts, locations,
-                                                                 cluster)
-                return flask.render_template('matches_maps.html', matches_map=matches_map)
+                    matches_map_obj = create_matches_map_with_marker(location_counts, locations,
+                                                                     cluster)
+                return flask.render_template('matches_maps.html', matches_map=matches_map_obj)
 
         application.run()
 
