@@ -128,7 +128,7 @@ def calc_stats(location_counts, codes, locations, output_filename):
     for code, code_count in high_codes:
         print(code, code_count)
 
-    codes_cdf = np.sort(codes.values())[::-1]
+    codes_cdf = np.sort(list(codes.values()))[::-1]
     np.savetxt(output_filename, codes_cdf)
 
 
