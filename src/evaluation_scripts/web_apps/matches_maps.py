@@ -87,11 +87,17 @@ def create_matches_map_with_radius(location_counts, locations):
         'fill_color': RED_COLOR,
         'fill_opacity': 0.35
     }
+    multiplier = 100
+    max_value = max(location_counts.values())
+    if max_value > 500000:
+        multiplier = 1
+    elif max_value > 50000:
+        multiplier = 10
     for location_id, location_count in location_counts.items():
         location_dct = default_dict.copy()
         matches_map.add_circle(center_lat=locations[str(location_id)].lat,
                                center_lng=locations[str(location_id)].lon,
-                               radius=location_count*100, **location_dct)
+                               radius=location_count*multiplier, **location_dct)
     return matches_map
 
 
