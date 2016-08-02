@@ -103,15 +103,18 @@ def create_matches_map_with_marker(location_counts, locations, cluster: bool):
 
 def get_codes_and_location_counts(filename_proto, file_count):
     location_counts = collections.defaultdict(int)
-    codes = collections.defaultdict(int)
+    codes = {}
     for index in range(0, file_count):
         with open(filename_proto.format(index)) as matches_file:
             for line in matches_file:
                 domains = util.json_loads(line)
                 for domain in domains:
                     for match in domain.all_matches:
-                        location_counts[match.location_id] += 1
-                        codes[match.code] += 1
+                        location_counts[str(match.location_id)] += 1
+                        if match.code not in codes:
+                            codes[match.code] = collections.defaultdict(int)
+                        codes[match.code]['count'] += 1
+                        codes[match.code][str(match.location_id)] += 1
 
     return location_counts, codes
 
@@ -123,12 +126,18 @@ def calc_stats(location_counts, codes, locations, output_filename):
         location = locations[str(loc_id)]
         print(location.city_name, location.lat, location.lon, count)
 
-    high_codes = heapq.nlargest(20, list(codes.items()), key=lambda x: x[1])
+    high_codes = heapq.nlargest(20, list(codes.items()), key=lambda x: x[1]['count'])
     print('most matched location codes')
-    for code, code_count in high_codes:
-        print(code, code_count)
+    for code, code_eval in high_codes:
+        location_names = ''
+        for key, key_count in sorted(list(code_eval.items()), key=lambda x: x[1], reverse=True):
+            if key == 'count':
+                continue
+            location_names += 'id {}, name {}, count {}\n'.format(
+                key, locations[str(key)], key_count)
+        print(code, code_eval, '\n', location_names)
 
-    codes_cdf = np.sort(list(codes.values()))[::-1]
+    codes_cdf = np.sort([code_eval['count'] for code_eval in codes.values()])[::-1]
     np.savetxt(output_filename, codes_cdf)
 
 
