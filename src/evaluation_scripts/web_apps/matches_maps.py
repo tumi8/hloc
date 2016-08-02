@@ -4,16 +4,22 @@ import argparse
 import src.data_processing.util as util
 import collections
 import heapq
+import numpy as np
 
 
 RED_COLOR = '#FF0000'
 
 parser = argparse.ArgumentParser()
-parser.add_argument('filename_proto', type=str,
+parser.add_argument('drop_filename_proto', type=str,
                     help=r'The path to the files with {} instead of the filenumber'
                          ' in the name so it is possible to format the string')
-parser.add_argument('-f', '--file-count', type=int, default=8,
-                    dest='file_count', help='number of files from preprocessing')
+parser.add_argument('-t', dest='trie_filename_proto', type=str,
+                    help=r'The path to the files with {} instead of the filenumber'
+                         ' in the name so it is possible to format the string')
+parser.add_argument('-f', '--drop-file-count', type=int, default=8,
+                    dest='drop_file_count', help='number of files from preprocessing')
+parser.add_argument('-tf', '--trie-file-count', type=int, default=8,
+                    dest='trie_file_count', help='number of files from preprocessing')
 parser.add_argument('-loc', '--location-file-name', required=True, type=str,
                     dest='location_filename', help='The path to the location file.'
                     ' The output file from the codes_parser')
@@ -45,15 +51,21 @@ print('most matched location codes')
 for code, code_count in high_codes:
     print(code, code_count)
 
+
+
 if not args.analyze:
     application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
                                                       'web_apps/static')
     flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
 
-    @application.route('/matches/drop')
-    def drop_matches_map():
-        matches_map = create_matches_map_with_marker()
+    @application.route('/matches/<any(drop,trie):method>/<any(circles,markers):type>')
+    def drop_matches_map(type):
+        if type == 'circles':
+            matches_map = create_matches_map_with_radius()
+        else:
+            cluster = flask.request.args.get('cluster', None) is not None
+            matches_map = create_matches_map_with_marker(cluster)
         return flask.render_template('matches_maps.html', matches_map=matches_map)
 
 
@@ -75,9 +87,9 @@ def create_matches_map_with_radius():
     return matches_map
 
 
-def create_matches_map_with_marker():
+def create_matches_map_with_marker(cluster: bool):
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
-                                       maptype='TERRAIN', style='height:100%;', cluster=True,
+                                       maptype='TERRAIN', style='height:100%;', cluster=cluster,
                                        cluster_imagepath='/static/images/m')
     for location_id, location_count in location_counts.items():
         location = locations[str(location_id)]
