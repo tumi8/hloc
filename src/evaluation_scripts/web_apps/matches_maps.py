@@ -135,7 +135,7 @@ def calc_stats(location_counts, codes, locations, output_filename):
                 continue
             location_names += 'id {}, name {}, count {}\n'.format(
                 key, locations[str(key)].city_name, key_count)
-        print(code, code_eval['count'], '\n', location_names)
+        print(code, code_eval['count'], '\n', location_names.strip())
 
     codes_cdf = np.sort([code_eval['count'] for code_eval in codes.values()])[::-1]
     np.savetxt(output_filename, codes_cdf)
