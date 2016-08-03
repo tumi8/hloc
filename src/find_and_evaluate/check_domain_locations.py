@@ -352,7 +352,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
             continue
 
         for match in label.matches:
-            if locations[match.location_id].is_in_radius(
+            if locations[str(match.location_id)].is_in_radius(
                     util.GPSLocation(geoip_location.location.latitude,
                                      geoip_location.location.longitude)):
                 correct_count[match['type']] += 1
@@ -595,7 +595,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 result_location, match = matches
                 update_count_for_type(match.code_type)
                 match.matching = result_location
-                domain.location = locations[match.location_id]
+                domain.location = locations[str(match.location_id)]
                 update_domains(domain, util.DomainType.correct)
                 nonlocal matched
                 matched = True
@@ -607,7 +607,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
         next_match = get_next_match()
         while next_match is not None:
-            location = locations[next_match.location_id]
+            location = locations[str(next_match.location_id)]
             near_nodes = location.nodes
 
             if len(near_nodes) == 0:
@@ -704,7 +704,7 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
                 distance = distances[result.location_id][str(match.location_id)]
             else:
                 distance = \
-                    locations[result.location_id].gps_distance_equirectangular(
+                    locations[str(result.location_id)].gps_distance_equirectangular(
                         locations[str(match.location_id)])
 
             if distance > (result.rtt * 100):
