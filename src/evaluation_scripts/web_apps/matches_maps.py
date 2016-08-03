@@ -92,11 +92,12 @@ def main():
                     location_counts = trie_location_counts
 
             if location_counts:
+                limit = flask.request.args.get('limit', 0)
                 if mark_type == 'circles':
-                    matches_map_obj = create_matches_map_with_radius(location_counts, locations)
+                    matches_map_obj = create_matches_map_with_radius(location_counts, locations,
+                                                                     limit)
                 else:
                     cluster = flask.request.args.get('cluster', None) is not None
-                    limit = flask.request.args.get('limit', 0)
                     matches_map_obj = create_matches_map_with_marker(location_counts, locations,
                                                                      cluster, limit)
                 return flask.render_template('matches_maps.html', matches_map=matches_map_obj)
@@ -104,7 +105,7 @@ def main():
         application.run()
 
 
-def create_matches_map_with_radius(location_counts, locations):
+def create_matches_map_with_radius(location_counts, locations, limit):
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
                                        maptype='TERRAIN', style='height:100%;')
     default_dict = {
@@ -126,11 +127,10 @@ def create_matches_map_with_radius(location_counts, locations):
         matches_map.add_circle(center_lat=location.lat,
                                center_lng=location.lon,
                                radius=location_count*multiplier, **location_dct)
-        if location_count*multiplier > 10000:
+        if location_count*multiplier > limit*1000:
             matches_map.add_marker(lat=location.lat,
                                    lng=location.lon,
-                                   infobox='{}<br>{} {}'.format(location.city_name, location.lat,
-                                                                location.lon))
+                                   infobox=get_location_html_infobox_text(location, location_count))
     return matches_map
 
 
@@ -143,11 +143,14 @@ def create_matches_map_with_marker(location_counts, locations, cluster: bool, li
         for _ in range(0, location_count):
             if location_count > limit:
                 matches_map.add_marker(lat=location.lat, lng=location.lon,
-                                       infobox='{}<br>{} {}'.format(location.city_name,
-                                                                    location.lat,
-                                                                    location.lon))
+                                       infobox=get_location_html_infobox_text(location,
+                                                                              location_count))
     return matches_map
 
+
+def get_location_html_infobox_text(location, count):
+    return '<strong>{}:</strong> {}<br>{} {}'.format(location.city_name, count,
+                                                     location.lat, location.lon)
 
 def get_codes_and_location_counts(filename_proto, file_count):
     location_counts = collections.defaultdict(int)
