@@ -50,26 +50,31 @@ def main():
     if args.drop_filename_proto:
         drop_location_counts, drop_codes = get_codes_and_location_counts(
             args.drop_filename_proto, args.drop_file_count)
-        logging.info('### DROP Statistics ###')
-        calc_stats(drop_location_counts, drop_codes, locations, 'drop_codes.stats')
+        if args.analyze:
+            logging.info('### DROP Statistics ###')
+            calc_stats(drop_location_counts, drop_codes, locations, 'drop_codes.stats')
 
     if args.drop_checked_filename_proto:
         drop_checked_location_counts, drop_codes = get_data_from_checked(
             args.drop_checked_filename_proto, args.drop_file_count)
-        logging.info('### DROP Checked Statistics ###')
-        calc_stats(drop_checked_location_counts, drop_codes, locations, 'drop_checked_codes.stats')
+        if args.analyze:
+            logging.info('### DROP Checked Statistics ###')
+            calc_stats(drop_checked_location_counts, drop_codes, locations,
+                       'drop_checked_codes.stats')
 
     if args.trie_filename_proto:
         trie_location_counts, trie_codes = get_codes_and_location_counts(
             args.trie_filename_proto, args.trie_file_count)
-        logging.info('### TRIE Statistics ###')
-        calc_stats(trie_location_counts, trie_codes, locations, 'trie_codes.stats')
+        if args.analyze:
+            logging.info('### TRIE Statistics ###')
+            calc_stats(trie_location_counts, trie_codes, locations, 'trie_codes.stats')
 
     if args.trie_checked_filename_proto:
         trie_checked_location_counts, trie_codes = get_data_from_checked(
             args.trie_checked_filename_proto, args.trie_file_count)
-        logging.info('### TRIE Checked Statistics ###')
-        calc_stats(trie_checked_location_counts, trie_codes, locations, 'drop_checked_codes.stats')
+        if args.analyze:
+            logging.info('### TRIE Checked Statistics ###')
+            calc_stats(trie_checked_location_counts, trie_codes, locations, 'drop_checked_codes.stats')
 
     if not args.analyze:
         application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
@@ -92,7 +97,7 @@ def main():
                     location_counts = trie_location_counts
 
             if location_counts:
-                limit = flask.request.args.get('limit', 0)
+                limit = int(flask.request.args.get('limit', 0))
                 if mark_type == 'circles':
                     matches_map_obj = create_matches_map_with_radius(location_counts, locations,
                                                                      limit)
