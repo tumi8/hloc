@@ -96,8 +96,9 @@ def main():
                     matches_map_obj = create_matches_map_with_radius(location_counts, locations)
                 else:
                     cluster = flask.request.args.get('cluster', None) is not None
+                    limit = flask.request.args.get('limit', 0)
                     matches_map_obj = create_matches_map_with_marker(location_counts, locations,
-                                                                     cluster)
+                                                                     cluster, limit)
                 return flask.render_template('matches_maps.html', matches_map=matches_map_obj)
 
         application.run()
@@ -133,14 +134,18 @@ def create_matches_map_with_radius(location_counts, locations):
     return matches_map
 
 
-def create_matches_map_with_marker(location_counts, locations, cluster: bool):
+def create_matches_map_with_marker(location_counts, locations, cluster: bool, limit: int):
     matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
                                        maptype='TERRAIN', style='height:100%;', cluster=cluster,
                                        cluster_imagepath='/static/images/m')
     for location_id, location_count in location_counts.items():
         location = locations[str(location_id)]
         for _ in range(0, location_count):
-            matches_map.add_marker(lat=location.lat, lng=location.lon)
+            if location_count > limit:
+                matches_map.add_marker(lat=location.lat, lng=location.lon,
+                                       infobox='{}<br>{} {}'.format(location.city_name,
+                                                                    location.lat,
+                                                                    location.lon))
     return matches_map
 
 
