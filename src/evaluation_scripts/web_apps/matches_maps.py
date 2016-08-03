@@ -17,7 +17,13 @@ def main():
     parser.add_argument('-d', dest='drop_filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
                              ' in the name so it is possible to format the string')
+    parser.add_argument('-dc', dest='drop_checked_filename_proto', type=str,
+                        help=r'The path to the files with {} instead of the filenumber'
+                             ' in the name so it is possible to format the string')
     parser.add_argument('-t', dest='trie_filename_proto', type=str,
+                        help=r'The path to the files with {} instead of the filenumber'
+                             ' in the name so it is possible to format the string')
+    parser.add_argument('-tc', dest='trie_checked_filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
                              ' in the name so it is possible to format the string')
     parser.add_argument('-df', '--drop-file-count', type=int, default=8,
@@ -28,11 +34,10 @@ def main():
                         dest='location_filename', help='The path to the location file.'
                         ' The output file from the codes_parser')
     parser.add_argument('-a', action='store_true', dest='analyze')
-    parser.add_argument('-c', action='store_true', dest='checked',
-                        help='the input files are the output form checking dry run')
 
     args = parser.parse_args()
-    if not args.drop_filename_proto and not args.trie_filename_proto:
+    if not args.drop_filename_proto and not args.trie_filename_proto and not \
+            args.drop_checked_filename_proto and not args.trie_checked_filename_proto:
         logging.critical('Neither drop filename proto nor trie filename proto is defined!')
         return 1
 
@@ -40,30 +45,51 @@ def main():
 
     with open(args.location_filename) as location_file:
         locations = util.json_load(location_file)
-    drop_location_counts, trie_location_counts = [None] * 2
+    drop_location_counts, drop_checked_location_counts = [None] * 2
+    trie_location_counts, trie_checked_location_counts = [None] * 2
     if args.drop_filename_proto:
         drop_location_counts, drop_codes = get_codes_and_location_counts(
-            args.drop_filename_proto, args.drop_file_count, args.checked)
+            args.drop_filename_proto, args.drop_file_count)
         logging.info('### DROP Statistics ###')
         calc_stats(drop_location_counts, drop_codes, locations, 'drop_codes.stats')
+
+    if args.drop_checked_filename_proto:
+        drop_checked_location_counts, drop_codes = get_data_from_checked(
+            args.drop_checked_filename_proto, args.drop_file_count)
+        logging.info('### DROP Checked Statistics ###')
+        calc_stats(drop_checked_location_counts, drop_codes, locations, 'drop_checked_codes.stats')
+
     if args.trie_filename_proto:
         trie_location_counts, trie_codes = get_codes_and_location_counts(
-            args.trie_filename_proto, args.trie_file_count, args.checked)
+            args.trie_filename_proto, args.trie_file_count)
         logging.info('### TRIE Statistics ###')
         calc_stats(trie_location_counts, trie_codes, locations, 'trie_codes.stats')
+
+    if args.trie_checked_filename_proto:
+        trie_checked_location_counts, trie_codes = get_data_from_checked(
+            args.trie_checked_filename_proto, args.trie_file_count)
+        logging.info('### TRIE Checked Statistics ###')
+        calc_stats(trie_checked_location_counts, trie_codes, locations, 'drop_checked_codes.stats')
 
     if not args.analyze:
         application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
                                                           'web_apps/static')
         flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
 
-        @application.route('/matches/<any(drop,trie):method>/<any(circles,markers):mark_type>')
+        @application.route('/<any("drop","trie"):method>/<any(circles,markers):mark_type>')
         def matches_map(method, mark_type):
             location_counts = None
+            checked = flask.request.args.get('checked', None) is not None
             if method == 'drop':
-                location_counts = drop_location_counts
+                if checked:
+                    location_counts = drop_checked_location_counts
+                else:
+                    location_counts = drop_location_counts
             elif method == 'trie':
-                location_counts = trie_location_counts
+                if checked:
+                    location_counts = trie_checked_location_counts
+                else:
+                    location_counts = trie_location_counts
 
             if location_counts:
                 if mark_type == 'circles':
@@ -117,11 +143,9 @@ def create_matches_map_with_marker(location_counts, locations, cluster: bool):
     return matches_map
 
 
-def get_codes_and_location_counts(filename_proto, file_count, checked):
+def get_codes_and_location_counts(filename_proto, file_count):
     location_counts = collections.defaultdict(int)
     codes = {}
-    if checked:
-        return get_data_from_checked(filename_proto, file_count)
     for index in range(0, file_count):
         with open(filename_proto.format(index)) as matches_file:
             for line in matches_file:
