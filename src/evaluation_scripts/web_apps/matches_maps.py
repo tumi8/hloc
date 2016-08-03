@@ -125,10 +125,11 @@ def create_matches_map_with_radius(location_counts, locations):
         matches_map.add_circle(center_lat=location.lat,
                                center_lng=location.lon,
                                radius=location_count*multiplier, **location_dct)
-        matches_map.add_marker(lat=location.lat,
-                               lng=location.lon, infobox='{}\n{} {}'.format(location.city_name,
-                                                                            location.lat,
-                                                                            location.lon))
+        if location_count*multiplier > 10000:
+            matches_map.add_marker(lat=location.lat,
+                                   lng=location.lon,
+                                   infobox='{}<br>{} {}'.format(location.city_name, location.lat,
+                                                                location.lon))
     return matches_map
 
 
