@@ -359,7 +359,9 @@ class Location(GPSLocation):
         clli = '7'
         alternate_names = '8'
         airport_info = '9'
-        locode = '10'
+        locode = 'a'
+        nodes = 'b'
+        available_nodes = 'c'
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
                  population=0):
@@ -405,6 +407,12 @@ class Location(GPSLocation):
         if self.locode:
             ret_dict[self.PropertyKey.locode] = self.locode.dict_representation()
 
+        if self.available_nodes:
+            ret_dict[self.PropertyKey.available_nodes] = self.available_nodes
+
+        if self.nodes:
+            ret_dict[self.PropertyKey.nodes] = self.nodes
+
         return ret_dict
 
     def code_id_type_tuples(self):
@@ -448,6 +456,10 @@ class Location(GPSLocation):
             obj.airport_info = dct[Location.PropertyKey.airport_info]
         if Location.PropertyKey.locode in dct:
             obj.locode = dct[Location.PropertyKey.locode]
+        if Location.PropertyKey.available_nodes in dct:
+            obj.available_nodes = dct[Location.PropertyKey.available_nodes]
+        if Location.PropertyKey.nodes in dct:
+            obj.nodes = dct[Location.PropertyKey.nodes]
         return obj
 
 
