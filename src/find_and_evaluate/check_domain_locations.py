@@ -1171,20 +1171,41 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
             break
         params = {
             'centre': '{0},{1}'.format(location.lat, location.lon),
-            'distance': str(distance)
+            'distance': str(distance),
+            'limit': '500'
             }
 
         # TODO use wrapper class
-        nodes = ripe_atlas.ProbeRequest(**params)
 
-        if nodes.total_count > 0:
-            results = [node for node in nodes]
-            available_probes = [node for node in results
-                                if (node.status_name == 'Connected' and
-                                    'system-ipv4-works' in node.tags and
-                                    'system-ipv4-capable' in node.tags)]
-            if len(available_probes) > 0:
-                return results, available_probes
+        nodes = []
+        available_probes = []
+        next_is_available = True
+
+        while next_is_available:
+            params['offset'] = len(nodes)
+            response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
+                                                     None, params=params)
+            if response_dict is not None and response_dict['meta']['total_count'] > 0:
+                next_is_available = response_dict['meta']['next'] is not None
+                nodes.extend(response_dict['objects'])
+                available_probes = [node for node in response_dict['objects']
+                                    if (node['status_name'] == 'Connected' and
+                                        'system-ipv4-works' in node['tags'] and
+                                        'system-ipv4-capable' in node['tags'])]
+            else:
+                break
+        if len(nodes) > 0:
+            return nodes, available_probes
+        # nodes = ripe_atlas.ProbeRequest(**params)
+        #
+        # if nodes.total_count > 0:
+        #     results = [node for node in nodes]
+        #     available_probes = [node for node in results
+        #                         if (node.status_name == 'Connected' and
+        #                             'system-ipv4-works' in node.tags and
+        #                             'system-ipv4-capable' in node.tags)]
+        #     if len(available_probes) > 0:
+        #         return results, available_probes
     return [], []
 
 
