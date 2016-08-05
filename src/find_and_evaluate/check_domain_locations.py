@@ -130,21 +130,37 @@ def main():
     zmap_results = None
     zmap_locations = None
     distances = None
-
+    finish_event = None
     if args.verifingMethod == 'ripe':
         ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
         ripe_create_sema = mp.Semaphore(100)
+        finish_event = threading.Event()
         generator_thread = threading.Thread(target=generate_ripe_request_tokens,
-                                            args=(ripe_slow_down_sema, args.ripeRequestLimit))
-        generator_thread.deamon = True
+                                            args=(ripe_slow_down_sema, args.ripeRequestLimit,
+                                                  finish_event))
 
         if not args.dry_run:
             if next(iter(locations.values())).nodes is None:
                 logging.info('Getting the nodes from RIPE Atlas')
+                probe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
+                probes_finish_event = threading.Event()
+                probes_generator_thread = threading.Thread(target=generate_ripe_request_tokens,
+                                                           args=(probe_slow_down_sema,
+                                                                 args.ripeRequestLimit,
+                                                                 probes_finish_event))
+
+                threads = []
                 for location in locations.values():
-                    nodes, available_nodes = get_nearest_ripe_nodes(location, 1000)
-                    location.nodes = nodes
-                    location.available_nodes = available_nodes
+                    thread = threading.Thread(target=get_nearest_ripe_nodes,
+                                              args=(location, 1000, probe_slow_down_sema))
+                    thread.start()
+                    threads.append(thread)
+
+                for thread in threads:
+                    thread.join()
+                probes_finish_event.set()
+                probes_generator_thread.join()
+
                 with open(args.locationFile, 'w') as locationFile:
                     util.json_dump(locations, locationFile)
 
@@ -221,6 +237,8 @@ def main():
         except KeyboardInterrupt:
             pass
 
+    finish_event.set()
+    generator_thread.join()
     logging.info('{} processes alive'.format(alive))
     end_time = time.time()
     logging.info('running time: {}'.format((end_time - start_time)))
@@ -241,11 +259,11 @@ def init_coords_distances(zmap_locations: [str, util.GPSLocation],
     return distances
 
 
-def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int):
+def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: threading.Event):
     """
     Generates RIPE_REQUESTS_PER_SECOND tokens on the Semaphore
     """
-    while True:
+    while not finish_event.is_set():
         time.sleep(2 / limit)
         try:
             sema.release()
@@ -581,12 +599,11 @@ def check_domain_location_ripe(domain: util.Domain,
 
             :rtype: DomainLabelMatch
             """
-            nonlocal matches
+            nonlocal matches, matched
             matches = sort_matches(matches, results, locations, distances)
             if dry_run:
                 if isinstance(matches, tuple):
                     update_domains(domain, util.DomainType.correct)
-                    nonlocal matched
                     matched = True
                     return None
                 add_dry_run_matches(matches)
@@ -597,7 +614,6 @@ def check_domain_location_ripe(domain: util.Domain,
                 match.matching = result_location
                 domain.location = locations[str(match.location_id)]
                 update_domains(domain, util.DomainType.correct)
-                nonlocal matched
                 matched = True
                 return None
             ret = None
@@ -1151,15 +1167,15 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
     return response.json()
 
 
-def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
-        ([[str, object]], [[str, object]]):
+def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
+                           slow_down_sema: mp.Semaphore=None) -> ([[str, object]], [[str, object]]):
     """
     Searches for ripe nodes near the location
     :rtype: (list, list)
     """
     if max_distance % 50 != 0:
         logging.critical('max_distance must be a multiple of 50')
-        return None, None
+        return
 
     distances = [25, 50, 100, 250, 500, 1000]
     if max_distance not in distances:
@@ -1184,7 +1200,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
         while next_is_available:
             params['offset'] = len(nodes)
             response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
-                                                     None, params=params)
+                                                     slow_down_sema, params=params)
             if response_dict is not None and response_dict['meta']['total_count'] > 0:
                 next_is_available = response_dict['meta']['next'] is not None
                 nodes.extend(response_dict['objects'])
@@ -1195,7 +1211,9 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
             else:
                 break
         if len(nodes) > 0:
-            return nodes, available_probes
+            location.nodes = nodes
+            location.available_nodes = available_probes
+            return
         # nodes = ripe_atlas.ProbeRequest(**params)
         #
         # if nodes.total_count > 0:
@@ -1206,7 +1224,9 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int) -> \
         #                             'system-ipv4-capable' in node.tags)]
         #     if len(available_probes) > 0:
         #         return results, available_probes
-    return [], []
+    location.nodes = []
+    location.available_nodes = []
+    return
 
 
 if __name__ == '__main__':
