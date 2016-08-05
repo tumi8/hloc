@@ -148,11 +148,18 @@ def main():
                                                            args=(probe_slow_down_sema,
                                                                  args.ripeRequestLimit,
                                                                  probes_finish_event))
-
+                thread_limit = 50
+                thread_sema = threading.Semaphore(thread_limit)
                 threads = []
                 for location in locations.values():
+                    if len(threads) > thread_limit:
+                        for thread in threads:
+                            if not thread.is_alive():
+                                thread.join()
+                    thread_sema.acquire()
                     thread = threading.Thread(target=get_nearest_ripe_nodes,
-                                              args=(location, 1000, probe_slow_down_sema))
+                                              args=(location, 1000, probe_slow_down_sema,
+                                                    thread_sema))
                     thread.start()
                     threads.append(thread)
 
@@ -1168,13 +1175,16 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
 
 
 def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
-                           slow_down_sema: mp.Semaphore=None) -> ([[str, object]], [[str, object]]):
+                           slow_down_sema: mp.Semaphore=None,
+                           thread_sema: threading.Semaphore=None) -> \
+        ([[str, object]], [[str, object]]):
     """
     Searches for ripe nodes near the location
     :rtype: (list, list)
     """
     if max_distance % 50 != 0:
         logging.critical('max_distance must be a multiple of 50')
+        thread_sema.release()
         return
 
     distances = [25, 50, 100, 250, 500, 1000]
@@ -1213,6 +1223,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
         if len(nodes) > 0:
             location.nodes = nodes
             location.available_nodes = available_probes
+            thread_sema.release()
             return
         # nodes = ripe_atlas.ProbeRequest(**params)
         #
@@ -1226,6 +1237,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
         #         return results, available_probes
     location.nodes = []
     location.available_nodes = []
+    thread_sema.release()
     return
 
 
