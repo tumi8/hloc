@@ -1002,6 +1002,7 @@ def create_ripe_measurement(ip_addr: str, location: util.Location, near_node: [s
             response.raise_for_status()
 
         measurement_ids = response.json()['measurements']
+        response.close()
         return measurement_ids[0]
 
     if USE_WRAPPER:
@@ -1166,12 +1167,22 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
         except requests.exceptions.ReadTimeout:
             continue
 
-    if response is None or response.status_code >= 500:
+    if response is None:
         return None
+
+    if response.status_code >= 500:
+        response.close()
+        return None
+
     if response.status_code // 100 != 2:
         response.raise_for_status()
+        response.close()
+        return None
 
-    return response.json()
+    json_dct = response.json()
+    response.close()
+
+    return json_dct
 
 
 def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
