@@ -30,14 +30,8 @@ MEASUREMENT_URL = ATLAS_URL + API_MEASUREMENT_POINT + '/'
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
 DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
-# MUNICH_ID = 'munich'
-# DALLAS_ID = 'dallas'
-# SINGAPORE_ID = 'singapore'
-# COORDS = {
-#     MUNICH_ID: {'gps_coords': util.GPSLocation(lat=48.137357, lon=11.575288)},
-#     DALLAS_ID: {'gps_coords': util.GPSLocation(lat=32.776664, lon=-96.796988)},
-#     SINGAPORE_ID: {'gps_coords': util.GPSLocation(lat=1.352083, lon=103.874949)}
-# }
+
+MAX_THREADS = 20
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -148,11 +142,11 @@ def main():
                                                            args=(probe_slow_down_sema,
                                                                  args.ripeRequestLimit,
                                                                  probes_finish_event))
-                thread_limit = 50
-                thread_sema = threading.Semaphore(thread_limit)
+
+                thread_sema = threading.Semaphore(MAX_THREADS)
                 threads = []
                 for location in locations.values():
-                    if len(threads) > thread_limit:
+                    if len(threads) > MAX_THREADS:
                         for thread in threads:
                             if not thread.is_alive():
                                 thread.join()
@@ -391,8 +385,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
                         ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool):
     """Checks for all domains if the suspected locations are correct"""
-    thread_count = 25
-    thread_semaphore = threading.Semaphore(thread_count)
+    thread_semaphore = threading.Semaphore(MAX_THREADS)
 
     count_lock = threading.Lock()
     correct_type_count = collections.defaultdict(int)
@@ -469,8 +462,6 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 nonlocal count_matches
                 count_matches += update_domain.matches_count
 
-
-
             if not dry_run:
                 with domain_lock:
                     domains[dtype].append(update_domain)
@@ -491,7 +482,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 line = domain_file_mm.readline().decode('utf-8')
                 while len(line) > 0:
                     domain_location_list = util.json_loads(line)
-                    if len(threads) > thread_count:
+                    if len(threads) > MAX_THREADS:
                         remove_indexes = []
                         for t_index, thread in enumerate(threads):
                             if not thread.is_alive():
@@ -538,8 +529,9 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         if dry_run:
             logging.info('{} matches for {} entries after dry run. {} unreachable addresses. '
                          'Total amount matches: {}. directly verified {}'.format(
-                dry_run_count, (count_entries - count_unreachable - dry_run_verifications),
-                count_unreachable, count_matches, dry_run_verifications))
+                            dry_run_count,
+                            (count_entries - count_unreachable - dry_run_verifications),
+                            count_unreachable, count_matches, dry_run_verifications))
             util.json_dump(dry_run_matches, output_file)
         else:
             util.json_dump(domains, output_file)
@@ -565,8 +557,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                ripe_slow_down_sema: mp.Semaphore,
                                ip_version: str,
                                dry_run: bool,
-                               add_dry_run_matches: [[int], ],
-                               increment_dry_run_verifications: [[],]):
+                               add_dry_run_matches: [[int], ]):
     """checks if ip is at location"""
     try:
         matched = False
