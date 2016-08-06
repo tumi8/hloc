@@ -142,7 +142,7 @@ def main():
                                                            args=(probe_slow_down_sema,
                                                                  args.ripeRequestLimit,
                                                                  probes_finish_event))
-
+                probes_generator_thread.start()
                 thread_sema = threading.Semaphore(MAX_THREADS)
                 threads = []
                 for location in locations.values():
@@ -1184,63 +1184,63 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
     Searches for ripe nodes near the location
     :rtype: (list, list)
     """
-    if max_distance % 50 != 0:
-        logging.critical('max_distance must be a multiple of 50')
-        thread_sema.release()
-        return
-
-    distances = [25, 50, 100, 250, 500, 1000]
-    if max_distance not in distances:
-        distances.append(max_distance)
-        distances.sort()
-
-    for distance in distances:
-        if distance > max_distance:
-            break
-        params = {
-            'centre': '{0},{1}'.format(location.lat, location.lon),
-            'distance': str(distance),
-            'limit': '500'
-            }
-
-        # TODO use wrapper class
-
-        nodes = []
-        available_probes = []
-        next_is_available = True
-
-        while next_is_available:
-            params['offset'] = len(nodes)
-            response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
-                                                     slow_down_sema, params=params)
-            if response_dict is not None and response_dict['meta']['total_count'] > 0:
-                next_is_available = response_dict['meta']['next'] is not None
-                nodes.extend(response_dict['objects'])
-                available_probes = [node for node in response_dict['objects']
-                                    if (node['status_name'] == 'Connected' and
-                                        'system-ipv4-works' in node['tags'] and
-                                        'system-ipv4-capable' in node['tags'])]
-            else:
-                break
-        if len(nodes) > 0:
-            location.nodes = nodes
-            location.available_nodes = available_probes
-            thread_sema.release()
+    try:
+        if max_distance % 50 != 0:
+            logging.critical('max_distance must be a multiple of 50')
             return
-        # nodes = ripe_atlas.ProbeRequest(**params)
-        #
-        # if nodes.total_count > 0:
-        #     results = [node for node in nodes]
-        #     available_probes = [node for node in results
-        #                         if (node.status_name == 'Connected' and
-        #                             'system-ipv4-works' in node.tags and
-        #                             'system-ipv4-capable' in node.tags)]
-        #     if len(available_probes) > 0:
-        #         return results, available_probes
-    location.nodes = []
-    location.available_nodes = []
-    thread_sema.release()
-    return
+
+        distances = [25, 50, 100, 250, 500, 1000]
+        if max_distance not in distances:
+            distances.append(max_distance)
+            distances.sort()
+
+        for distance in distances:
+            if distance > max_distance:
+                break
+            params = {
+                'centre': '{0},{1}'.format(location.lat, location.lon),
+                'distance': str(distance),
+                'limit': '500'
+                }
+
+            # TODO use wrapper class
+
+            nodes = []
+            available_probes = []
+            next_is_available = True
+
+            while next_is_available:
+                params['offset'] = len(nodes)
+                response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
+                                                         slow_down_sema, params=params)
+                if response_dict is not None and response_dict['meta']['total_count'] > 0:
+                    next_is_available = response_dict['meta']['next'] is not None
+                    nodes.extend(response_dict['objects'])
+                    available_probes = [node for node in response_dict['objects']
+                                        if (node['status_name'] == 'Connected' and
+                                            'system-ipv4-works' in node['tags'] and
+                                            'system-ipv4-capable' in node['tags'])]
+                else:
+                    break
+            if len(nodes) > 0:
+                location.nodes = nodes
+                location.available_nodes = available_probes
+                return
+            # nodes = ripe_atlas.ProbeRequest(**params)
+            #
+            # if nodes.total_count > 0:
+            #     results = [node for node in nodes]
+            #     available_probes = [node for node in results
+            #                         if (node.status_name == 'Connected' and
+            #                             'system-ipv4-works' in node.tags and
+            #                             'system-ipv4-capable' in node.tags)]
+            #     if len(available_probes) > 0:
+            #         return results, available_probes
+        location.nodes = []
+        location.available_nodes = []
+        return
+    finally:
+        thread_sema.release()
 
 
 if __name__ == '__main__':
