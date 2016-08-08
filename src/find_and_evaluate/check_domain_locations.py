@@ -264,6 +264,7 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     """
     Generates RIPE_REQUESTS_PER_SECOND tokens on the Semaphore
     """
+    logging.debug('generate thread started')
     while not finish_event.is_set():
         time.sleep(2 / limit)
         try:
@@ -271,6 +272,7 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
             sema.release()
         except ValueError:
             continue
+    logging.debug('generate thread stoopped')
 
 
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
@@ -506,8 +508,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                             ripe_slow_down_sema,
                                                             ip_version,
                                                             dry_run,
-                                                            add_dry_run_matches,
-                                                            increment_dry_run_verifications))
+                                                            add_dry_run_matches))
                             threads.append(thread)
                             thread.start()
                         else:
@@ -634,9 +635,6 @@ def check_domain_location_ripe(domain: util.Domain,
                                                        results,
                                                        ripe_slow_down_sema)
 
-            if node is not None:
-                node_location_dist = location.gps_distance_equirectangular(
-                    util.GPSLocation(node['latitude'], node['longitude']))
             if chk_m is None or chk_m == -1:
                 # only if no old measurement exists
                 m_results, near_node = create_and_check_measurement(
@@ -644,14 +642,14 @@ def check_domain_location_ripe(domain: util.Domain,
                     location,
                     ripe_create_sema,
                     ripe_slow_down_sema)
-                if near_node is not None:
-                    node_location_dist = location.gps_distance_equirectangular(
-                        util.GPSLocation(near_node['latitude'], near_node['longitude']))
 
                 if m_results is None:
                     matches.remove(next_match)
                     next_match = get_next_match()
                     continue
+
+                node_location_dist = location.gps_distance_equirectangular(
+                    util.GPSLocation(near_node['latitude'], near_node['longitude']))
 
                 result = next(iter(m_results))
 
@@ -679,16 +677,19 @@ def check_domain_location_ripe(domain: util.Domain,
                 else:
                     n_res = util.LocationResult(location.id, chk_res, location)
                     results.append(n_res)
-            elif chk_m < (MAX_RTT + node_location_dist / 100):
-                update_count_for_type(next_match.code_type)
-                matched = True
-                next_match.matching = node
-                domain.location = location
-                update_domains(domain, util.DomainType.correct)
-                break
             else:
-                n_res = util.LocationResult(location.id, chk_m, location)
-                results.append(n_res)
+                node_location_dist = location.gps_distance_equirectangular(
+                    util.GPSLocation(node['latitude'], node['longitude']))
+                if chk_m < (MAX_RTT + node_location_dist / 100):
+                    update_count_for_type(next_match.code_type)
+                    matched = True
+                    next_match.matching = node
+                    domain.location = location
+                    update_domains(domain, util.DomainType.correct)
+                    break
+                else:
+                    n_res = util.LocationResult(location.id, chk_m, location)
+                    results.append(n_res)
 
             matches.remove(next_match)
             next_match = get_next_match()
