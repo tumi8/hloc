@@ -98,6 +98,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             open(util.remove_file_ending(filename) + '.found', 'w') as loc_found_file, \
             open(util.remove_file_ending(filename) + '.notfound', 'w') as no_loc_found_file, \
             open(util.remove_file_ending(filename) + '.found-wo-trie', 'w') as loc_found_wo_file:
+        domain_count = collections.defaultdict(int)
         domains_w_location = []
         domains_wo_location = []
         domains_no_location = []
@@ -105,6 +106,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         def save_domain_with_location(loc_domain):
             domains_w_location.append(loc_domain)
             if len(domains_w_location) >= 10**4:
+                domain_count['domains_w_location'] += len(domains_w_location)
                 util.json_dump(domains_w_location, loc_found_file)
                 loc_found_file.write('\n')
                 del domains_w_location[:]
@@ -112,6 +114,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         def save_domain_wo_location(loc_domain):
             domains_wo_location.append(loc_domain)
             if len(domains_wo_location) >= 10 ** 4:
+                domain_count['domains_wo_location'] += len(domains_wo_location)
                 util.json_dump(domains_wo_location, loc_found_wo_file)
                 loc_found_wo_file.write('\n')
                 del domains_wo_location[:]
@@ -119,6 +122,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         def save_domain_no_location(loc_domain):
             domains_no_location.append(loc_domain)
             if len(domains_no_location) >= 10 ** 4:
+                domain_count['domains_no_location'] += len(domains_no_location)
                 util.json_dump(domains_no_location, no_loc_found_file)
                 no_loc_found_file.write('\n')
                 del domains_no_location[:]
@@ -187,6 +191,9 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         util.json_dump(domains_w_location, loc_found_file)
         util.json_dump(domains_wo_location, loc_found_wo_file)
         util.json_dump(domains_no_location, no_loc_found_file)
+        domain_count['domains_w_location'] += len(domains_w_location)
+        domain_count['domains_wo_location'] += len(domains_wo_location)
+        domain_count['domains_no_location'] += len(domains_no_location)
 
         new_better_stats = {}
         for rule_name, rule_stat in entries_stats.items():
@@ -227,6 +234,12 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             10, stats_for_used_rules.items(), key=lambda stat: stat[1]['matching_percent_related'])
 
         logging.info('Total amount domains: {}'.format(count_domains))
+        logging.info('Total amount domains with location: {}'.format(
+            domain_count['domains_w_location']))
+        logging.info('Total amount domains without location code: {}'.format(
+            domain_count['domains_wo_location']))
+        logging.info('Total amount domains without location: {}'.format(
+            domain_count['domains_no_location']))
         logging.info('Total amount rules: {}'.format(len(new_better_stats)))
         logging.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
         logging.info('10 rules with highest matching percent: {}'.format(
