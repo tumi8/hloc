@@ -170,6 +170,7 @@ def main():
                 if not location.available_nodes:
                     null_locations.append(location)
 
+            logging.info('{} locations without nodes'.format(len(null_locations)))
             with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
                 util.json_dump(null_locations, loc_wo_nodes_file)
 
@@ -625,22 +626,26 @@ def check_domain_location_ripe(domain: util.Domain,
             location = locations[str(next_match.location_id)]
             near_nodes = location.nodes
 
-            if len(near_nodes) == 0:
+            if not near_nodes:
                 matches.remove(next_match)
                 next_match = get_next_match()
                 continue
 
             chk_m, node = check_measurements_for_nodes(measurements,
                                                        location,
+                                                       near_nodes,
                                                        results,
                                                        ripe_slow_down_sema)
 
             if chk_m is None or chk_m == -1:
                 # only if no old measurement exists
+                available_nodes = location.available_nodes
+                if not available_nodes:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
                 m_results, near_node = create_and_check_measurement(
-                    domain.ip_for_version(ip_version),
-                    location,
-                    ripe_create_sema,
+                    domain.ip_for_version(ip_version), location, available_nodes, ripe_create_sema,
                     ripe_slow_down_sema)
 
                 if m_results is None:
@@ -835,12 +840,12 @@ NON_WORKING_PROBES = []
 NON_WORKING_PROBES_LOCK = threading.Lock()
 
 
-def create_and_check_measurement(ip_addr: str, location: util.Location,
+def create_and_check_measurement(ip_addr: str, location: util.Location, nodes: [[str, object]],
                                  ripe_create_sema: mp.Semaphore,
                                  ripe_slow_down_sema: mp.Semaphore) -> \
         ([str, object], [str, object]):
     """creates a measurement for the parameters and checks for the created measurement"""
-    near_nodes = [node for node in location.available_nodes if
+    near_nodes = [node for node in nodes if
                   node not in NON_WORKING_PROBES]
 
     def new_near_node():
@@ -1089,7 +1094,7 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
 
 
 def check_measurements_for_nodes(measurements: [object], location: util.Location,
-                                 results: [util.LocationResult],
+                                 nodes: [[str, object]], results: [util.LocationResult],
                                  ripe_slow_down_sema: mp.Semaphore) -> (float, int):
     """
     Check the measurements list for measurements from near_nodes
@@ -1100,11 +1105,11 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
 
     measurement_results = get_measurements_for_nodes(measurements,
                                                      ripe_slow_down_sema,
-                                                     location.nodes)
+                                                     nodes)
 
     check_n = None
     node_n = None
-    near_node_ids = [node['id'] for node in location.nodes]
+    near_node_ids = [node['id'] for node in nodes]
     for m_results in measurement_results:
         for result in m_results['results']:
             oldest_alowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
@@ -1117,7 +1122,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
             if check_res == -1 and check_n is None:
                 check_n = check_res
             elif check_n is None or check_res < check_n or check_n == -1:
-                node_n = next((near_node for near_node in location.nodes
+                node_n = next((near_node for near_node in nodes
                                if near_node['id'] == result['prb_id']))
                 check_n = check_res
                 results.append(
