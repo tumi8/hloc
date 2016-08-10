@@ -224,10 +224,10 @@ class LocationCodeType(enum.Enum):
 
 @enum.unique
 class DomainType(enum.Enum):
-    correct = 0
-    not_responding = 1
-    no_location = 2
-    blacklisted = 3
+    correct = '0'
+    not_responding = '1'
+    no_location = '2'
+    blacklisted = '3'
 
 
 class JSONBase(object):

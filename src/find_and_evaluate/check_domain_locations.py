@@ -450,7 +450,10 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 len(domains[util.DomainType.correct]), len(domains[util.DomainType.not_responding]),
                 len(domains[util.DomainType.no_location]),
                 len(domains[util.DomainType.blacklisted])))
-            util.json_dump(domains, output_file)
+            dump_dct = {}
+            for type, values in domains.items():
+                dump_dct[type.value] = values
+            util.json_dump(dump_dct, output_file)
             output_file.write('\n')
             domains.clear()
 
