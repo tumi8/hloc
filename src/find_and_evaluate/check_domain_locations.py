@@ -23,9 +23,9 @@ API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
 MAX_RTT = 9
 ALLOWED_MEASUREMENT_AGE = 60 * 60 * 24 * 350  # 350 days in seconds
-ATLAS_URL = 'https://atlas.ripe.net'
-API_MEASUREMENT_POINT = '/api/v1/measurement'
-MEASUREMENT_URL = ATLAS_URL + API_MEASUREMENT_POINT + '/'
+ATLAS_API_URL = 'https://atlas.ripe.net/api/v1/'
+API_MEASUREMENT_ENDPOINT = 'measurement'
+MEASUREMENT_URL = ATLAS_API_URL + API_MEASUREMENT_ENDPOINT + '/'
 
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
@@ -451,8 +451,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 len(domains[util.DomainType.no_location]),
                 len(domains[util.DomainType.blacklisted])))
             dump_dct = {}
-            for type, values in domains.items():
-                dump_dct[type.value] = values
+            for result_type, values in domains.items():
+                dump_dct[result_type.value] = values
             util.json_dump(dump_dct, output_file)
             output_file.write('\n')
             domains.clear()
@@ -648,8 +648,8 @@ def check_domain_location_ripe(domain: util.Domain,
                     next_match = get_next_match()
                     continue
                 m_results, near_node = create_and_check_measurement(
-                    domain.ip_for_version(ip_version), location, available_nodes, ripe_create_sema,
-                    ripe_slow_down_sema)
+                    (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
+                    ripe_create_sema, ripe_slow_down_sema)
 
                 if m_results is None:
                     matches.remove(next_match)
@@ -659,9 +659,9 @@ def check_domain_location_ripe(domain: util.Domain,
                 node_location_dist = location.gps_distance_equirectangular(
                     util.GPSLocation(near_node['latitude'], near_node['longitude']))
 
-                result = next(iter(m_results))
-
-                if result is None:
+                try:
+                    result = next(iter(m_results))
+                except StopIteration:
                     matches.remove(next_match)
                     next_match = get_next_match()
                     continue
@@ -719,7 +719,7 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
     if len(results) == 0:
         return matches
 
-    near_matches = {}
+    near_matches = collections.defaultdict(list)
     for match in matches:
         location_distances = []
         for result in results:
@@ -743,15 +743,12 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
 
         min_res = min(location_distances, key=lambda res: res[1])[0]
 
-        if min_res.location_id not in near_matches:
-            near_matches[min_res.location_id] = []
-
-        near_matches[min_res.location_id].append(match)
+        near_matches[str(min_res.location_id)].append(match)
 
     ret = []
     for result in results:
-        if result.location_id in near_matches:
-            ret.extend(near_matches[result.location_id])
+        if str(result.location_id) in near_matches:
+            ret.extend(near_matches[str(result.location_id)])
     return ret
 
 
@@ -843,13 +840,13 @@ NON_WORKING_PROBES = []
 NON_WORKING_PROBES_LOCK = threading.Lock()
 
 
-def create_and_check_measurement(ip_addr: str, location: util.Location, nodes: [[str, object]],
+def create_and_check_measurement(ip_addr: [str, str],
+                                 location: util.Location, nodes: [[str, object]],
                                  ripe_create_sema: mp.Semaphore,
                                  ripe_slow_down_sema: mp.Semaphore) -> \
         ([str, object], [str, object]):
     """creates a measurement for the parameters and checks for the created measurement"""
-    near_nodes = [node for node in nodes if
-                  node not in NON_WORKING_PROBES]
+    near_nodes = [node for node in nodes if node not in NON_WORKING_PROBES]
 
     def new_near_node():
         """Get a node from the near_nodes and return it"""
@@ -874,8 +871,6 @@ def create_and_check_measurement(ip_addr: str, location: util.Location, nodes: [
     ripe_create_sema.acquire()
     try:
         measurement_id = new_measurement()
-        if measurement_id is None:
-            return None, None
 
         while True:
             if measurement_id is None:
@@ -885,9 +880,9 @@ def create_and_check_measurement(ip_addr: str, location: util.Location, nodes: [
                 if res.status_id == 4:
                     break
                 elif res.status_id in [6, 7]:
-                    NON_WORKING_PROBES_LOCK.acquire()
-                    NON_WORKING_PROBES.append(near_node)
-                    NON_WORKING_PROBES_LOCK.release()
+                    with NON_WORKING_PROBES_LOCK:
+                        NON_WORKING_PROBES.append(near_node)
+
                     near_nodes.remove(near_node)
                     near_node = new_near_node()
                     if near_node is None:
@@ -917,15 +912,20 @@ def create_and_check_measurement(ip_addr: str, location: util.Location, nodes: [
 USE_WRAPPER = True
 
 
-def create_ripe_measurement(ip_addr: str, location: util.Location, near_node: [str, object],
+def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_node: [str, object],
                             ripe_slow_down_sema: mp.Semaphore) -> int:
     """Creates a new ripe measurement to the first near node and returns the measurement id"""
+
+    if ip_addr[1] == util.IPV4_IDENTIFIER:
+        af = 4
+    else:
+        af = 6
 
     def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
-        ping = ripe_atlas.Ping(af=4, packets=1, target=ip_addr,
-                               description=ip_addr + ' test for location ' + location.city_name)
+        ping = ripe_atlas.Ping(af=af, packets=1, target=ip_addr[0],
+                               description=ip_addr[0] + ' test for location ' + location.city_name)
         source = ripe_atlas.AtlasSource(value=str(near_node['id']), requested=1,
                                         type='probes')
         atlas_request = ripe_atlas.AtlasCreateRequest(
@@ -960,11 +960,11 @@ def create_ripe_measurement(ip_addr: str, location: util.Location, near_node: [s
         payload = {
             'definitions': [
                 {
-                    'target': ip_addr,
-                    'af': 4,
+                    'target': ip_addr[0],
+                    'af': af,
                     'packets': 1,
                     'size': 48,
-                    'description': ip_addr + ' test for location ' + location[
+                    'description': ip_addr[0] + ' test for location ' + location[
                         'cityName'],
                     'type': 'ping',
                     'resolve_on_probe': False
