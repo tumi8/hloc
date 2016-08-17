@@ -77,8 +77,8 @@ def remove_file_ending(filenamepath: str) -> str:
 def setup_logging(filename: str):
     """does the basic config on logging"""
     logging.basicConfig(filename=filename, level=logging.DEBUG,
-                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               '%(filename)s:%(lineno)d %(message)s', datefmt='%d.%m %H:%M:%S')
+                        format=u'[%(levelname)s][%(asctime)s]:[%(processName)s] '
+                               u'%(filename)s:%(lineno)d %(message)s', datefmt='%d.%m %H:%M:%S')
 
 
 def parse_zmap_results(zmap_filename: str, location_name: str, present_results: dict):
