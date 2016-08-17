@@ -455,7 +455,9 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 dump_dct[result_type.value] = values
             util.json_dump(dump_dct, output_file)
             output_file.write('\n')
+            logging.warning(domains.keys())
             domains.clear()
+            logging.warning(domains.keys())
 
         def update_domains(update_domain: util.Domain, dtype: util.DomainType):
             """Append current domain in the domain dict to the dtype"""
@@ -475,8 +477,9 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                     if (len(domains[util.DomainType.correct]) +
                             len(domains[util.DomainType.not_responding]) +
                             len(domains[util.DomainType.no_location]) +
-                            len(domains[util.DomainType.blacklisted])) >= 10**3:
+                            len(domains[util.DomainType.blacklisted])) >= 10:
                         dump_domain_list()
+                        logging.warning(domains.keys())
 
         threads = []
         count_entries = 0
@@ -539,7 +542,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             count_unreachable, count_matches, dry_run_verifications))
             util.json_dump(dry_run_matches, output_file)
         else:
-            util.json_dump(domains, output_file)
+            dump_domain_list()
 
         count_alive = 0
         for thread in threads:
