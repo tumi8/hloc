@@ -15,7 +15,7 @@ import collections
 import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
 import threading
-from math import ceil
+import math
 
 import src.data_processing.util as util
 
@@ -152,8 +152,8 @@ def main():
                                 thread.join()
                     thread_sema.acquire()
                     thread = threading.Thread(target=get_nearest_ripe_nodes,
-                                              args=(location, 1000, probe_slow_down_sema,
-                                                    thread_sema))
+                                              args=(location, 1000, args.ip_version,
+                                                    probe_slow_down_sema, thread_sema))
                     thread.start()
                     threads.append(thread)
 
@@ -719,8 +719,8 @@ def check_domain_location_ripe(domain: util.Domain,
 
 
 def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
-                 locations: [str, util.Location],
-                 distances: [str, [str, float]]) -> [util.DomainLabelMatch]:
+                            locations: [str, util.Location],
+                            distances: [str, [str, float]]) -> [util.DomainLabelMatch]:
     """Sort the matches after their most probable location"""
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)
@@ -1029,8 +1029,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         while True:
             try:
                 measurement.next_batch()
-            except ripe_atlas.exceptions.APIResponseError:
-                pass
+            except ripe_atlas.exceptions.APIResponseError as error:
+                logging.exception('MeasurementRequest APIResponseError: {}'.format(error))
             else:
                 break
 
@@ -1054,8 +1054,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
     while True:
         try:
             measurements = ripe_atlas.MeasurementRequest(**params)
-        except ripe_atlas.exceptions.APIResponseError:
-            pass
+        except ripe_atlas.exceptions.APIResponseError as error:
+            logging.exception('MeasurementRequest APIResponseError: {}'.format(error))
         else:
             break
 
@@ -1066,8 +1066,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             logging.warning('Ripe MeasurementRequest error! {}'.format(ip_addr))
             time.sleep(30)
     next_batch(measurements)
-    if measurements.total_count > 200:
-        skip = ceil(measurements.total_count / 100) - 2
+    if measurements.total_count > 500:
+        skip = math.floor(measurements.total_count / 100) - 5
 
         for _ in range(0, skip):
             next_batch(measurements)
@@ -1151,14 +1151,13 @@ def get_ripe_measurement(measurement_id: int):
     while True:
         try:
             return ripe_atlas.Measurement(id=measurement_id)
-        except ripe_atlas.exceptions.APIResponseError:
-            pass
+        except ripe_atlas.exceptions.APIResponseError as error:
+            time.sleep(5)
+            retries += 1
 
-        time.sleep(5)
-        retries += 1
-
-        if retries % 5 == 0:
-            logging.warning('Ripe get Measurement error! {}'.format(measurement_id))
+            if retries % 5 == 0:
+                logging.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
+                                                                                error))
 
 
 def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params: [str, str]=None,
@@ -1171,9 +1170,10 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
                 ripe_slow_down_sema.acquire()
             response = RIPE_SESSION.get(url, params=params, headers=headers,
                                         timeout=(3.05, 27.05))
-            break
         except requests.exceptions.ReadTimeout:
             continue
+        else:
+            break
 
     if response is None:
         return None
@@ -1193,7 +1193,7 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
     return json_dct
 
 
-def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
+def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_version: str,
                            slow_down_sema: mp.Semaphore=None,
                            thread_sema: threading.Semaphore=None) -> \
         ([[str, object]], [[str, object]]):
@@ -1235,8 +1235,8 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int,
                     nodes.extend(response_dict['objects'])
                     available_probes = [node for node in response_dict['objects']
                                         if (node['status_name'] == 'Connected' and
-                                            'system-ipv4-works' in node['tags'] and
-                                            'system-ipv4-capable' in node['tags'])]
+                                            'system-{}-works'.format(ip_version) in node['tags'] and
+                                            'system-{}-capable'.format(ip_version) in node['tags'])]
                 else:
                     break
             if len(nodes) > 0:
