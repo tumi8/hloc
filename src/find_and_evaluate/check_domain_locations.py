@@ -446,10 +446,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
         def dump_domain_list():
             """Write all domains in the buffer to the file and empty the lists"""
-            logging.info('correct {} not_responding {} no_location {} blacklisted {}'.format(
-                len(domains[util.DomainType.correct]), len(domains[util.DomainType.not_responding]),
-                len(domains[util.DomainType.no_location]),
-                len(domains[util.DomainType.blacklisted])))
+            logging.info('correct {} no_verification {} not_responding {} no_location {} '
+                         'blacklisted {}'.format(len(domains[util.DomainType.correct]),
+                                                 len(domains[util.DomainType.no_verification]),
+                                                 len(domains[util.DomainType.not_responding]),
+                                                 len(domains[util.DomainType.no_location]),
+                                                 len(domains[util.DomainType.blacklisted])))
             dump_dct = {}
             for result_type, values in domains.items():
                 dump_dct[result_type.value] = values
@@ -475,7 +477,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                     if (len(domains[util.DomainType.correct]) +
                             len(domains[util.DomainType.not_responding]) +
                             len(domains[util.DomainType.no_location]) +
-                            len(domains[util.DomainType.blacklisted])) >= 10**3:
+                            len(domains[util.DomainType.blacklisted]) +
+                            len(domains[util.DomainType.no_verification])) >= 10**3:
                         dump_domain_list()
 
         threads = []
@@ -603,7 +606,7 @@ def check_domain_location_ripe(domain: util.Domain,
             :rtype: DomainLabelMatch
             """
             nonlocal matches, matched
-            matches = sort_matches(matches, results, locations, distances)
+            matches = filter_possible_matches(matches, results, locations, distances)
             if dry_run:
                 if isinstance(matches, tuple):
                     update_domains(domain, util.DomainType.correct)
@@ -625,6 +628,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return ret
 
         next_match = get_next_match()
+        no_verification_matches = []
         while next_match is not None:
             location = locations[str(next_match.location_id)]
             near_nodes = location.nodes
@@ -700,19 +704,23 @@ def check_domain_location_ripe(domain: util.Domain,
                     results.append(n_res)
 
             matches.remove(next_match)
+            no_verification_matches.append(next_match)
             next_match = get_next_match()
 
         if not matched:
-            update_domains(domain, util.DomainType.no_location)
+            if filter_possible_matches(no_verification_matches, results, locations, distances):
+                update_domains(domain, util.DomainType.no_verification)
+            else:
+                update_domains(domain, util.DomainType.no_location)
     finally:
         sema.release()
 
     return 0
 
 
-def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
+def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
                  locations: [str, util.Location],
-                 distances: [str, [str, float]]):
+                 distances: [str, [str, float]]) -> [util.DomainLabelMatch]:
     """Sort the matches after their most probable location"""
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)

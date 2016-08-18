@@ -227,7 +227,8 @@ class DomainType(enum.Enum):
     correct = '0'
     not_responding = '1'
     no_location = '2'
-    blacklisted = '3'
+    no_verification = '3'
+    blacklisted = '4'
 
 
 class JSONBase(object):
