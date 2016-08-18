@@ -714,15 +714,15 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
                  locations: [str, util.Location],
                  distances: [str, [str, float]]):
     """Sort the matches after their most probable location"""
-    results = [result for result in results if result.rtt is not None]
-    results.sort(key=lambda res: res.rtt)
-    if len(results) == 0:
+    f_results = [result for result in results if result.rtt is not None]
+    f_results.sort(key=lambda res: res.rtt)
+    if len(f_results) == 0:
         return matches
 
     near_matches = collections.defaultdict(list)
     for match in matches:
         location_distances = []
-        for result in results:
+        for result in f_results:
             if result.location_id in distances:
                 distance = distances[result.location_id][str(match.location_id)]
             else:
@@ -738,7 +738,7 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
                 return result.location, match
 
             location_distances.append((result, distance))
-        if len(location_distances) != len(results):
+        if len(location_distances) != len(f_results):
             continue
 
         min_res = min(location_distances, key=lambda res: res[1])[0]
@@ -746,7 +746,7 @@ def sort_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult
         near_matches[str(min_res.location_id)].append(match)
 
     ret = []
-    for result in results:
+    for result in f_results:
         if str(result.location_id) in near_matches:
             ret.extend(near_matches[str(result.location_id)])
     return ret
