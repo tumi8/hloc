@@ -475,7 +475,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                     if (len(domains[util.DomainType.correct]) +
                             len(domains[util.DomainType.not_responding]) +
                             len(domains[util.DomainType.no_location]) +
-                            len(domains[util.DomainType.blacklisted])) >= 10:
+                            len(domains[util.DomainType.blacklisted])) >= 10**3:
                         dump_domain_list()
 
         threads = []
