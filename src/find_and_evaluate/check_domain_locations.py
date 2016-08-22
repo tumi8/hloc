@@ -615,9 +615,11 @@ def check_domain_location_ripe(domain: util.Domain,
                 add_dry_run_matches(matches)
                 return None
             if isinstance(matches, tuple):
-                result_location, match = matches
+                distance, rtt, match = matches
                 update_count_for_type(match.code_type)
-                match.matching = result_location
+                match.matching = True
+                match.matching_distance = distance
+                match.matching_rtt = rtt
                 domain.location = locations[str(match.location_id)]
                 update_domains(domain, util.DomainType.correct)
                 matched = True
@@ -682,7 +684,9 @@ def check_domain_location_ripe(domain: util.Domain,
                 elif chk_res < (MAX_RTT + node_location_dist / 100):
                     update_count_for_type(next_match.code_type)
                     matched = True
-                    next_match.matching = near_node
+                    next_match.matching = True
+                    next_match.matching_distance = node_location_dist
+                    next_match.matching_rtt = chk_res
                     domain.location = location
                     update_domains(domain, util.DomainType.correct)
                     break
@@ -695,7 +699,9 @@ def check_domain_location_ripe(domain: util.Domain,
                 if chk_m < (MAX_RTT + node_location_dist / 100):
                     update_count_for_type(next_match.code_type)
                     matched = True
-                    next_match.matching = node
+                    next_match.matching = True
+                    next_match.matching_distance = node_location_dist
+                    next_match.matching_rtt = chk_m
                     domain.location = location
                     update_domains(domain, util.DomainType.correct)
                     break
@@ -743,7 +749,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
             # Only verify location if there is also a match
             if distance < 100 and result.rtt < MAX_RTT + distance / 100:
-                return result.location, match
+                return distance, result.rtt, match
 
             location_distances.append((result, distance))
         if len(location_distances) != len(f_results):
@@ -1094,7 +1100,8 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
         allowed_start_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
 
         params = {
-            'msm_id': measure['id'], 'start': allowed_start_time,
+            'msm_id': measure['id'],
+            'start': allowed_start_time,
             'probe_ids': [node['id'] for node in near_nodes]
             }
         ripe_slow_down_sema.acquire()

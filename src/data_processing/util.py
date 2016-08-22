@@ -680,13 +680,16 @@ class DomainLabelMatch(JSONBase):
 
     class_name_identifier = 'dlm'
 
-    __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
+    __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching',
+                 'matching_distance', 'matching_rtt']
 
     class PropertyKey:
         location_id = '0'
         code_type = '1'
         code = '2'
         matching = '3'
+        matching_distance = '4'
+        matching_rtt = '5'
 
     def __init__(self, location_id: int, code_type: LocationCodeType,
                  domain_label: DomainLabel=None, code=None):
@@ -696,23 +699,36 @@ class DomainLabelMatch(JSONBase):
         self.code_type = code_type
         self.code = code
         self.matching = False
+        self.matching_distance = None
+        self.matching_rtt = None
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
-        return {
+        dct = {
             CLASS_IDENTIFIER: self.class_name_identifier,
             self.PropertyKey.location_id: self.location_id,
             self.PropertyKey.code_type: self.code_type.value,
             self.PropertyKey.code: self.code,
-            self.PropertyKey.matching: self.matching
         }
+        if self.matching:
+            dct[self.PropertyKey.matching] = self.matching
+        if self.matching_distance:
+            dct[self.PropertyKey.matching_distance] = self.matching_distance
+        if self.matching_rtt:
+            dct[self.PropertyKey.matching_rtt] = self.matching_rtt
+        return dct
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabelMatch(dct[DomainLabelMatch.PropertyKey.location_id],
                                LocationCodeType(dct[DomainLabelMatch.PropertyKey.code_type]))
-        obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
+        if DomainLabelMatch.PropertyKey.matching in dct:
+            obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
+        if DomainLabelMatch.PropertyKey.matching_distance in dct:
+            obj.matching_distance = dct[DomainLabelMatch.PropertyKey.matching_distance]
+        if DomainLabelMatch.PropertyKey.matching_rtt in dct:
+            obj.matching_rtt = dct[DomainLabelMatch.PropertyKey.matching_rtt]
         if DomainLabelMatch.PropertyKey.code in dct:
             obj.code = dct[DomainLabelMatch.PropertyKey.code]
         return obj
