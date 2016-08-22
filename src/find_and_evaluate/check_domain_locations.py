@@ -170,7 +170,7 @@ def main():
                 if not location.available_nodes:
                     null_locations.append(location)
 
-            logging.info('{} locations without nodes'.format(len(null_locations)))
+            logging.debug('{} locations without nodes'.format(len(null_locations)))
             with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
                 util.json_dump(null_locations, loc_wo_nodes_file)
 
@@ -187,7 +187,7 @@ def main():
 
         distances = init_coords_distances(zmap_locations, locations)
 
-    logging.info('finished ripe after {}'.format((time.time() - start_time)))
+    logging.debug('finished ripe after {}'.format((time.time() - start_time)))
 
     processes = []
     for pid in range(0, args.fileCount):
@@ -233,7 +233,7 @@ def main():
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
                 alive = process_sts.count(True)
-                logging.info('{} processes alive'.format(alive))
+                logging.debug('{} processes alive'.format(alive))
             for process in processes:
                 process.join()
         except KeyboardInterrupt:
@@ -241,7 +241,7 @@ def main():
 
     finish_event.set()
     generator_thread.join()
-    logging.info('{} processes alive'.format(alive))
+    logging.debug('{} processes alive'.format(alive))
     end_time = time.time()
     logging.info('running time: {}'.format((end_time - start_time)))
     return 0
@@ -446,12 +446,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
         def dump_domain_list():
             """Write all domains in the buffer to the file and empty the lists"""
-            logging.info('correct {} no_verification {} not_responding {} no_location {} '
-                         'blacklisted {}'.format(len(domains[util.DomainType.correct]),
-                                                 len(domains[util.DomainType.no_verification]),
-                                                 len(domains[util.DomainType.not_responding]),
-                                                 len(domains[util.DomainType.no_location]),
-                                                 len(domains[util.DomainType.blacklisted])))
+            logging.debug('correct {} no_verification {} not_responding {} no_location {} '
+                          'blacklisted {}'.format(len(domains[util.DomainType.correct]),
+                                                  len(domains[util.DomainType.no_verification]),
+                                                  len(domains[util.DomainType.not_responding]),
+                                                  len(domains[util.DomainType.no_location]),
+                                                  len(domains[util.DomainType.blacklisted])))
             dump_dct = {}
             for result_type, values in domains.items():
                 dump_dct[result_type.value] = values
@@ -523,8 +523,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
                         count_entries += 1
                         if count_entries % 10000 == 0 and not dry_run:
-                            logging.info('count {} correct_count {}'.format(count_entries,
-                                                                            correct_type_count))
+                            logging.debug('count {} correct_count {}'.format(count_entries,
+                                                                             correct_type_count))
                     line = domain_file_mm.readline().decode('utf-8')
 
             for thread in threads:
@@ -902,14 +902,18 @@ def create_and_check_measurement(ip_addr: [str, str],
             else:
                 sleep_ten()
         ripe_slow_down_sema.acquire()
+        logging.disable(logging.INFO)
         success, m_results = ripe_atlas.AtlasResultsRequest(
             **{'msm_id': measurement_id}).create()
+        logging.disable(logging.NOTSET)
         while not success:
             logging.warning('ResultRequest error {}'.format(m_results))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
+            logging.disable(logging.INFO)
             success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
+            logging.disable(logging.NOTSET)
 
         return m_results, near_node
 
@@ -943,11 +947,15 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
             is_oneoff=True
         )
         # ripe_slow_down_sema.acquire()
+        logging.disable(logging.INFO)
         (success, response) = atlas_request.create()
+        logging.disable(logging.NOTSET)
 
         retries = 0
         while not success:
+            logging.disable(logging.INFO)
             success, response = atlas_request.create()
+            logging.disable(logging.NOTSET)
 
             if success:
                 break
@@ -1053,11 +1061,14 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
 
     while True:
         try:
+            logging.disable(logging.INFO)
             measurements = ripe_atlas.MeasurementRequest(**params)
         except ripe_atlas.exceptions.APIResponseError as error:
             logging.exception('MeasurementRequest APIResponseError: {}'.format(error))
         else:
             break
+        finally:
+            logging.disable(logging.NOTSET)
 
         time.sleep(5)
         retries += 1
@@ -1087,12 +1098,16 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
             'probe_ids': [node['id'] for node in near_nodes]
             }
         ripe_slow_down_sema.acquire()
+        logging.disable(logging.INFO)
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
+        logging.disable(logging.NOTSET)
         retries = 0
         while not success and retries < 5:
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
+            logging.disable(logging.INFO)
             success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
+            logging.disable(logging.NOTSET)
             if not success:
                 retries += 1
 
@@ -1150,6 +1165,7 @@ def get_ripe_measurement(measurement_id: int):
     retries = 0
     while True:
         try:
+            logging.disable(logging.INFO)
             return ripe_atlas.Measurement(id=measurement_id)
         except ripe_atlas.exceptions.APIResponseError as error:
             time.sleep(5)
@@ -1158,6 +1174,8 @@ def get_ripe_measurement(measurement_id: int):
             if retries % 5 == 0:
                 logging.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
                                                                                 error))
+        finally:
+            logging.disable(logging.NOTSET)
 
 
 def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params: [str, str]=None,
