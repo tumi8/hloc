@@ -10,10 +10,11 @@ import mmap
 import ujson as json
 import collections
 from multiprocessing import Process
-import logging
 import marisa_trie
 
 import src.data_processing.util as util
+
+logger = None
 
 
 def __create_parser_arguments(parser):
@@ -52,7 +53,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'find')
 
     with open(args.trie_file_path, 'rb') as trie_file:
         trie = pickle.load(trie_file)
@@ -113,7 +115,7 @@ def start_search_in_file(filename_proto, index, trie, popular_labels,
         search_in_file(filename_proto, index, trie, popular_labels,
                        amount=amount)
     end_time = time.time()
-    logging.info('index {0}: search_in_file running time: {1}'
+    logger.info('index {0}: search_in_file running time: {1}'
                  .format(index, (end_time - start_time)))
 
 
@@ -220,14 +222,14 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:
         pickle.dump(popular_labels, popular_file)
-    logging.info('total entries: {}'.format(entries_count))
-    logging.info('total labels: {}'.format(label_count))
-    logging.info('total label length: {}'.format(label_length))
-    logging.info('popular_count: {}'.format(popular_count))
-    logging.info('entries with location found: {}'.format(entries_wl_count))
-    logging.info('label with location found: {}'.format(label_wl_count))
-    logging.info('matches: {}'.format(sum(match_count.values())))
-    logging.info('match count:\n{}'.format(match_count))
+    logger.info('total entries: {}'.format(entries_count))
+    logger.info('total labels: {}'.format(label_count))
+    logger.info('total label length: {}'.format(label_length))
+    logger.info('popular_count: {}'.format(popular_count))
+    logger.info('entries with location found: {}'.format(entries_wl_count))
+    logger.info('label with location found: {}'.format(label_wl_count))
+    logger.info('matches: {}'.format(sum(match_count.values())))
+    logger.info('match count:\n{}'.format(match_count))
 
 
 def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):

@@ -6,11 +6,11 @@ import collections
 import time
 import src.data_processing.util as util
 import multiprocessing as mp
-import logging
 import pprint
 import heapq
 from src.data_processing.preprocess_drop_rules import RULE_NAME
 
+logger = None
 
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
@@ -44,7 +44,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'find')
 
     with open(args.trie_file, 'rb') as trie_file:
         trie = pickle.load(trie_file)
@@ -74,7 +75,7 @@ def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [s
     search_in_file(domainfile_proto, index, trie, drop_rules, amount, stats_file_path)
 
     end_time = time.time()
-    logging.info('running time: {}'.format((end_time - start_time)))
+    logger.info('running time: {}'.format((end_time - start_time)))
 
 
 def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
@@ -233,27 +234,27 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         ten_lowest_related_matching = heapq.nsmallest(
             10, stats_for_used_rules.items(), key=lambda stat: stat[1]['matching_percent_related'])
 
-        logging.info('Total amount domains: {}'.format(count_domains))
-        logging.info('Total amount domains with location: {}'.format(
+        logger.info('Total amount domains: {}'.format(count_domains))
+        logger.info('Total amount domains with location: {}'.format(
             domain_count['domains_w_location']))
-        logging.info('Total amount domains without location code: {}'.format(
+        logger.info('Total amount domains without location code: {}'.format(
             domain_count['domains_wo_location']))
-        logging.info('Total amount domains without location: {}'.format(
+        logger.info('Total amount domains without location: {}'.format(
             domain_count['domains_no_location']))
-        logging.info('Total amount rules: {}'.format(len(new_better_stats)))
-        logging.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
-        logging.info('10 rules with highest matching percent: {}'.format(
+        logger.info('Total amount rules: {}'.format(len(new_better_stats)))
+        logger.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
+        logger.info('10 rules with highest matching percent: {}'.format(
             pprint.pformat(ten_most_matching, indent=4)))
-        logging.info('10 rules with highest true matching percent: {}'.format(
+        logger.info('10 rules with highest true matching percent: {}'.format(
             pprint.pformat(ten_most_true_matching, indent=4)))
-        logging.info('10 rules with lowest matching percent: {}'.format(
+        logger.info('10 rules with lowest matching percent: {}'.format(
             pprint.pformat(ten_least_matching, indent=4)))
-        logging.info('10 rules with lowest true matching percent: {}'.format(
+        logger.info('10 rules with lowest true matching percent: {}'.format(
             pprint.pformat(ten_least_true_matching, indent=4)))
-        logging.info('10 rules with lowest related matching percent: {}'.format(
+        logger.info('10 rules with lowest related matching percent: {}'.format(
             pprint.pformat(ten_lowest_related_matching, indent=4)))
 
-        logging.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
+        logger.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
 
 if __name__ == '__main__':
     main()

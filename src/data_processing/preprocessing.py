@@ -16,13 +16,14 @@ import os
 import collections
 import multiprocessing as mp
 import ujson as json
-import logging
 import mmap
 import configparser
 import sys
 
 from . import util
 from .util import Domain
+
+logger = None
 
 
 def __create_parser_arguments(parser):
@@ -89,7 +90,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'process')
 
     config = Config()
     if args.config_filepath:
@@ -141,19 +143,19 @@ def main():
                               .format(ConfigPropertyKey.white_list_key), file=sys.stderr)
                         return
         else:
-            logging.info('Creating new default config file')
+            logger.info('Creating new default config file')
             create_default_config(config_parser)
             with open(args.config_filepath, 'w') as config_file:
                 config_parser.write(config_file)
 
     ipregex_text = select_ip_regex(args.regexStrategy)
     if not args.isp_ip_filter:
-        logging.info('processing without ip filtering')
+        logger.info('processing without ip filtering')
 
     if args.isp_ip_filter:
-        logging.info('using strategy: {}'.format(args.regexStrategy))
+        logger.info('using strategy: {}'.format(args.regexStrategy))
     else:
-        logging.info('not filtering ip domain names')
+        logger.info('not filtering ip domain names')
     ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
 
     tlds = set()
@@ -201,13 +203,13 @@ def main():
                 process.join()
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
-                logging.info('{} processes alive'.format(process_sts.count(True)))
+                logger.info('{} processes alive'.format(process_sts.count(True)))
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
 
     end = time.time()
-    logging.info('Running time: {0}'.format((end - start)))
+    logger.info('Running time: {0}'.format((end - start)))
 
 
 def select_ip_regex(regex_strategy):
@@ -243,8 +245,8 @@ def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {s
         preprocess_file_part(config, pnr, ipregex, tlds)
 
     end_time = time.monotonic()
-    logging.info('preprocess_file_part running time: {} profiled: {}'
-                 .format((end_time - start_time), profile))
+    logger.info('preprocess_file_part running time: {} profiled: {}'
+                .format((end_time - start_time), profile))
 
 
 BLOCK_SIZE = 10
@@ -256,7 +258,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     pnr is a number to recognize the process
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
-    logging.info('starting')
+    logger.info('starting')
     filename = util.get_path_filename(config.filename)
     label_stats = collections.defaultdict(int)
     is_ipv6 = config.ip_version == 'ipv6'
@@ -437,7 +439,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
 
         write_bad_lines(util.ACCEPTED_CHARACTER)
 
-        logging.info('good lines: {}'.format(count_good_lines))
+        logger.info('good lines: {}'.format(count_good_lines))
         with open(os.path.join(config.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(bad_characters, characterStatsFile)

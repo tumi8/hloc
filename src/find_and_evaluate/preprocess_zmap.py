@@ -8,7 +8,8 @@ import argparse
 import os
 import sys
 import src.data_processing.util as util
-import logging
+
+logger = None
 
 
 def __create_parser_arguments(parser):
@@ -29,7 +30,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'process')
 
     if not os.path.exists(args.dirname):
         print('directory does not exist!', file=sys.stderr)
@@ -44,31 +46,32 @@ def main():
         config_parser.read(args.config_filename)
         for filename in filenames:
             location_name = __get_location_name(filename)
-            if (location_name not in config_parser  or
+            if (location_name not in config_parser or
                     'lat' not in config_parser[location_name] or
                     'lon' not in config_parser[location_name]):
-                logging.critical('{} not defined in config file or has not the right format! '
-                                 'Aborting!'.format(location_name))
+                logger.critical('{} not defined in config file or has not the right format! '
+                                'Aborting!'.format(location_name))
                 return 3
 
             locations[location_name] = util.GPSLocation(
                 config_parser[location_name]['lat'], config_parser[location_name]['lon'])
     else:
-        logging.critical('Config file does not exist!')
+        logger.critical('Config file does not exist!')
         return 2
 
-    logging.info('parsing')
+    logger.info('parsing')
 
     for filename in filenames:
         location_name = __get_location_name(filename)
-        results = util.parse_zmap_results(os.path.join(args.dirname, filename), location_name, results)
+        results = util.parse_zmap_results(os.path.join(args.dirname, filename), location_name,
+                                          results)
 
     with open(args.output_file, 'w') as output_file:
         util.json_dump(locations, output_file)
         output_file.write('\n')
         util.json_dump(results, output_file)
 
-    logging.info('finished')
+    logger.info('finished')
 
 
 def __get_location_name(filename):

@@ -4,11 +4,11 @@ import argparse
 from multiprocessing import Process
 from netaddr import IPNetwork, IPAddress
 import src.data_processing.util as util
-import logging
 import os
 
 
 TEMP_NAME_PROTOTYPE = 'ips_{}.temp'
+logger = None
 
 
 def main():
@@ -32,7 +32,8 @@ def main():
 
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'extract')
 
     blacklist_networks = None
     if args.blacklist:
@@ -83,12 +84,12 @@ def main():
 
             os.remove(temp_filename)
 
-    logging.info('finished extracting ips')
+    logger.info('finished extracting ips')
 
 
 def get_ips(filename, pid, blacklist_networks, whitelist_networks, is_ipv4):
     with open(filename) as ip_file, open(TEMP_NAME_PROTOTYPE.format(pid), 'w') as ip_w_file:
-        logging.info('started')
+        logger.info('started')
 
         def address_in_network_list(ip, network_list):
             for net in network_list:
@@ -98,7 +99,7 @@ def get_ips(filename, pid, blacklist_networks, whitelist_networks, is_ipv4):
 
         for line in ip_file:
             entries = util.json_loads(line)
-            logging.info('has entries: {}'.format(len(entries)))
+            logger.info('has entries: {}'.format(len(entries)))
             ips = []
 
             def add_ip(entry_ip):

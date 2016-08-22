@@ -74,11 +74,13 @@ def remove_file_ending(filenamepath: str) -> str:
         '.'.join(get_path_filename(filenamepath).split('.')[:-1])
 
 
-def setup_logging(filename: str):
+def setup_logger(filename: str, loggername: str) -> logging.Logger:
     """does the basic config on logging"""
     logging.basicConfig(filename=filename, level=logging.DEBUG,
-                        format=u'[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               u'%(filename)s:%(lineno)d %(message)s', datefmt='%d.%m %H:%M:%S')
+                        format=u'[%(asctime)s] [%(name)-{}s]:[%(levelname)-8s][%(processName)s] '
+                               u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername) + 1),
+                        datefmt='%d.%m %H:%M:%S')
+    return logging.getLogger(loggername)
 
 
 def parse_zmap_results(zmap_filename: str, location_name: str, present_results: dict):

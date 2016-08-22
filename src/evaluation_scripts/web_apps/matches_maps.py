@@ -5,11 +5,10 @@ import src.data_processing.util as util
 import collections
 import heapq
 import numpy as np
-import logging
 import datetime
 
-
 RED_COLOR = '#FF0000'
+logger = None
 
 
 def main():
@@ -36,12 +35,16 @@ def main():
     parser.add_argument('-a', action='store_true', dest='analyze')
 
     args = parser.parse_args()
+
+    global logger
+    logger = util.setup_logger('matches_maps_{}.log'.format(
+        datetime.date.today().strftime('%d_%m')), 'matches')
+
     if not args.drop_filename_proto and not args.trie_filename_proto and not \
             args.drop_checked_filename_proto and not args.trie_checked_filename_proto:
-        logging.critical('Neither drop filename proto nor trie filename proto is defined!')
+        logger.critical('Neither drop filename proto nor trie filename proto is defined!')
         return 1
 
-    util.setup_logging('matches_maps_{}.log'.format(datetime.date.today().strftime('%d_%m')))
 
     with open(args.location_filename) as location_file:
         locations = util.json_load(location_file)
@@ -51,14 +54,14 @@ def main():
         drop_location_counts, drop_codes = get_codes_and_location_counts(
             args.drop_filename_proto, args.drop_file_count)
         if args.analyze:
-            logging.info('### DROP Statistics ###')
+            logger.info('### DROP Statistics ###')
             calc_stats(drop_location_counts, drop_codes, locations, 'drop_codes.stats')
 
     if args.drop_checked_filename_proto:
         drop_checked_location_counts, drop_codes = get_data_from_checked(
             args.drop_checked_filename_proto, args.drop_file_count)
         if args.analyze:
-            logging.info('### DROP Checked Statistics ###')
+            logger.info('### DROP Checked Statistics ###')
             calc_stats(drop_checked_location_counts, drop_codes, locations,
                        'drop_checked_codes.stats')
 
@@ -66,14 +69,14 @@ def main():
         trie_location_counts, trie_codes = get_codes_and_location_counts(
             args.trie_filename_proto, args.trie_file_count)
         if args.analyze:
-            logging.info('### TRIE Statistics ###')
+            logger.info('### TRIE Statistics ###')
             calc_stats(trie_location_counts, trie_codes, locations, 'trie_codes.stats')
 
     if args.trie_checked_filename_proto:
         trie_checked_location_counts, trie_codes = get_data_from_checked(
             args.trie_checked_filename_proto, args.trie_file_count)
         if args.analyze:
-            logging.info('### TRIE Checked Statistics ###')
+            logger.info('### TRIE Checked Statistics ###')
             calc_stats(trie_checked_location_counts, trie_codes, locations, 'drop_checked_codes.stats')
 
     if not args.analyze:
@@ -194,13 +197,13 @@ def get_data_from_checked(filename_proto, file_count):
 
 def calc_stats(location_counts, codes, locations, output_filename):
     high_locs = heapq.nlargest(20, list(location_counts.items()), key=lambda x: x[1])
-    logging.info('most matched locations')
+    logger.info('most matched locations')
     for loc_id, count in high_locs:
         location = locations[str(loc_id)]
-        logging.info('{} {} {} {}'.format(location.city_name, location.lat, location.lon, count))
+        logger.info('{} {} {} {}'.format(location.city_name, location.lat, location.lon, count))
 
     high_codes = heapq.nlargest(20, list(codes.items()), key=lambda x: x[1]['count'])
-    logging.info('most matched location codes')
+    logger.info('most matched location codes')
     for code, code_eval in high_codes:
         location_names = ''
         for key, key_count in sorted(list(code_eval.items()), key=lambda x: x[1], reverse=True):
@@ -208,7 +211,7 @@ def calc_stats(location_counts, codes, locations, output_filename):
                 continue
             location_names += 'id {}, name {}, count {}\n'.format(
                 key, locations[str(key)].city_name, key_count)
-        logging.info('{} {}\n{}'.format(code, code_eval['count'], location_names.strip()))
+        logger.info('{} {}\n{}'.format(code, code_eval['count'], location_names.strip()))
 
     codes_cdf = np.sort([code_eval['count'] for code_eval in codes.values()])[::-1]
     np.savetxt(output_filename, codes_cdf)

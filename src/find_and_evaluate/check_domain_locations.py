@@ -32,6 +32,7 @@ LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
 DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 
 MAX_THREADS = 20
+logger = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -112,7 +113,8 @@ def main():
     args = parser.parse_args()
     __check_args(args)
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'check')
 
     start_time = time.time()
     with open(args.locationFile) as locationFile:
@@ -135,7 +137,7 @@ def main():
 
         if not args.dry_run:
             if next(iter(locations.values())).nodes is None:
-                logging.info('Getting the nodes from RIPE Atlas')
+                logger.info('Getting the nodes from RIPE Atlas')
                 probe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
                 probes_finish_event = threading.Event()
                 probes_generator_thread = threading.Thread(target=generate_ripe_request_tokens,
@@ -170,7 +172,7 @@ def main():
                 if not location.available_nodes:
                     null_locations.append(location)
 
-            logging.debug('{} locations without nodes'.format(len(null_locations)))
+            logger.debug('{} locations without nodes'.format(len(null_locations)))
             with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
                 util.json_dump(null_locations, loc_wo_nodes_file)
 
@@ -182,12 +184,12 @@ def main():
             zmap_locations = util.json_loads(location_line)
             zmap_results = util.json_loads(results_line)
         else:
-            logging.critical('No zmap results file! Aborting!')
+            logger.critical('No zmap results file! Aborting!')
             return 1
 
         distances = init_coords_distances(zmap_locations, locations)
 
-    logging.debug('finished ripe after {}'.format((time.time() - start_time)))
+    logger.debug('finished ripe after {}'.format((time.time() - start_time)))
 
     processes = []
     for pid in range(0, args.fileCount):
@@ -233,7 +235,7 @@ def main():
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
                 alive = process_sts.count(True)
-                logging.debug('{} processes alive'.format(alive))
+                logger.debug('{} processes alive'.format(alive))
             for process in processes:
                 process.join()
         except KeyboardInterrupt:
@@ -241,9 +243,9 @@ def main():
 
     finish_event.set()
     generator_thread.join()
-    logging.debug('{} processes alive'.format(alive))
+    logger.debug('{} processes alive'.format(alive))
     end_time = time.time()
-    logging.info('running time: {}'.format((end_time - start_time)))
+    logger.info('running time: {}'.format((end_time - start_time)))
     return 0
 
 
@@ -265,7 +267,7 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     """
     Generates RIPE_REQUESTS_PER_SECOND tokens on the Semaphore
     """
-    logging.debug('generate thread started')
+    logger.debug('generate thread started')
     while not finish_event.is_set():
         time.sleep(2 / limit)
         try:
@@ -273,7 +275,7 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
             sema.release()
         except ValueError:
             continue
-    logging.debug('generate thread stoopped')
+    logger.debug('generate thread stoopped')
 
 
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
@@ -358,7 +360,7 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
 
     location_domain_file.close()
     geoipreader.close()
-    logging.info('correct count: {}'.format(correct_count))
+    logger.info('correct count: {}'.format(correct_count))
 
 
 def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
@@ -446,12 +448,12 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
         def dump_domain_list():
             """Write all domains in the buffer to the file and empty the lists"""
-            logging.debug('correct {} no_verification {} not_responding {} no_location {} '
-                          'blacklisted {}'.format(len(domains[util.DomainType.correct]),
-                                                  len(domains[util.DomainType.no_verification]),
-                                                  len(domains[util.DomainType.not_responding]),
-                                                  len(domains[util.DomainType.no_location]),
-                                                  len(domains[util.DomainType.blacklisted])))
+            logger.debug('correct {} no_verification {} not_responding {} no_location {} '
+                         'blacklisted {}'.format(len(domains[util.DomainType.correct]),
+                                                 len(domains[util.DomainType.no_verification]),
+                                                 len(domains[util.DomainType.not_responding]),
+                                                 len(domains[util.DomainType.no_location]),
+                                                 len(domains[util.DomainType.blacklisted])))
             dump_dct = {}
             for result_type, values in domains.items():
                 dump_dct[result_type.value] = values
@@ -523,20 +525,20 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
                         count_entries += 1
                         if count_entries % 10000 == 0 and not dry_run:
-                            logging.debug('count {} correct_count {}'.format(count_entries,
-                                                                             correct_type_count))
+                            logger.debug('count {} correct_count {}'.format(count_entries,
+                                                                            correct_type_count))
                     line = domain_file_mm.readline().decode('utf-8')
 
             for thread in threads:
                 thread.join()
 
         except KeyboardInterrupt:
-            logging.warning('SIGINT recognized stopping Process')
+            logger.warning('SIGINT recognized stopping Process')
             pass
 
         if dry_run:
-            logging.info('{} matches for {} entries after dry run. {} unreachable addresses. '
-                         'Total amount matches: {}. directly verified {}'.format(
+            logger.info('{} matches for {} entries after dry run. {} unreachable addresses. '
+                        'Total amount matches: {}. directly verified {}'.format(
                             dry_run_count,
                             (count_entries - count_unreachable - dry_run_verifications),
                             count_unreachable, count_matches, dry_run_verifications))
@@ -549,7 +551,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
             if thread.is_alive():
                 count_alive += 1
 
-    logging.info('correct_count {}'.format(correct_type_count))
+    logger.info('correct_count {}'.format(correct_type_count))
 
 
 def check_domain_location_ripe(domain: util.Domain,
@@ -593,7 +595,7 @@ def check_domain_location_ripe(domain: util.Domain,
         if not dry_run:
             measurements = [mes for mes in get_measurements(domain.ip_for_version(ip_version),
                                                             ripe_slow_down_sema)]
-            # logging.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
+            # logger.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
             #                                                 len(measurements)))
         else:
             measurements = []
@@ -815,7 +817,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 #         elif error.returncode == 255:
 #             time.sleep(3)
 #             return ssh_ping(server_conf, ip_address)
-#         logging.error(error.output)
+#         logger.error(error.output)
 #         raise error
 #     except subprocess.TimeoutExpired:
 #         return None
@@ -913,7 +915,7 @@ def create_and_check_measurement(ip_addr: [str, str],
             **{'msm_id': measurement_id}).create()
         logging.disable(logging.NOTSET)
         while not success:
-            logging.warning('ResultRequest error {}'.format(m_results))
+            logger.warning('ResultRequest error {}'.format(m_results))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
             logging.disable(logging.INFO)
@@ -969,7 +971,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
 
             retries += 1
             if retries % 5 == 0:
-                logging.error('Create error {}'.format(response))
+                logger.error('Create error {}'.format(response))
 
         measurement_ids = response['measurements']
         return measurement_ids[0]
@@ -1011,7 +1013,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
         retries = 0
         while response.status_code != 202 and retries < 5:
             if response.status_code == 400:
-                logging.error('Create measurement error! {}'.format(response.text))
+                logger.error('Create measurement error! {}'.format(response.text))
                 return None
             ripe_slow_down_sema.acquire()
             response = requests.post(
@@ -1044,7 +1046,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             try:
                 measurement.next_batch()
             except ripe_atlas.exceptions.APIResponseError as error:
-                logging.exception('MeasurementRequest APIResponseError: {}'.format(error))
+                logger.exception('MeasurementRequest APIResponseError: {}'.format(error))
             else:
                 break
 
@@ -1052,7 +1054,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             loc_retries += 1
 
             if loc_retries % 5 == 0:
-                logging.warning('Ripe next_batch error! {}'.format(ip_addr))
+                logger.warning('Ripe next_batch error! {}'.format(ip_addr))
 
     max_age = int(time.time()) - ALLOWED_MEASUREMENT_AGE
     params = {
@@ -1070,7 +1072,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             logging.disable(logging.INFO)
             measurements = ripe_atlas.MeasurementRequest(**params)
         except ripe_atlas.exceptions.APIResponseError as error:
-            logging.exception('MeasurementRequest APIResponseError: {}'.format(error))
+            logger.exception('MeasurementRequest APIResponseError: {}'.format(error))
         else:
             break
         finally:
@@ -1080,7 +1082,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         retries += 1
 
         if retries % 5 == 0:
-            logging.warning('Ripe MeasurementRequest error! {}'.format(ip_addr))
+            logger.warning('Ripe MeasurementRequest error! {}'.format(ip_addr))
             time.sleep(30)
     next_batch(measurements)
     if measurements.total_count > 500:
@@ -1119,7 +1121,7 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
                 retries += 1
 
         if retries > 4:
-            logging.error('AtlasResultsRequest error! {}'.format(result_list))
+            logger.error('AtlasResultsRequest error! {}'.format(result_list))
             continue
 
         # measure['results'] = result_list
@@ -1179,8 +1181,8 @@ def get_ripe_measurement(measurement_id: int):
             retries += 1
 
             if retries % 5 == 0:
-                logging.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
-                                                                                error))
+                logger.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
+                                                                               error))
         finally:
             logging.disable(logging.NOTSET)
 
@@ -1228,7 +1230,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
     """
     try:
         if max_distance % 50 != 0:
-            logging.critical('max_distance must be a multiple of 50')
+            logger.critical('max_distance must be a multiple of 50')
             return
 
         distances = [25, 50, 100, 250, 500, 1000]

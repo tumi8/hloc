@@ -3,10 +3,10 @@
 import argparse
 import yaml
 import time
-import logging
 import src.data_processing.util as util
 
 RULE_NAME = '__rule__'
+logger = None
 
 
 def __create_parser_arguments(parser):
@@ -25,7 +25,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
     start_time = time.time()
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'process')
 
     rules = []
     with open(args.drop_rules_file_path) as drop_rules_file:
@@ -40,10 +41,10 @@ def main():
         util.json_dump(rules_trie, output_file)
 
     end_time = time.time()
-    logging.info('Collected {} DRoP rule objects'.format(len(rules)))
-    logging.info('Collected {} DRoP rules'.format(sum([len(rule.rules) for rule in rules])))
-    logging.info('{} different first level domain name rules exist'.format(len(rules_trie)))
-    logging.info('running time: {}'.format((end_time - start_time)))
+    logger.info('Collected {} DRoP rule objects'.format(len(rules)))
+    logger.info('Collected {} DRoP rules'.format(sum([len(rule.rules) for rule in rules])))
+    logger.info('{} different first level domain name rules exist'.format(len(rules_trie)))
+    logger.info('running time: {}'.format((end_time - start_time)))
 
 
 def create_trie_for_rules(rules: [util.DRoPRule]) -> [str, object]:
