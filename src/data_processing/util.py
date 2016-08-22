@@ -85,14 +85,6 @@ def setup_logger(filename: str, loggername: str) -> logging.Logger:
 
 def parse_zmap_results(zmap_filename: str, location_name: str, present_results: dict):
     """Parses a file """
-    def parse_zmap_line(zmap_line):
-        rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
-            zmap_line.split(',')
-        if success:
-            sec_difference = int(rec_ts) - int(sent_ts)
-            u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10**6
-            return rsaddr, (sec_difference + u_sec_diference) * 1000
-
     zmap_results = {}
     if present_results:
         zmap_results = present_results.copy()
@@ -121,9 +113,19 @@ def parse_zmap_results(zmap_filename: str, location_name: str, present_results: 
     return zmap_results
 
 
-#######################################
-#    JSON utility functions           #
-#######################################
+def parse_zmap_line(zmap_line):
+    """Parses one line of an zmap output"""
+    rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
+        zmap_line.split(',')
+    if success:
+        sec_difference = int(rec_ts) - int(sent_ts)
+        u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
+        return rsaddr, (sec_difference + u_sec_diference) * 1000
+
+
+###################################################################################################
+#                                    JSON utility functions                                       #
+###################################################################################################
 def json_object_encoding(obj):
     """Overrides the default method from the JSONEncoder"""
     if isinstance(obj, JSONBase):
