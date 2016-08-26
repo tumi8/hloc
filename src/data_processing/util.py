@@ -80,8 +80,8 @@ def setup_logger(filename: str, loggername: str) -> logging.Logger:
                         format=u'[%(asctime)s][%(name)-{}s][%(levelname)-8s][%(processName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername) + 1),
                         datefmt='%d.%m %H:%M:%S')
-    logging.getLogger("requests").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
     return logging.getLogger(loggername)
 
 

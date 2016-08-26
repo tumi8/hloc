@@ -148,10 +148,10 @@ def main():
                                                                  args.ripeRequestLimit,
                                                                  probes_finish_event))
                 probes_generator_thread.start()
-                thread_sema = threading.Semaphore(MAX_THREADS)
+                thread_sema = threading.Semaphore(10)
                 threads = []
                 for location in locations.values():
-                    if len(threads) > MAX_THREADS:
+                    if len(threads) > 10:
                         for thread in threads:
                             if not thread.is_alive():
                                 thread.join()
@@ -669,6 +669,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
             if not near_nodes:
                 matches.remove(next_match)
+                no_verification_matches.append(next_match)
                 next_match = get_next_match()
                 continue
 
@@ -683,6 +684,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 available_nodes = location.available_nodes
                 if not available_nodes:
                     matches.remove(next_match)
+                    no_verification_matches.append(next_match)
                     next_match = get_next_match()
                     continue
                 m_results, near_node = create_and_check_measurement(
