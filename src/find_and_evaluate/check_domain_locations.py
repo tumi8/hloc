@@ -118,6 +118,7 @@ def main():
 
     global logger
     logger = util.setup_logger(args.log_file, 'check')
+    logger.debug('starting')
 
     start_time = time.time()
     with open(args.locationFile) as locationFile:
@@ -186,13 +187,17 @@ def main():
 
             zmap_locations = util.json_loads(location_line)
             zmap_results = util.json_loads(results_line)
+            del location_line
+            del results_line
         else:
             logger.critical('No zmap results file! Aborting!')
             return 1
 
         distances = init_coords_distances(zmap_locations, locations)
 
-    logger.debug('finished ripe after {}'.format((time.time() - start_time)))
+    logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
+    logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+    logger.debug('finished ripe')
 
     processes = []
     for pid in range(0, args.fileCount):
@@ -262,6 +267,8 @@ def init_coords_distances(zmap_locations: [str, util.GPSLocation],
     for location_id, location in code_locations.items():
         for zmap_id, zmap_location in zmap_locations.items():
             distances[zmap_id][location_id] = DISTANCE_METHOD(location, zmap_location)
+
+    logger.debug('Size of distances: {}'.format(pympler.asizeof.asizeof(distances)))
 
     return distances
 
@@ -499,9 +506,16 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         try:
             with open(filename_proto.format(pid)) as domainFile, \
                     mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm:
-                line = domain_file_mm.readline().decode('utf-8')
-                while len(line) > 0:
-                    domain_location_list = util.json_loads(line)
+
+                def next_domains():
+                    line = domain_file_mm.readline().decode('utf-8')
+                    if line:
+                        return util.json_loads(line)
+                    else:
+                        return None
+
+                domain_location_list = next_domains()
+                while domain_location_list:
                     if len(threads) > MAX_THREADS:
                         remove_indexes = []
                         for t_index, thread in enumerate(threads):
@@ -510,9 +524,10 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                 remove_indexes.append(t_index)
                         for r_index in remove_indexes[::-1]:
                             threads.remove(threads[r_index])
+
+                    starting_threads = []
                     for domain in domain_location_list:
                         if domain.ip_for_version(ip_version) in zmap_results:
-                            thread_semaphore.acquire()
                             thread = threading.Thread(target=check_domain_location_ripe,
                                                       args=(domain.copy(), update_domains,
                                                             update_count_for_type,
@@ -527,8 +542,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                             ip_version,
                                                             dry_run,
                                                             add_dry_run_matches))
-                            threads.append(thread)
-                            thread.start()
+                            starting_threads.append(thread)
                         else:
                             update_domains(domain.copy(), util.DomainType.not_responding)
 
@@ -536,7 +550,14 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         if count_entries % 10000 == 0 and not dry_run:
                             logger.debug('count {} correct_count {}'.format(count_entries,
                                                                             correct_type_count))
-                    line = domain_file_mm.readline().decode('utf-8')
+
+                    del domain_location_list
+                    for thread in starting_threads:
+                        thread_semaphore.acquire()
+                        threads.append(thread)
+                        thread.start()
+
+                    domain_location_list = next_domains()
 
             for thread in threads:
                 thread.join()
@@ -600,15 +621,6 @@ def check_domain_location_ripe(domain: util.Domain,
             update_domains(domain, util.DomainType.not_responding)
             return
 
-        # TODO refactoring measurements are in dict format
-        if not dry_run:
-            measurements = [mes for mes in get_measurements(domain.ip_for_version(ip_version),
-                                                            ripe_slow_down_sema)]
-            # logger.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
-            #                                                 len(measurements)))
-        else:
-            measurements = []
-
         matches = domain.all_matches
 
         def get_next_match():
@@ -642,6 +654,16 @@ def check_domain_location_ripe(domain: util.Domain,
 
         next_match = get_next_match()
         no_verification_matches = []
+
+        # TODO refactoring measurements are in dict format
+        if not dry_run and next_match is not None:
+            measurements = [mes for mes in get_measurements(domain.ip_for_version(ip_version),
+                                                            ripe_slow_down_sema)]
+            # logger.info('ip {} got measurements {}'.format(domain.ip_for_version(ip_version),
+            #                                                 len(measurements)))
+        else:
+            measurements = []
+
         while next_match is not None:
             location = locations[str(next_match.location_id)]
             near_nodes = location.nodes
