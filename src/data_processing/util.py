@@ -247,7 +247,10 @@ class JSONBase(object):
 
     @staticmethod
     def create_object_from_dict(dct):
-        raise NotImplementedError("JSONBase: Should have implemented this nethod")
+        raise NotImplementedError("JSONBase: Should have implemented this method")
+
+    def copy(self):
+        raise NotImplementedError("JSONBase: Should have implemented this method")
 
 
 class GPSLocation(JSONBase):
@@ -341,6 +344,11 @@ class GPSLocation(JSONBase):
         obj = GPSLocation(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon])
         if GPSLocation.PropertyKey.id in dct:
             obj.id = dct[GPSLocation.PropertyKey.id]
+        return obj
+
+    def copy(self):
+        obj = GPSLocation(self.lat, self.lon)
+        obj.id = self.id
         return obj
 
 
@@ -467,6 +475,16 @@ class Location(GPSLocation):
             obj.nodes = dct[Location.PropertyKey.nodes]
         return obj
 
+    def copy(self):
+        obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
+                       self.population)
+        obj.id = self.id
+        obj.airport_info = self.airport_info.copy()
+        obj.locode = self.locode.copy()
+        obj.available_nodes = self.available_nodes.copy()
+        obj.nodes = self.nodes.copy()
+        return obj
+
 
 class AirportInfo(JSONBase):
     """Holds a list of the different airport codes"""
@@ -504,6 +522,13 @@ class AirportInfo(JSONBase):
         obj.icao_codes = dct[AirportInfo.PropertyKey.icao_codes]
         return obj
 
+    def copy(self):
+        obj = AirportInfo()
+        obj.faa_codes = self.faa_codes[:]
+        obj.icao_codes = self.icao_codes[:]
+        obj.iata_codes = self.iata_codes[:]
+        return obj
+
 
 class LocodeInfo(JSONBase):
     """Holds a list of locode codes"""
@@ -535,6 +560,12 @@ class LocodeInfo(JSONBase):
         obj = LocodeInfo()
         obj.place_codes = dct[LocodeInfo.PropertyKey.place_codes]
         obj.subdivision_codes = dct[LocodeInfo.PropertyKey.subdivision_codes]
+        return obj
+
+    def copy(self):
+        obj = LocodeInfo()
+        obj.place_codes = self.place_codes[:]
+        obj.subdivision_codes = self.subdivision_codes[:]
         return obj
 
 
@@ -638,6 +669,14 @@ class Domain(JSONBase):
 
         return obj
 
+    def copy(self):
+        obj = Domain(self.domain_name, self.ip_address, self.ipv6_address)
+        obj.domain_labels = [domain_label.copy() for domain_label in self.domain_labels]
+        for label in obj.domain_labels:
+            label.domain = obj
+        obj.location = self.location
+        return obj
+
 
 class DomainLabel(JSONBase):
     """The model for a domain name label"""
@@ -673,9 +712,16 @@ class DomainLabel(JSONBase):
         obj = DomainLabel(dct[DomainLabel.PropertyKey.label])
         for match in dct[DomainLabel.PropertyKey.matches]:
             match_obj = match
-            match_obj.domain = obj
+            match_obj.domain_label = obj
             obj.matches.append(match_obj)
 
+        return obj
+
+    def copy(self):
+        obj = DomainLabel(self.label)
+        obj.matches = [match.copy() for match in self.matches]
+        for match in obj.matches:
+            match.domain_label = obj
         return obj
 
 
@@ -737,6 +783,13 @@ class DomainLabelMatch(JSONBase):
             obj.code = dct[DomainLabelMatch.PropertyKey.code]
         return obj
 
+    def copy(self):
+        obj = DomainLabelMatch(self.location_id, self.code_type, code=self.code)
+        obj.matching = self.matching
+        obj.matching_rtt = self.matching_rtt
+        obj.matching_distance = self.matching_distance
+        return obj
+
 
 class LocationResult(JSONBase):
     """Stores the result for a location"""
@@ -768,6 +821,9 @@ class LocationResult(JSONBase):
         """Creates a LocationResult object from a dictionary"""
         return LocationResult(dct[LocationResult.PropertyKey.location_id],
                               dct[LocationResult.PropertyKey.rtt])
+
+    def copy(self):
+        return LocationResult(self.location_id, self.rtt, location=self.location)
 
 
 class DRoPRule(JSONBase):
@@ -833,6 +889,11 @@ class DRoPRule(JSONBase):
                          LocationCodeType(rule[DRoPRule.NamedTupleRule.PropertyKey.rule_type]))
         return obj
 
+    def copy(self):
+        obj = DRoPRule(self.name, self.source)
+        obj._rules = [rule.copy() for rule in self._rules]
+        return obj
+
     @staticmethod
     def create_rule_from_yaml_dict(dct):
         """Creates a DroPRule object from a DRoP-Yaml dictionary"""
@@ -868,3 +929,6 @@ class DRoPRule(JSONBase):
 
         def __str__(self):
             return 'Rule(regexrule: {}, type: {})'.format(self.rule, self.type.name)
+
+        def copy(self):
+            return DRoPRule.NamedTupleRule(self.rule, self.type)

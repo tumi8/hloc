@@ -16,6 +16,8 @@ import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
 import threading
 import math
+import pympler.tracker
+import pympler.asizeof
 
 import src.data_processing.util as util
 
@@ -33,6 +35,7 @@ DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 
 MAX_THREADS = 20
 logger = None
+memory_tracker = pympler.tracker.SummaryTracker()
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -278,6 +281,8 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     logger.debug('generate thread stoopped')
 
 
+# TODO falsify databases with all measurements
+
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
                                ip2locations_filename: str):
     """Verifies the locations with the ip2locations database"""
@@ -446,20 +451,24 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
             output_file.write('\n')
             dry_run_matches.clear()
 
-        def dump_domain_list():
+        def dump_domain_list(domain_list):
             """Write all domains in the buffer to the file and empty the lists"""
             logger.debug('correct {} no_verification {} not_responding {} no_location {} '
-                         'blacklisted {}'.format(len(domains[util.DomainType.correct]),
-                                                 len(domains[util.DomainType.no_verification]),
-                                                 len(domains[util.DomainType.not_responding]),
-                                                 len(domains[util.DomainType.no_location]),
-                                                 len(domains[util.DomainType.blacklisted])))
+                         'blacklisted {}'.format(len(domain_list[util.DomainType.correct]),
+                                                 len(domain_list[util.DomainType.no_verification]),
+                                                 len(domain_list[util.DomainType.not_responding]),
+                                                 len(domain_list[util.DomainType.no_location]),
+                                                 len(domain_list[util.DomainType.blacklisted])))
             dump_dct = {}
-            for result_type, values in domains.items():
+            for result_type, values in domain_list.items():
                 dump_dct[result_type.value] = values
             util.json_dump(dump_dct, output_file)
             output_file.write('\n')
-            domains.clear()
+            domain_list.clear()
+            # memory_tracker.print_diff()
+            dict_size = pympler.asizeof.asized(domain_list)
+            if dict_size.size != dict_size.flat:
+                logger.debug(dict_size.size)
 
         def update_domains(update_domain: util.Domain, dtype: util.DomainType):
             """Append current domain in the domain dict to the dtype"""
@@ -481,7 +490,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             len(domains[util.DomainType.no_location]) +
                             len(domains[util.DomainType.blacklisted]) +
                             len(domains[util.DomainType.no_verification])) >= 10**3:
-                        dump_domain_list()
+                        dump_domain_list(domains)
 
         threads = []
         count_entries = 0
@@ -505,7 +514,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         if domain.ip_for_version(ip_version) in zmap_results:
                             thread_semaphore.acquire()
                             thread = threading.Thread(target=check_domain_location_ripe,
-                                                      args=(domain, update_domains,
+                                                      args=(domain.copy(), update_domains,
                                                             update_count_for_type,
                                                             thread_semaphore,
                                                             locations,
@@ -521,7 +530,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             threads.append(thread)
                             thread.start()
                         else:
-                            update_domains(domain, util.DomainType.not_responding)
+                            update_domains(domain.copy(), util.DomainType.not_responding)
 
                         count_entries += 1
                         if count_entries % 10000 == 0 and not dry_run:
@@ -544,7 +553,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             count_unreachable, count_matches, dry_run_verifications))
             util.json_dump(dry_run_matches, output_file)
         else:
-            dump_domain_list()
+            dump_domain_list(domains)
 
         count_alive = 0
         for thread in threads:
