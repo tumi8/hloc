@@ -1226,8 +1226,10 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
         try:
             if ripe_slow_down_sema is not None:
                 ripe_slow_down_sema.acquire()
+            logging.disable(logging.INFO)
             response = RIPE_SESSION.get(url, params=params, headers=headers,
                                         timeout=(3.05, 27.05))
+            logging.disable(logging.NOTSET)
         except requests.exceptions.ReadTimeout:
             continue
         else:
