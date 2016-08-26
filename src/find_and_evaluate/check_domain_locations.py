@@ -10,7 +10,6 @@ import geoip2.database
 import random
 import mmap
 import IP2Location
-import logging
 import collections
 import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
@@ -941,18 +940,14 @@ def create_and_check_measurement(ip_addr: [str, str],
             else:
                 sleep_ten()
         ripe_slow_down_sema.acquire()
-        logging.disable(logging.INFO)
         success, m_results = ripe_atlas.AtlasResultsRequest(
             **{'msm_id': measurement_id}).create()
-        logging.disable(logging.NOTSET)
         while not success:
             logger.warning('ResultRequest error {}'.format(m_results))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
-            logging.disable(logging.INFO)
             success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
-            logging.disable(logging.NOTSET)
 
         return m_results, near_node
 
@@ -986,15 +981,11 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
             is_oneoff=True
         )
         # ripe_slow_down_sema.acquire()
-        logging.disable(logging.INFO)
         (success, response) = atlas_request.create()
-        logging.disable(logging.NOTSET)
 
         retries = 0
         while not success:
-            logging.disable(logging.INFO)
             success, response = atlas_request.create()
-            logging.disable(logging.NOTSET)
 
             if success:
                 break
@@ -1100,14 +1091,11 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
 
     while True:
         try:
-            logging.disable(logging.INFO)
             measurements = ripe_atlas.MeasurementRequest(**params)
         except ripe_atlas.exceptions.APIResponseError as error:
             logger.exception('MeasurementRequest APIResponseError: {}'.format(error))
         else:
             break
-        finally:
-            logging.disable(logging.NOTSET)
 
         time.sleep(5)
         retries += 1
@@ -1138,16 +1126,12 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
             'probe_ids': [node['id'] for node in near_nodes]
             }
         ripe_slow_down_sema.acquire()
-        logging.disable(logging.INFO)
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
-        logging.disable(logging.NOTSET)
         retries = 0
         while not success and retries < 5:
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
-            logging.disable(logging.INFO)
             success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
-            logging.disable(logging.NOTSET)
             if not success:
                 retries += 1
 
@@ -1205,7 +1189,6 @@ def get_ripe_measurement(measurement_id: int):
     retries = 0
     while True:
         try:
-            logging.disable(logging.INFO)
             return ripe_atlas.Measurement(id=measurement_id)
         except ripe_atlas.exceptions.APIResponseError as error:
             time.sleep(5)
@@ -1214,8 +1197,6 @@ def get_ripe_measurement(measurement_id: int):
             if retries % 5 == 0:
                 logger.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
                                                                                error))
-        finally:
-            logging.disable(logging.NOTSET)
 
 
 def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params: [str, str]=None,
@@ -1226,10 +1207,8 @@ def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params
         try:
             if ripe_slow_down_sema is not None:
                 ripe_slow_down_sema.acquire()
-            logging.disable(logging.INFO)
             response = RIPE_SESSION.get(url, params=params, headers=headers,
                                         timeout=(3.05, 27.05))
-            logging.disable(logging.NOTSET)
         except requests.exceptions.ReadTimeout:
             continue
         else:
