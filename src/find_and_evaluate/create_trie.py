@@ -19,15 +19,15 @@ def main():
     with open(args.filename) as location_file:
         locations = util.json_load(location_file)
 
-    blacklist = []
+    blacklist = set()
     with open(args.code_black_list) as blacklist_file:
         for line in blacklist_file:
-            blacklist.append(line.strip())
+            blacklist.add(line.strip())
 
-    general_filter = []
+    general_filter = set()
     with open(args.general_filter) as general_filter_file:
         for line in general_filter_file:
-            general_filter.append(line.strip())
+            general_filter.add(line.strip())
 
     trie = create_trie(locations, blacklist, general_filter)
 
@@ -43,7 +43,7 @@ def create_trie(locations, blacklist, general_filter):
     """
     code_id_type_tuples = []
     for location in locations.values():
-        code_id_type_tuples.extend(location.code_id_type_tuples(blacklist))
+        code_id_type_tuples.extend(location.code_id_type_tuples())
 
     code_id_type_tuples = [code_tuple for code_tuple in code_id_type_tuples
                            if code_tuple[0] not in blacklist and
