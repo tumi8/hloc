@@ -52,7 +52,7 @@ def create_trie(locations, blacklist, general_filter):
     for code in general_filter:
         code_id_type_tuples.append((code, (-1, -1)))
 
-    return marisa_trie.RecordTrie('<HH', code_id_type_tuples)
+    return marisa_trie.RecordTrie('<hh', code_id_type_tuples)
 
 if __name__ == '__main__':
     main()
