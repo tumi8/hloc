@@ -1,0 +1,7 @@
+{
+ 'ran': ['frankfurt'],
+ 'ost': ['boston'],
+ 'ter': ['rochester', 'manchester'],
+ 'lin': ['illinois', 'carolina', 'dublin', 'colindale'],
+ 'omi': ['bloomington']
+}
