@@ -43,7 +43,6 @@ def __create_parser_arguments(parser):
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
                         dest='profile', action='store_true')
-    parser.add_argument('-f', '--general-filter-file', dest='general_filter', type=str)
     parser.add_argument('-s', '--special-filter-file', dest='special_filter', type=str)
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
