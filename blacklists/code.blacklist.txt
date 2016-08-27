@@ -1,0 +1,12 @@
+com
+dsl
+ati
+cpe
+cny
+tat
+nte
+sd1
+ro
+bus
+ine
+res
