@@ -43,6 +43,8 @@ def __create_parser_arguments(parser):
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
                         dest='profile', action='store_true')
+    parser.add_argument('-f', '--general-filter-file', dest='general_filter', type=str)
+    parser.add_argument('-s', '--special-filter-file', dest='special_filter', type=str)
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
@@ -58,6 +60,9 @@ def main():
 
     with open(args.trie_file_path, 'rb') as trie_file:
         trie = pickle.load(trie_file)
+
+    with open(args.special_filter) as special_filter_file:
+        special_filter = json.load(special_filter_file)
 
     popular_labels = {}
     if args.popular_labels_l is not None:
@@ -78,8 +83,7 @@ def main():
 
         process = Process(target=start_search_in_file,
                           args=(args.doaminfilename_proto, index, trie,
-                                popular_labels,
-                                args.profile),
+                                popular_labels, special_filter, args.profile),
                           kwargs={'amount': args.amount},
                           name='find_locations_{}'.format(index))
         process.start()
@@ -103,23 +107,22 @@ def main():
         json.dump(popular_labels, popular_file)
 
 
-def start_search_in_file(filename_proto, index, trie, popular_labels,
-                         profile, amount=1000):
+def start_search_in_file(filename_proto, index, trie, popular_labels, special_filter, profile,
+                         amount=1000):
     """for all amount=0"""
     start_time = time.time()
     if profile and index in [1, 7]:
         cProfile.runctx(
-            'search_in_file(filename_proto, index, trie, popular_labels, '
+            'search_in_file(filename_proto, index, trie, popular_labels, special_filter, '
             'amount=amount)', globals(), locals())
     else:
-        search_in_file(filename_proto, index, trie, popular_labels,
-                       amount=amount)
+        search_in_file(filename_proto, index, trie, popular_labels, special_filter, amount=amount)
     end_time = time.time()
-    logger.info('index {0}: search_in_file running time: {1}'
-                 .format(index, (end_time - start_time)))
+    logger.info('index {0}: search_in_file running time: {1}'.format(
+        index, (end_time - start_time)))
 
 
-def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
+def search_in_file(filename_proto, index, trie, popular_labels, special_filter, amount=1000):
     """for all amount=0"""
     filename = filename_proto.format(index)
     match_count = collections.defaultdict(int)
@@ -138,12 +141,11 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                 entrie_file.write('\n')
             entries[:] = []
 
-    with open(filename) as dns_file_handle, open(
-                    '.'.join(filename.split('.')[:-1]) + '-found.json',
-            'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
-            'w') as locn_found_file, mmap.mmap(dns_file_handle.fileno(), 0,
-                                               access=mmap.ACCESS_READ) as dns_file:
+    # TODO split by dash
+    with open(filename) as dns_file_handle, \
+            open('.'.join(filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, \
+            open('.'.join(filename.split('.')[:-1]) + '-not-found.json', 'w') as locn_found_file, \
+            mmap.mmap(dns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as dns_file:
 
         def lines(mmap_file: mmap.mmap):
             while True:
@@ -178,7 +180,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
                     else:
                         pm_count = collections.defaultdict(int)
 
-                        temp_gr_count, matches = search_in_label(o_label, trie)
+                        temp_gr_count, matches = search_in_label(o_label, trie, special_filter)
 
                         for key, value in temp_gr_count.items():
                             match_count[key] += value
@@ -232,22 +234,35 @@ def search_in_file(filename_proto, index, trie, popular_labels, amount=1000):
     logger.info('match count:\n{}'.format(match_count))
 
 
-def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie):
+def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie, special_filter):
     """returns all matches for this label"""
     matches = []
     ids = {}
     type_count = collections.defaultdict(int)
     label = o_label.label[:]
+    blacklisted = []
     while label:
         matching_keys = trie.prefixes(label)
+        matching_keys.sort(key=len, reverse=True)
         for key in matching_keys:
+            if [black_word for black_word in blacklisted if key in black_word]:
+                continue
+
+            if key in special_filter and \
+                    [black_word for black_word in special_filter[key]
+                     if black_word in o_label.label]:
+                continue
+
             matching_locations = trie[key]
+            if [location_id for location_id, _ in matching_locations if location_id == -1]:
+                blacklisted.append(key)
+                continue
             for location_id, code_type in matching_locations:
                 real_code_type = util.LocationCodeType(code_type)
                 if location_id in ids:
                     continue
-                matches.append(util.DomainLabelMatch(location_id, real_code_type, domain_label=o_label,
-                                                     code=key))
+                matches.append(util.DomainLabelMatch(location_id, real_code_type,
+                                                     domain_label=o_label, code=key))
                 type_count[real_code_type] += 1
 
         label = label[1:]
