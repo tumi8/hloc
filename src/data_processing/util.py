@@ -77,7 +77,7 @@ def remove_file_ending(filenamepath: str) -> str:
 def setup_logger(filename: str, loggername: str) -> logging.Logger:
     """does the basic config on logging"""
     logging.basicConfig(filename=filename, level=logging.DEBUG,
-                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-8s][%(processName)s] '
+                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
                         datefmt='%d.%m %H:%M:%S')
     logging.getLogger("requests").setLevel(logging.ERROR)
