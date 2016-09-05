@@ -84,7 +84,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
                             help='Returns after the first time coputing the amount of '
                                  'matches to check')
-    parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
+    parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
 

@@ -10,3 +10,7 @@ ro
 bus
 ine
 res
+tel
+tds
+l92
+ol92

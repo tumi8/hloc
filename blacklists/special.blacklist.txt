@@ -8,5 +8,6 @@
  "ata": ["kolkata"],
  "est": ["rochester", "manchester", "charleston"],
  "usto": ["houston"],
- "gal": ["bangalore"]
+ "gal": ["bangalore"],
+ "bal": ["baltimore"]
 }
