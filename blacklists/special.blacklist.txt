@@ -3,5 +3,10 @@
  "ost": ["boston"],
  "ter": ["rochester", "manchester"],
  "lin": ["illinois", "carolina", "dublin", "colindale"],
- "omi": ["bloomington"]
+ "omi": ["bloomington"],
+ "cus": ["cust"],
+ "ata": ["kolkata"],
+ "est": ["rochester", "manchester", "charleston"],
+ "usto": ["houston"],
+ "gal": ["bangalore"]
 }
