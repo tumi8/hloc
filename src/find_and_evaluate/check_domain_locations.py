@@ -17,6 +17,7 @@ import threading
 import math
 import pympler.tracker
 import pympler.asizeof
+import gc
 
 import src.data_processing.util as util
 
@@ -35,6 +36,7 @@ DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 MAX_THREADS = 20
 logger = None
 memory_tracker = pympler.tracker.SummaryTracker()
+gc.set_debug(gc.DEBUG_LEAK)
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -629,6 +631,8 @@ def check_domain_location_ripe(domain: util.Domain,
             """
             nonlocal matches, matched
             matches = filter_possible_matches(matches, results, locations, distances)
+            if gc.garbage:
+                logger.error('Garbage collection garbage not empty! {}'.format(len(gc.garbage)))
             if dry_run:
                 if isinstance(matches, tuple):
                     update_domains(domain, util.DomainType.correct)
@@ -1072,7 +1076,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             try:
                 measurement.next_batch()
             except ripe_atlas.exceptions.APIResponseError as error:
-                logger.exception('MeasurementRequest APIResponseError: {}'.format(error))
+                logger.exception('MeasurementRequest APIResponseError next_batch: {}'.format(error))
             else:
                 break
 
@@ -1197,10 +1201,11 @@ def get_ripe_measurement(measurement_id: int):
         except ripe_atlas.exceptions.APIResponseError as error:
             time.sleep(5)
             retries += 1
-
             if retries % 25 == 0:
                 logger.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
                                                                                error))
+            if retries % 5 == 0:
+                time.sleep(30)
 
 
 def json_request_get_wrapper(url: str, ripe_slow_down_sema: mp.Semaphore, params: [str, str]=None,
