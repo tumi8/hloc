@@ -771,6 +771,8 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     for match in matches:
         location_distances = []
         for result in f_results:
+            if result.rtt is None:
+                continue
             if result.location_id in distances:
                 distance = distances[result.location_id][str(match.location_id)]
             else:
@@ -1196,7 +1198,7 @@ def get_ripe_measurement(measurement_id: int):
             time.sleep(5)
             retries += 1
 
-            if retries % 5 == 0:
+            if retries % 25 == 0:
                 logger.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
                                                                                error))
 
