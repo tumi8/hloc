@@ -13,6 +13,7 @@ import IP2Location
 import collections
 import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
+import ripe.atlas.cousteau.exceptions
 import threading
 import math
 import pympler.tracker
@@ -84,7 +85,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
                             help='Returns after the first time coputing the amount of '
                                  'matches to check')
-    parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log', dest='log_file',
+    parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
+                        dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
 
@@ -1075,8 +1077,9 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         while True:
             try:
                 measurement.next_batch()
-            except ripe_atlas.exceptions.APIResponseError as error:
-                logger.exception('MeasurementRequest APIResponseError next_batch: {}'.format(error))
+            except ripe_atlas.exceptions.APIResponseError as api_error:
+                logger.exception('MeasurementRequest APIResponseError next_batch: {}'.format(
+                    api_error))
             else:
                 break
 
