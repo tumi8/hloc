@@ -1,7 +1,6 @@
 {
  "ran": ["frankfurt"],
  "ost": ["boston"],
- "ter": ["rochester", "manchester"],
  "lin": ["illinois", "carolina", "dublin", "colindale"],
  "omi": ["bloomington"],
  "cus": ["cust"],
@@ -9,5 +8,10 @@
  "est": ["rochester", "manchester", "charleston"],
  "usto": ["houston"],
  "gal": ["bangalore"],
- "bal": ["baltimore"]
+ "bal": ["baltimore"],
+ "ver": ["vancouver", "denver"],
+ "ron": ["toronto", "porthuron"],
+ "lan": ["lansdale", "milano", "atalanta"],
+ "ont": ["montreal", "toronto"],
+ "chi": ["pichincha", "michigan", "chicago", "chico"]
 }
