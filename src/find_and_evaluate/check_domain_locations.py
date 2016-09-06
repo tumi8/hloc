@@ -36,7 +36,8 @@ DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 
 MAX_THREADS = 20
 logger = None
-memory_tracker = pympler.tracker.SummaryTracker()
+# memory_tracker = pympler.tracker.SummaryTracker()
+gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -553,7 +554,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             logger.debug('count {} correct_count {}'.format(count_entries,
                                                                             correct_type_count))
 
-                    del domain_location_list
+                    del domain_location_list[:]
                     for thread in starting_threads:
                         thread_semaphore.acquire()
                         threads.append(thread)
