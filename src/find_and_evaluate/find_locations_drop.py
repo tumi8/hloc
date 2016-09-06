@@ -12,6 +12,7 @@ from src.data_processing.preprocess_drop_rules import RULE_NAME
 
 logger = None
 
+
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('doaminfilename_proto', type=str,
@@ -170,7 +171,6 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
                                     if matched_str in label.label:
                                         label.matches.append(util.DomainLabelMatch(location[0],
                                                                                    code_type,
-                                                                                   label,
                                                                                    matched_str))
                                         break
 

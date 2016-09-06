@@ -260,8 +260,7 @@ def search_in_label(o_label: util.DomainLabel, trie: marisa_trie.RecordTrie, spe
                 real_code_type = util.LocationCodeType(code_type)
                 if location_id in ids:
                     continue
-                matches.append(util.DomainLabelMatch(location_id, real_code_type,
-                                                     domain_label=o_label, code=key))
+                matches.append(util.DomainLabelMatch(location_id, real_code_type, code=key))
                 type_count[real_code_type] += 1
 
         label = label[1:]
