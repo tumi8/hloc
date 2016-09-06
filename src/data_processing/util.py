@@ -594,7 +594,7 @@ class Domain(JSONBase):
         def create_labels() -> [DomainLabel]:
             labels = []
             for label in domain_name.split('.')[::-1]:
-                labels.append(DomainLabel(label, domain=self))
+                labels.append(DomainLabel(label))
             return labels
 
         self.domain_name = domain_name
@@ -661,10 +661,7 @@ class Domain(JSONBase):
                      dct[Domain.PropertyKey.ipv6_address])
         if Domain.PropertyKey.domain_labels in dct:
             del obj.domain_labels[:]
-            for label_dct in dct[Domain.PropertyKey.domain_labels]:
-                label_obj = label_dct
-                label_obj.domain = obj
-                obj.domain_labels.append(label_obj)
+            obj.domain_labels = dct[Domain.PropertyKey.domain_labels][:]
         if Domain.PropertyKey.location in dct and locations and \
                 dct[Domain.PropertyKey.location] in locations:
             obj.location = locations[dct[Domain.PropertyKey.location]]
@@ -674,8 +671,6 @@ class Domain(JSONBase):
     def copy(self):
         obj = Domain(self.domain_name, self.ip_address, self.ipv6_address)
         obj.domain_labels = [domain_label.copy() for domain_label in self.domain_labels]
-        for label in obj.domain_labels:
-            label.domain = obj
         obj.location = self.location
         return obj
 
@@ -685,19 +680,18 @@ class DomainLabel(JSONBase):
 
     class_name_identifier = 'dl'
 
-    __slots__ = ['label', 'domain', 'matches']
+    __slots__ = ['label', 'matches']
 
     class PropertyKey:
         label = '0'
         matches = '1'
 
-    def __init__(self, label, domain=None):
+    def __init__(self, label):
         """
         init
-        :param domain: set a reference to the domain name object
+        :param label: the domain label
         """
         self.label = label
-        self.domain = domain
         self.matches = []
 
     def dict_representation(self):
@@ -712,18 +706,13 @@ class DomainLabel(JSONBase):
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabel(dct[DomainLabel.PropertyKey.label])
-        for match in dct[DomainLabel.PropertyKey.matches]:
-            match_obj = match
-            match_obj.domain_label = obj
-            obj.matches.append(match_obj)
+        obj.matches = dct[DomainLabel.PropertyKey.matches][:]
 
         return obj
 
     def copy(self):
         obj = DomainLabel(self.label)
         obj.matches = [match.copy() for match in self.matches]
-        for match in obj.matches:
-            match.domain_label = obj
         return obj
 
 
@@ -732,7 +721,7 @@ class DomainLabelMatch(JSONBase):
 
     class_name_identifier = 'dlm'
 
-    __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching',
+    __slots__ = ['location_id', 'code_type', 'code', 'matching',
                  'matching_distance', 'matching_rtt']
 
     class PropertyKey:
@@ -743,10 +732,8 @@ class DomainLabelMatch(JSONBase):
         matching_distance = '4'
         matching_rtt = '5'
 
-    def __init__(self, location_id: int, code_type: LocationCodeType,
-                 domain_label: DomainLabel=None, code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType, code=None):
         """init"""
-        self.domain_label = domain_label
         self.location_id = location_id
         self.code_type = code_type
         self.code = code
