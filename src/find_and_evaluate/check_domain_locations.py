@@ -37,7 +37,6 @@ DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 MAX_THREADS = 20
 logger = None
 memory_tracker = pympler.tracker.SummaryTracker()
-gc.set_debug(gc.DEBUG_LEAK)
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
