@@ -168,12 +168,21 @@ def main():
     config.filename = args.filename
     if args.numProcesses:
         config.amount_processes = args.numProcesses
+    elif not config.amount_processes:
+        logger.critical('Amount of processes not defined! Aborting')
+        return 1
     if args.destination:
         config.destination = args.destination
+    elif not config.destination:
+        logger.critical('Destination path not defined! Aborting')
+        return 1
     if args.isp_ip_filter:
         config.isp_ip_filter = args.isp_ip_filter
     if args.ip_version:
         config.ip_version = args.ip_version
+    elif not config.ip_version:
+        logger.critical('IP version not defined! Aborting')
+        return 1
     if args.white_list_file_path:
         del config.white_list
         config.white_list = []
