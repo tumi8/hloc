@@ -769,7 +769,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     """Sort the matches after their most probable location"""
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)
-    if len(f_results) == 0:
+    if len(f_results) <= 3:
         return matches
 
     near_matches = collections.defaultdict(list)
