@@ -564,8 +564,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                     threads.append(thread)
                     thread.start()
 
-            for thread in threads:
-                thread.join()
+                for thread in threads:
+                    thread.join()
 
         except KeyboardInterrupt:
             logger.warning('SIGINT recognized stopping Process')
@@ -839,7 +839,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                 if not match_in_near_matches(match):
                     r_indexes.append(i)
 
-            for i in r_indexes:
+            for i in r_indexes[::-1]:
                 del matches[i]
 
         matches.clear()
