@@ -508,7 +508,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
             with open(filename_proto.format(pid)) as domainFile, \
                     mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm:
 
-                domain_location_list = None
+                domain_location_list = []
                 domain_location_list_lock = threading.Lock()
 
                 def next_domains():
@@ -523,7 +523,9 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 def next_domain():
                     with domain_location_list_lock:
                         nonlocal domain_location_list, count_entries
-                        if not domain_location_list:
+                        if domain_location_list is None:
+                            return None
+                        if len(domain_location_list) == 0:
                             if not next_domains():
                                 return None
 
