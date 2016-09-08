@@ -518,6 +518,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         domain_location_list = util.json_loads(line)
                         return True
                     else:
+                        domain_location_list = None
                         return False
 
                 def next_domain():
@@ -609,7 +610,7 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
                                        add_dry_run_matches)
         except Exception as e:
-            logger.error('Check Domain Error: {}'.format(e))
+            logger.exception('Check Domain Error')
         finally:
             next_domain_tuple = nextdomain()
     logger.debug('Thread finished')
