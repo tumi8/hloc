@@ -609,10 +609,10 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
                                        locations, zmap_locations, next_domain_tuple[1], distances,
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
                                        add_dry_run_matches)
-        except Exception as e:
+        except Exception:
             logger.exception('Check Domain Error')
-        finally:
-            next_domain_tuple = nextdomain()
+
+        next_domain_tuple = nextdomain()
     logger.debug('Thread finished')
 
 
@@ -1120,9 +1120,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         while True:
             try:
                 measurement.next_batch()
-            except ripe_atlas.exceptions.APIResponseError as api_error:
-                logger.exception('MeasurementRequest APIResponseError next_batch: {}'.format(
-                    api_error))
+            except ripe_atlas.exceptions.APIResponseError:
+                logger.exception('MeasurementRequest APIResponseError next_batch')
             else:
                 break
 
@@ -1146,8 +1145,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
     while True:
         try:
             measurements = ripe_atlas.MeasurementRequest(**params)
-        except ripe_atlas.exceptions.APIResponseError as error:
-            logger.exception('MeasurementRequest APIResponseError: {}'.format(error))
+        except ripe_atlas.exceptions.APIResponseError:
+            logger.exception('MeasurementRequest APIResponseError')
         else:
             break
 
@@ -1248,8 +1247,7 @@ def get_ripe_measurement(measurement_id: int):
             time.sleep(5)
             retries += 1
             if retries % 25 == 0:
-                logger.warning('Ripe get Measurement (id {}) error! {}'.format(measurement_id,
-                                                                               error))
+                logger.exception('Ripe get Measurement (id {}) error!'.format(measurement_id))
             if retries % 5 == 0:
                 time.sleep(30)
 
