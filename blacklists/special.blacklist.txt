@@ -13,5 +13,6 @@
  "ron": ["toronto", "porthuron"],
  "lan": ["lansdale", "milano", "atalanta"],
  "ont": ["montreal", "toronto"],
- "chi": ["pichincha", "michigan", "chicago", "chico"]
+ "chi": ["pichincha", "michigan", "chicago", "chico"],
+ "ton": ["pendelton", "boston", "washington", "wellington", "houston", "burlington", "charleston"]
 }
