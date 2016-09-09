@@ -640,6 +640,8 @@ def check_domain_location_ripe(domain: util.Domain,
                 results.append(util.LocationResult(zmap_id, zmap_result[zmap_id],
                                                    zmap_location))
 
+    eliminate_duplicate_results(results)
+
     if not results:
         update_domains(domain, util.DomainType.not_responding)
         return
@@ -700,8 +702,6 @@ def check_domain_location_ripe(domain: util.Domain,
         #                                                 len(measurements)))
     else:
         measurements = []
-
-    eliminate_duplicate_results(results)
 
     while next_match is not None:
         # logger.debug('next while loop turn')
@@ -823,7 +823,7 @@ def eliminate_duplicate_results(results: [util.LocationResult]):
             for inner_result in results:
                 if inner_result not in remove_obj:
                     if result.location_id == inner_result.location_id:
-                        if result.rtt < inner_result.location_id:
+                        if result.rtt < inner_result.rtt:
                             remove_obj.append(inner_result)
                         else:
                             remove_obj.append(result)
