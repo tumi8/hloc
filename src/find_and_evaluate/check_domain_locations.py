@@ -661,6 +661,7 @@ def check_domain_location_ripe(domain: util.Domain,
         """
         nonlocal matches, matched
         return_val, return_tuple = filter_possible_matches(matches, results, locations, distances)
+        logger.debug('after 5')
         if not return_val:
             return None
 
