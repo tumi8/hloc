@@ -814,12 +814,11 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)
     f_results = f_results[:10]
-    logger.debug('filter 1')
+    logger.debug('filter 1 {}'.format(len(matches)))
     if len(f_results) > 0:
         near_matches = collections.defaultdict(list)
         for match in matches:
             location_distances = []
-            logger.debug('filter 2')
             for result in f_results:
                 if result.rtt is None:
                     continue
@@ -839,7 +838,6 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
                 location_distances.append((result, distance))
 
-            logger.debug('filter 3')
             if len(location_distances) != len(f_results):
                 continue
 
