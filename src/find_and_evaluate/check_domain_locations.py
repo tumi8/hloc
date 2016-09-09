@@ -810,12 +810,16 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     Sort the matches after their most probable location
     :returns if there are any matches left
     """
+    logger.debug('filter 0')
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)
+    f_results = f_results[:10]
+    logger.debug('filter 1')
     if len(f_results) > 0:
         near_matches = collections.defaultdict(list)
         for match in matches:
             location_distances = []
+            logger.debug('filter 2')
             for result in f_results:
                 if result.rtt is None:
                     continue
@@ -834,6 +838,8 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                     return True, (distance, result.rtt, match)
 
                 location_distances.append((result, distance))
+
+            logger.debug('filter 3')
             if len(location_distances) != len(f_results):
                 continue
 
@@ -841,6 +847,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
             near_matches[str(min_res.location_id)].append(match)
 
+        logger.debug('filter 4')
         if f_results[0].rtt > 75:
             def match_in_near_matches(m_match):
                 for near_match_arr in near_matches.values():
@@ -855,12 +862,13 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
             for i in r_indexes[::-1]:
                 del matches[i]
-
+        logger.debug('filter 5')
         matches.clear()
         for result in f_results:
             if str(result.location_id) in near_matches:
                 for match in near_matches[str(result.location_id)]:
                     matches.append(match)
+        logger.debug('filter 6')
 
     return len(matches) > 0, None
 
