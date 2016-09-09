@@ -971,8 +971,7 @@ def create_and_check_measurement(ip_addr: [str, str],
         """Sleep for ten seconds"""
         time.sleep(10)
 
-    ripe_create_sema.acquire()
-    try:
+    with ripe_create_sema:
         measurement_id = new_measurement()
 
         while True:
@@ -996,20 +995,17 @@ def create_and_check_measurement(ip_addr: [str, str],
                     sleep_ten()
             else:
                 sleep_ten()
+    ripe_slow_down_sema.acquire()
+    success, m_results = ripe_atlas.AtlasResultsRequest(
+        **{'msm_id': measurement_id}).create()
+    while not success:
+        logger.warning('ResultRequest error {}'.format(m_results))
+        time.sleep(10 + (random.randrange(0, 500) / 100))
         ripe_slow_down_sema.acquire()
         success, m_results = ripe_atlas.AtlasResultsRequest(
             **{'msm_id': measurement_id}).create()
-        while not success:
-            logger.warning('ResultRequest error {}'.format(m_results))
-            time.sleep(10 + (random.randrange(0, 500) / 100))
-            ripe_slow_down_sema.acquire()
-            success, m_results = ripe_atlas.AtlasResultsRequest(
-                **{'msm_id': measurement_id}).create()
 
-        return m_results, near_node
-
-    finally:
-        ripe_create_sema.release()
+    return m_results, near_node
 
 
 USE_WRAPPER = True
@@ -1247,7 +1243,7 @@ def get_ripe_measurement(measurement_id: int):
     while True:
         try:
             return ripe_atlas.Measurement(id=measurement_id)
-        except ripe_atlas.exceptions.APIResponseError as error:
+        except ripe_atlas.exceptions.APIResponseError:
             time.sleep(5)
             retries += 1
             if retries % 25 == 0:
