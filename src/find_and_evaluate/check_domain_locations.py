@@ -659,30 +659,34 @@ def check_domain_location_ripe(domain: util.Domain,
         :rtype: DomainLabelMatch
         """
         nonlocal matches, matched
-        return_val = filter_possible_matches(matches, results, locations, distances)
+        return_val, return_tuple = filter_possible_matches(matches, results, locations, distances)
+        if not return_val:
+            return None
+
         if gc.garbage:
             logger.error('Garbage collection garbage not empty! {}'.format(len(gc.garbage)))
         if dry_run:
-            if isinstance(return_val, tuple):
+            if return_tuple:
                 update_domains(domain, util.DomainType.correct)
                 matched = True
                 return None
             add_dry_run_matches(matches)
             return None
-        if isinstance(return_val, tuple):
-            distance, rtt, match = matches
-            update_count_for_type(match.code_type)
-            match.matching = True
-            match.matching_distance = distance
-            match.matching_rtt = rtt
-            domain.location = locations[str(match.location_id)]
-            update_domains(domain, util.DomainType.correct)
-            matched = True
-            return None
-        ret = None
-        if len(matches) > 0:
-            ret = matches[0]
-        return ret
+        else:
+            if return_tuple:
+                distance, rtt, match = return_tuple
+                update_count_for_type(match.code_type)
+                match.matching = True
+                match.matching_distance = distance
+                match.matching_rtt = rtt
+                domain.location = locations[str(match.location_id)]
+                update_domains(domain, util.DomainType.correct)
+                matched = True
+                return None
+            ret = None
+            if len(matches) > 0:
+                ret = matches[0]
+            return ret
 
     next_match = get_next_match()
     no_verification_matches = []
@@ -817,7 +821,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
                 # Only verify location if there is also a match
                 if distance < 100 and result.rtt < MAX_RTT + distance / 100:
-                    return distance, result.rtt, match
+                    return True, (distance, result.rtt, match)
 
                 location_distances.append((result, distance))
             if len(location_distances) != len(f_results):
@@ -848,7 +852,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                 for match in near_matches[str(result.location_id)]:
                     matches.append(match)
 
-    return len(matches) > 0
+    return len(matches) > 0, None
 
 
 # def test_netsec_server(ip_address: str, chair_server_locks: [str, threading.Lock]) -> \
