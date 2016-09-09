@@ -730,7 +730,8 @@ def check_domain_location_ripe(domain: util.Domain,
                     else:
                         remove_obj = iter_result
                         break
-            results.remove(remove_obj)
+            if remove_obj:
+                results.remove(remove_obj)
             results.append(new_result)
 
         if chk_m is None or chk_m == -1:
@@ -1015,13 +1016,14 @@ def create_and_check_measurement(ip_addr: [str, str],
         return create_ripe_measurement(ip_addr, location, near_node,
                                        ripe_slow_down_sema)
 
-    def sleep_ten():
+    def sleep_time(amount: int = 15):
         """Sleep for ten seconds"""
-        time.sleep(10)
+        time.sleep(amount)
 
     with ripe_create_sema:
         measurement_id = new_measurement()
-
+        # sleep for 6 minutes
+        sleep_time(amount=360)
         while True:
             if measurement_id is None:
                 return None, None
@@ -1038,10 +1040,11 @@ def create_and_check_measurement(ip_addr: [str, str],
                     if near_node is None:
                         return None, None
                     measurement_id = new_measurement()
+                    sleep_time(360)
                 elif res.status_id in [0, 1, 2]:
-                    sleep_ten()
+                    sleep_time()
             else:
-                sleep_ten()
+                sleep_time()
     ripe_slow_down_sema.acquire()
     success, m_results = ripe_atlas.AtlasResultsRequest(
         **{'msm_id': measurement_id}).create()
