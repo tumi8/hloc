@@ -34,7 +34,7 @@ LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
 DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
 
-MAX_THREADS = 20
+MAX_THREADS = 1
 logger = None
 # memory_tracker = pympler.tracker.SummaryTracker()
 gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
@@ -605,6 +605,7 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
     next_domain_tuple = nextdomain()
     while next_domain_tuple:
         try:
+            logger.debug('next domain')
             check_domain_location_ripe(next_domain_tuple[0], update_domains, update_count_for_type,
                                        locations, zmap_locations, next_domain_tuple[1], distances,
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
@@ -689,6 +690,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return ret
 
     next_match = get_next_match()
+    logger.debug('first match')
     no_verification_matches = []
 
     # TODO refactoring measurements are in dict format
@@ -701,6 +703,7 @@ def check_domain_location_ripe(domain: util.Domain,
         measurements = []
 
     while next_match is not None:
+        logger.debug('next while loop turn')
         location = locations[str(next_match.location_id)]
         near_nodes = location.nodes
 
@@ -751,6 +754,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
             elif chk_res == -1:
                 update_domains(domain, util.DomainType.not_responding)
+                logger.debug('not responding')
                 return
             elif chk_res < (MAX_RTT + node_location_dist / 100):
                 update_count_for_type(next_match.code_type)
@@ -787,8 +791,12 @@ def check_domain_location_ripe(domain: util.Domain,
     if not matched:
         if filter_possible_matches(no_verification_matches, results, locations, distances):
             update_domains(domain, util.DomainType.no_verification)
+            logger.debug('no verification')
         else:
             update_domains(domain, util.DomainType.no_location)
+            logger.debug('no location')
+    else:
+        logger.debug('verified')
 
     return 0
 
@@ -990,7 +998,6 @@ def create_and_check_measurement(ip_addr: [str, str],
                     if near_node is None:
                         return None, None
                     measurement_id = new_measurement()
-                    continue
                 elif res.status_id in [0, 1, 2]:
                     sleep_ten()
             else:
