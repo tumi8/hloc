@@ -860,13 +860,14 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
             for i in r_indexes[::-1]:
                 del matches[i]
-        logger.debug('filter 5')
-        matches.clear()
-        for result in f_results:
-            if str(result.location_id) in near_matches:
-                for match in near_matches[str(result.location_id)]:
-                    matches.append(match)
-        logger.debug('filter 6')
+            logger.debug('filter 5')
+        else:
+            matches.clear()
+            for result in f_results:
+                if str(result.location_id) in near_matches:
+                    for match in near_matches[str(result.location_id)]:
+                        matches.append(match)
+            logger.debug('filter 6')
 
     return len(matches) > 0, None
 
