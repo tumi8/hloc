@@ -718,7 +718,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                                    near_nodes,
                                                    results,
                                                    ripe_slow_down_sema)
-
+        logger.debug('after 1')
         if chk_m is None or chk_m == -1:
             # only if no old measurement exists
             available_nodes = location.available_nodes
@@ -730,7 +730,7 @@ def check_domain_location_ripe(domain: util.Domain,
             m_results, near_node = create_and_check_measurement(
                 (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
                 ripe_create_sema, ripe_slow_down_sema)
-
+            logger.debug('after 2')
             if m_results is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -747,7 +747,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             chk_res = get_rtt_from_result(result)
-
+            logger.debug('after 3')
             if chk_res is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -783,6 +783,7 @@ def check_domain_location_ripe(domain: util.Domain,
             else:
                 n_res = util.LocationResult(location.id, chk_m, location)
                 results.append(n_res)
+        logger.debug('after 4')
 
         matches.remove(next_match)
         no_verification_matches.append(next_match)
