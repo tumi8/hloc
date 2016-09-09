@@ -632,10 +632,9 @@ def check_domain_location_ripe(domain: util.Domain,
                                add_dry_run_matches: [[int], ]):
     """checks if ip is at location"""
     matched = False
-    results = None
+    results = []
 
     if zmap_result:
-        results = []
         for zmap_id, zmap_location in zmap_locations.items():
             if zmap_id in zmap_result:
                 results.append(util.LocationResult(zmap_id, zmap_result[zmap_id],
@@ -647,8 +646,7 @@ def check_domain_location_ripe(domain: util.Domain,
     # else:
     #     results = test_netsec_server(domain['ip'], chair_server_locks)
 
-    if results is None or len(
-            [res for res in results if res.rtt is not None]) == 0:
+    if len([res for res in results if res.rtt is not None]) == 0:
         update_domains(domain, util.DomainType.not_responding)
         return
 
@@ -720,6 +718,32 @@ def check_domain_location_ripe(domain: util.Domain,
                                                    results,
                                                    ripe_slow_down_sema)
         logger.debug('after 1')
+
+        def eliminate_duplicate_results(results: [util.LocationResult]):
+            remove_obj = []
+            for result in results:
+                if result not in remove_obj:
+                    for inner_result in results:
+                        if inner_result not in remove_obj:
+                            if result.location_id == inner_result.location_id:
+                                if result.rtt < inner_result.location_id:
+                                    remove_obj.append(inner_result)
+                                else:
+                                    remove_obj.append(result)
+                                    break
+
+        def add_new_result(new_result: util.LocationResult):
+            remove_obj = None
+            for result in results:
+                if result.location_id == new_result.location_id:
+                    if result.rtt <= new_result.rtt:
+                        return
+                    else:
+                        remove_obj = result
+                        break
+            results.remove(remove_obj)
+            results.append(new_result)
+
         if chk_m is None or chk_m == -1:
             # only if no old measurement exists
             available_nodes = location.available_nodes
@@ -768,7 +792,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 break
             else:
                 n_res = util.LocationResult(location.id, chk_res, location)
-                results.append(n_res)
+                add_new_result(n_res)
         else:
             node_location_dist = location.gps_distance_equirectangular(
                 util.GPSLocation(node['latitude'], node['longitude']))
@@ -783,7 +807,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 break
             else:
                 n_res = util.LocationResult(location.id, chk_m, location)
-                results.append(n_res)
+                add_new_result(n_res)
         logger.debug('after 4')
 
         matches.remove(next_match)
