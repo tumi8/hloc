@@ -605,7 +605,7 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
     next_domain_tuple = nextdomain()
     while next_domain_tuple:
         try:
-            # logger.debug('next domain')
+            logger.debug('next domain')
             check_domain_location_ripe(next_domain_tuple[0], update_domains, update_count_for_type,
                                        locations, zmap_locations, next_domain_tuple[1], distances,
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
@@ -661,7 +661,7 @@ def check_domain_location_ripe(domain: util.Domain,
         """
         nonlocal matches, matched
         return_val, return_tuple = filter_possible_matches(matches, results, locations, distances)
-        # logger.debug('after 5')
+        logger.debug('after 5')
         if not return_val:
             return None
 
@@ -691,7 +691,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return ret
 
     next_match = get_next_match()
-    # logger.debug('first match')
+    logger.debug('first match')
     no_verification_matches = []
 
     # TODO refactoring measurements are in dict format
@@ -704,7 +704,7 @@ def check_domain_location_ripe(domain: util.Domain,
         measurements = []
 
     while next_match is not None:
-        # logger.debug('next while loop turn')
+        logger.debug('next while loop turn')
         location = locations[str(next_match.location_id)]
         near_nodes = location.nodes
 
@@ -719,7 +719,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                                    near_nodes,
                                                    results,
                                                    ripe_slow_down_sema)
-        # logger.debug('after 1')
+        logger.debug('after 1')
 
         def add_new_result(new_result: util.LocationResult):
             remove_obj = None
@@ -745,7 +745,7 @@ def check_domain_location_ripe(domain: util.Domain,
             m_results, near_node = create_and_check_measurement(
                 (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
                 ripe_create_sema, ripe_slow_down_sema)
-            # logger.debug('after 2')
+            logger.debug('after 2')
             if m_results is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -762,7 +762,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             chk_res = get_rtt_from_result(result)
-            # logger.debug('after 3')
+            logger.debug('after 3')
             if chk_res is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -798,7 +798,7 @@ def check_domain_location_ripe(domain: util.Domain,
             else:
                 n_res = util.LocationResult(location.id, chk_m, location)
                 add_new_result(n_res)
-        # logger.debug('after 4')
+        logger.debug('after 4')
 
         matches.remove(next_match)
         no_verification_matches.append(next_match)
@@ -807,12 +807,12 @@ def check_domain_location_ripe(domain: util.Domain,
     if not matched:
         if filter_possible_matches(no_verification_matches, results, locations, distances):
             update_domains(domain, util.DomainType.no_verification)
-            # logger.debug('no verification')
+            logger.debug('no verification')
         else:
             update_domains(domain, util.DomainType.no_location)
-            # logger.debug('no location')
-    # else:
-    #     logger.debug('verified')
+            logger.debug('no location')
+    else:
+        logger.debug('verified')
 
     return 0
 
@@ -838,11 +838,11 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     Sort the matches after their most probable location
     :returns if there are any matches left
     """
-    # logger.debug('filter 0')
+    logger.debug('filter 0')
     f_results = [result for result in results if result.rtt is not None]
     f_results.sort(key=lambda res: res.rtt)
     f_results = f_results[:10]
-    # logger.debug('filter 1 {}'.format(len(matches)))
+    logger.debug('filter 1 {}'.format(len(matches)))
     if len(f_results) > 0:
         near_matches = collections.defaultdict(list)
         for match in matches:
@@ -873,7 +873,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
 
             near_matches[str(min_res.location_id)].append(match)
 
-        # logger.debug('filter 4')
+        logger.debug('filter 4')
         len_near_matches = 0
         for matches_arr in near_matches.values():
             len_near_matches += len(matches_arr)
@@ -892,14 +892,14 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
             for i in r_indexes[::-1]:
                 del matches[i]
 
-            # logger.debug('filter 5 {} {}'.format(len(matches), len_near_matches))
+            logger.debug('filter 5 {} {}'.format(len(matches), len_near_matches))
         else:
             matches.clear()
             for result in f_results:
                 if str(result.location_id) in near_matches:
                     for match in near_matches[str(result.location_id)]:
                         matches.append(match)
-            # logger.debug('filter 6 {} {}'.format(len(matches), len_near_matches))
+            logger.debug('filter 6 {} {}'.format(len(matches), len_near_matches))
 
     return len(matches) > 0, None
 
