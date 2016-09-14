@@ -898,8 +898,11 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
             logger.debug('filter 5 {} {}'.format(len(matches), len_near_matches))
         else:
             matches.clear()
+            finished_location_ids = []
             for result in f_results:
-                if str(result.location_id) in near_matches:
+                if str(result.location_id) in near_matches and \
+                                str(result.location_id) not in finished_location_ids:
+                    finished_location_ids.append(str(result.location_id))
                     matches.extend(near_matches[str(result.location_id)])
             logger.debug('filter 6 {} {}'.format(len(matches), len_near_matches))
 
