@@ -1343,7 +1343,6 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
         ([[str, object]], [[str, object]]):
     """
     Searches for ripe nodes near the location
-    :rtype: (list, list)
     """
     try:
         if max_distance % 50 != 0:
@@ -1359,44 +1358,45 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             if distance > max_distance:
                 break
             params = {
-                'centre': '{0},{1}'.format(location.lat, location.lon),
-                'distance': str(distance),
-                'limit': '500'
+                'radius': '{0},{1}:'.format(location.lat, location.lon, distance),
+                # 'limit': '500'
                 }
 
-            # TODO use wrapper class
+            # nodes = []
+            # available_probes = []
+            # next_is_available = True
+            # while next_is_available:
+            #     params['offset'] = len(nodes)
+            #     response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
+            #                                              slow_down_sema, params=params)
+            #     if response_dict is not None and response_dict['meta']['total_count'] > 0:
+            #         next_is_available = response_dict['meta']['next'] is not None
+            #         nodes.extend(response_dict['objects'])
+            #         available_probes = [
+            #             node for node in response_dict['objects']
+            #             if (node['status_name'] == 'Connected' and
+            #                 'system-{}-works'.format(ip_version) in node['tags'] and
+            #                 'system-{}-capable'.format(ip_version) in node['tags'])]
+            #     else:
+            #         break
+            # if len(nodes) > 0:
+            #     location.nodes = nodes
+            #     location.available_nodes = available_probes
+            #     return
 
-            nodes = []
-            available_probes = []
-            next_is_available = True
+            slow_down_sema.acquire()
+            nodes = ripe_atlas.ProbeRequest(**params)
 
-            while next_is_available:
-                params['offset'] = len(nodes)
-                response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
-                                                         slow_down_sema, params=params)
-                if response_dict is not None and response_dict['meta']['total_count'] > 0:
-                    next_is_available = response_dict['meta']['next'] is not None
-                    nodes.extend(response_dict['objects'])
-                    available_probes = [node for node in response_dict['objects']
-                                        if (node['status_name'] == 'Connected' and
-                                            'system-{}-works'.format(ip_version) in node['tags'] and
-                                            'system-{}-capable'.format(ip_version) in node['tags'])]
-                else:
-                    break
-            if len(nodes) > 0:
-                location.nodes = nodes
-                location.available_nodes = available_probes
-                return
-            # nodes = ripe_atlas.ProbeRequest(**params)
-            #
-            # if nodes.total_count > 0:
-            #     results = [node for node in nodes]
-            #     available_probes = [node for node in results
-            #                         if (node.status_name == 'Connected' and
-            #                             'system-ipv4-works' in node.tags and
-            #                             'system-ipv4-capable' in node.tags)]
-            #     if len(available_probes) > 0:
-            #         return results, available_probes
+            if nodes.total_count > 0:
+                results = [node for node in nodes]
+                available_probes = [node for node in results
+                                    if (node.status_name == 'Connected' and
+                                        'system-{}-works'.format(ip_version) in node.tags and
+                                        'system-{}-capable'.format(ip_version) in node.tags)]
+                if len(available_probes) > 0:
+                    location.nodes = results
+                    location.available_nodes = available_probes
+                    return
         location.nodes = []
         location.available_nodes = []
         return
