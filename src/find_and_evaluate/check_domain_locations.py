@@ -724,7 +724,7 @@ def check_domain_location_ripe(domain: util.Domain,
         def add_new_result(new_result: util.LocationResult):
             remove_obj = None
             for iter_result in results:
-                if iter_result.location_id == new_result.location_id:
+                if str(iter_result.location_id) == str(new_result.location_id):
                     if iter_result.rtt <= new_result.rtt:
                         return
                     else:
@@ -823,12 +823,15 @@ def eliminate_duplicate_results(results: [util.LocationResult]):
         if result not in remove_obj:
             for inner_result in results:
                 if inner_result not in remove_obj:
-                    if result.location_id == inner_result.location_id:
+                    if str(result.location_id) == str(inner_result.location_id):
                         if result.rtt < inner_result.rtt:
                             remove_obj.append(inner_result)
                         else:
                             remove_obj.append(result)
                             break
+
+    for obj in remove_obj:
+        results.remove(obj)
 
 
 def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.LocationResult],
@@ -897,8 +900,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
             matches.clear()
             for result in f_results:
                 if str(result.location_id) in near_matches:
-                    for match in near_matches[str(result.location_id)]:
-                        matches.append(match)
+                    matches.extend(near_matches[str(result.location_id)])
             logger.debug('filter 6 {} {}'.format(len(matches), len_near_matches))
 
     return len(matches) > 0, None
