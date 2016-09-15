@@ -1390,6 +1390,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             slow_down_sema.acquire()
             nodes = ripe_atlas.ProbeRequest(**params)
 
+            nodes.next_batch()
             if nodes.total_count > 0:
                 results = [node for node in nodes]
                 available_probes = [node for node in results
