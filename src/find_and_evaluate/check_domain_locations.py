@@ -1394,9 +1394,11 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             if nodes.total_count > 0:
                 results = [node for node in nodes]
                 available_probes = [node for node in results
-                                    if (node.status_name == 'Connected' and
-                                        'system-{}-works'.format(ip_version) in node.tags and
-                                        'system-{}-capable'.format(ip_version) in node.tags)]
+                                    if (node['status']['name'] == 'Connected' and
+                                        'system-{}-works'.format(ip_version) in
+                                        [tag['slug'] for tag in node.tags] and
+                                        'system-{}-capable'.format(ip_version) in
+                                        [tag['slug'] for tag in node.tags])]
                 if len(available_probes) > 0:
                     location.nodes = results
                     location.available_nodes = available_probes
@@ -1405,7 +1407,8 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
         location.available_nodes = []
         return
     finally:
-        thread_sema.release()
+        if thread_sema:
+            thread_sema.release()
 
 
 if __name__ == '__main__':
