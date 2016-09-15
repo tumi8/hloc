@@ -1361,7 +1361,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             if distance > max_distance:
                 break
             params = {
-                'radius': '{0},{1}:'.format(location.lat, location.lon, distance),
+                'radius': '{},{}:{}'.format(location.lat, location.lon, distance),
                 # 'limit': '500'
                 }
 

@@ -631,7 +631,7 @@ class Domain(JSONBase):
         """Counts the amount of matches for this domain"""
         return len(self.all_matches)
 
-    def ip_for_version(self, version) -> str:
+    def ip_for_version(self, version: str) -> str:
         """returns the version corresponding ip address"""
         if version == IPV4_IDENTIFIER:
             return self.ip_address
