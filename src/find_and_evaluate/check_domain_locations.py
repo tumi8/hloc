@@ -752,7 +752,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             node_location_dist = location.gps_distance_equirectangular(
-                util.GPSLocation(near_node['latitude'], near_node['longitude']))
+                util.GPSLocation(near_node['geometry']['coordinates'][1], near_node['geometry']['coordinates'][0]))
 
             try:
                 result = next(iter(m_results))
@@ -785,7 +785,8 @@ def check_domain_location_ripe(domain: util.Domain,
                 add_new_result(n_res)
         else:
             node_location_dist = location.gps_distance_equirectangular(
-                util.GPSLocation(node['latitude'], node['longitude']))
+                util.GPSLocation(node['geometry']['coordinates'][1],
+                                 node['geometry']['coordinates'][0]))
             if chk_m < (MAX_RTT + node_location_dist / 100):
                 update_count_for_type(next_match.code_type)
                 matched = True
