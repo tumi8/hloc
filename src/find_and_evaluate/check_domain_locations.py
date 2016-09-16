@@ -822,7 +822,7 @@ def eliminate_duplicate_results(results: [util.LocationResult]):
     for result in results:
         if result not in remove_obj:
             for inner_result in results:
-                if inner_result not in remove_obj:
+                if result is not inner_result and inner_result not in remove_obj:
                     if str(result.location_id) == str(inner_result.location_id):
                         if result.rtt < inner_result.rtt:
                             remove_obj.append(inner_result)
