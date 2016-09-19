@@ -77,11 +77,17 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     ripe_group.add_argument('-q', '--ripe-request-limit', type=int,
                             dest='ripeRequestLimit',
                             help='How many request should normally be allowed per second '
-                                 'to the ripe server', default=10)
+                                 'to the ripe server', default=25)
     ripe_group.add_argument('-b', '--ripe-request-burst-limit', type=int,
                             dest='ripeRequestBurstLimit',
                             help='How many request should at maximum be allowed per second'
-                                 ' to the ripe server', default=15)
+                                 ' to the ripe server', default=40)
+    ripe_group.add_argument('-ml', '--measurement-limit', type=int, dest='ripe_measurement_limit',
+                            help='The amount of parallel RIPE Atlas measurements allowed',
+                            default=100)
+    ripe_group.add_argument('-raak', '--ripe-atlas-api-key', type=str, dest='api_key',
+                            help='The RIPE Atlas Api key',
+                            default='1dc0b3c2-5e97-4a87-8864-0e5a19374e60')
     ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
                             help='Returns after the first time coputing the amount of '
                                  'matches to check')
@@ -136,7 +142,10 @@ def main():
     finish_event = None
     if args.verifingMethod == 'ripe':
         ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
-        ripe_create_sema = mp.Semaphore(100)
+        ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
+        global API_KEY, MAX_THREADS
+        API_KEY = args.api_key
+        MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
         finish_event = threading.Event()
         generator_thread = threading.Thread(target=generate_ripe_request_tokens,
                                             args=(ripe_slow_down_sema, args.ripeRequestLimit,
@@ -752,7 +761,8 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             node_location_dist = location.gps_distance_equirectangular(
-                util.GPSLocation(near_node['geometry']['coordinates'][1], near_node['geometry']['coordinates'][0]))
+                util.GPSLocation(near_node['geometry']['coordinates'][1],
+                                 near_node['geometry']['coordinates'][0]))
 
             try:
                 result = next(iter(m_results))
