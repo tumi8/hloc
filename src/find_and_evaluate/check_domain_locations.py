@@ -743,7 +743,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 results.remove(remove_obj)
             results.append(new_result)
 
-        if chk_m is None or chk_m == -1:
+        if chk_m is None:
             # only if no old measurement exists
             available_nodes = location.available_nodes
             if not available_nodes:
@@ -793,6 +793,9 @@ def check_domain_location_ripe(domain: util.Domain,
             else:
                 n_res = util.LocationResult(location.id, chk_res, location)
                 add_new_result(n_res)
+        elif chk_m == -1:
+            update_domains(domain, util.DomainType.not_responding)
+            return
         else:
             node_location_dist = location.gps_distance_equirectangular(
                 util.GPSLocation(node['geometry']['coordinates'][1],
@@ -1278,6 +1281,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
 
     check_n = None
     node_n = None
+    date_n = None
     near_node_ids = [node['id'] for node in nodes]
     for m_results in measurement_results:
         for result in m_results['results']:
@@ -1285,11 +1289,13 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
             if (result['prb_id'] not in near_node_ids or
                     result['timestamp'] < oldest_alowed_time):
                 continue
+
             check_res = get_rtt_from_result(result)
             if check_res is None:
                 continue
             if check_res == -1 and check_n is None:
                 check_n = check_res
+                date_n = result['timestamp']
             elif check_n is None or check_res < check_n or check_n == -1:
                 node_n = next((near_node for near_node in nodes
                                if near_node['id'] == result['prb_id']))
@@ -1298,6 +1304,9 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
                     util.LocationResult(location.id, check_res, location=location))
 
     if check_n is not None:
+        if check_n == -1:
+            if date_n < int(time.time() - 60*60*24*7):
+                return None, None
         return check_n, node_n
 
     return None, None
