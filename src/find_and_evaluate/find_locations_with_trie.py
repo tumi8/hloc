@@ -163,6 +163,10 @@ def search_in_file(filename_proto, index, trie, popular_labels, special_filter, 
                 loc_found = False
                 for i, o_label in enumerate(domain.domain_labels):
                     if i == 0:
+                        # if tld skip
+                        continue
+                    if i == 1:
+                        # test for skipping the second level domain
                         continue
                     label_count += 1
                     label_loc_found = False
