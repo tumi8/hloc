@@ -71,7 +71,7 @@ def main():
         output_file.write('\n')
         util.json_dump(results, output_file)
 
-    logger.info('finished')
+    logger.info('finished wrote results for {} ips'.format(len(results)))
 
 
 def __get_location_name(filename):
