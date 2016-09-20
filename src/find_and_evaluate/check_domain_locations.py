@@ -1293,9 +1293,11 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
             check_res = get_rtt_from_result(result)
             if check_res is None:
                 continue
-            if check_res == -1 and check_n is None:
-                check_n = check_res
-                date_n = result['timestamp']
+            elif check_res == -1 :
+                if check_n is None:
+                    check_n = check_res
+                if date_n is None or date_n < result['timestamp']:
+                    date_n = result['timestamp']
             elif check_n is None or check_res < check_n or check_n == -1:
                 node_n = next((near_node for near_node in nodes
                                if near_node['id'] == result['prb_id']))
