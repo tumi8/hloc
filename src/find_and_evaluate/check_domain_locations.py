@@ -819,7 +819,7 @@ def check_domain_location_ripe(domain: util.Domain,
         next_match = get_next_match()
 
     if not matched:
-        if filter_possible_matches(no_verification_matches, results, locations, distances):
+        if filter_possible_matches(no_verification_matches, results, locations, distances)[0]:
             update_domains(domain, util.DomainType.no_verification)
             # logger.debug('no verification')
         else:
