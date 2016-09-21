@@ -89,8 +89,11 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                             help='The RIPE Atlas Api key',
                             default='1dc0b3c2-5e97-4a87-8864-0e5a19374e60')
     ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
-                            help='Returns after the first time coputing the amount of '
-                                 'matches to check')
+                            help='Turns on dry run which returns after the first time coputing '
+                                 'the amount of matches to check')
+    ripe_group.add_argument('-a', '--append-to-existing', action='store_true', dest='append',
+                            help='Tun on if there are matches already existing and you do not want '
+                                 'to overwrite them')
     parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
@@ -225,7 +228,8 @@ def main():
                                        ripe_create_sema,
                                        ripe_slow_down_sema,
                                        args.ip_version,
-                                       args.dry_run),
+                                       args.dry_run,
+                                       args.append),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
@@ -412,7 +416,8 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
 def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
                         zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
-                        ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool):
+                        ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool,
+                        append: bool):
     """Checks for all domains if the suspected locations are correct"""
     count_lock = threading.Lock()
     correct_type_count = collections.defaultdict(int)
@@ -440,8 +445,15 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         del count_matches
         file_ending = 'checked'
 
+    file_mode = 'w'
+    append_entries = 0
+    if append:
+        file_mode = 'a'
+        append_entries = util.count_lines(util.remove_file_ending(filename_proto).format(pid) +
+                                        '.' + file_ending) * 1000
+
     with open(util.remove_file_ending(filename_proto).format(pid) + '.' + file_ending,
-              'w') as output_file:
+              file_mode) as output_file:
 
         def update_count_for_type(ctype: util.LocationCodeType):
             """acquires lock and increments in count the type property"""
@@ -512,6 +524,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
         threads = []
         count_entries = 0
         count_unreachable = 0
+        skipped_entries = 0
 
         try:
             with open(filename_proto.format(pid)) as domainFile, \
@@ -523,8 +536,17 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                 def next_domains():
                     line = domain_file_mm.readline().decode('utf-8')
                     if line:
-                        nonlocal domain_location_list
+                        nonlocal domain_location_list, skipped_entries
                         domain_location_list = util.json_loads(line)
+                        while append and skipped_entries < append_entries:
+                            if len(domain_location_list) <= append_entries - skipped_entries:
+                                skipped_entries += len(domain_location_list)
+                                domain_location_list[:] = []
+                                return next_domains()
+                            else:
+                                domain_location_list.pop()
+                                skipped_entries += 1
+
                         return True
                     else:
                         domain_location_list = None
