@@ -134,7 +134,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, special_filter, 
 
     def save_entrie(entrie, entries, entrie_file, new_line=True):
         entries.append(entrie)
-        if len(entries) >= 10 ** 4:
+        if len(entries) >= 10 ** 3:
             util.json_dump(entries, entrie_file)
             if new_line:
                 entrie_file.write('\n')
