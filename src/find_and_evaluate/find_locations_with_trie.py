@@ -223,6 +223,8 @@ def search_in_file(filename_proto, index, trie, popular_labels, special_filter, 
 
         util.json_dump(location_found, loc_found_file)
         util.json_dump(no_location_found, locn_found_file)
+        loc_found_file.write('\n')
+        locn_found_file.write('\n')
 
     with open('popular_labels_found_{}.pickle'.format(index),
               'wb') as popular_file:

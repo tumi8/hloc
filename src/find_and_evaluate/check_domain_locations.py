@@ -609,6 +609,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             (count_entries - count_unreachable - dry_run_verifications),
                             count_unreachable, count_matches, dry_run_verifications))
             util.json_dump(dry_run_matches, output_file)
+            output_file.write('\n')
         else:
             dump_domain_list(domains)
 
