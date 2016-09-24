@@ -16,7 +16,6 @@ import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions
 import threading
 import math
-import pympler.tracker
 import pympler.asizeof
 import gc
 
@@ -193,7 +192,7 @@ def main():
                 if not location.available_nodes:
                     null_locations.append(location)
 
-            logger.debug('{} locations without nodes'.format(len(null_locations)))
+            logger.info('{} locations without nodes'.format(len(null_locations)))
             with open('locations_wo_nodes.json', 'w') as loc_wo_nodes_file:
                 util.json_dump(null_locations, loc_wo_nodes_file)
 
@@ -485,22 +484,18 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
 
         def dump_domain_list(domain_list):
             """Write all domains in the buffer to the file and empty the lists"""
-            logger.debug('correct {} no_verification {} not_responding {} no_location {} '
-                         'blacklisted {}'.format(len(domain_list[util.DomainType.correct]),
-                                                 len(domain_list[util.DomainType.no_verification]),
-                                                 len(domain_list[util.DomainType.not_responding]),
-                                                 len(domain_list[util.DomainType.no_location]),
-                                                 len(domain_list[util.DomainType.blacklisted])))
+            logger.info('correct {} no_verification {} not_responding {} no_location {} '
+                        'blacklisted {}'.format(len(domain_list[util.DomainType.correct]),
+                                                len(domain_list[util.DomainType.no_verification]),
+                                                len(domain_list[util.DomainType.not_responding]),
+                                                len(domain_list[util.DomainType.no_location]),
+                                                len(domain_list[util.DomainType.blacklisted])))
             dump_dct = {}
             for result_type, values in domain_list.items():
                 dump_dct[result_type.value] = values
             util.json_dump(dump_dct, output_file)
             output_file.write('\n')
             domain_list.clear()
-            # memory_tracker.print_diff()
-            dict_size = pympler.asizeof.asized(domain_list)
-            if dict_size.size != dict_size.flat:
-                logger.debug(dict_size.size)
 
         def update_domains(update_domain: util.Domain, dtype: util.DomainType):
             """Append current domain in the domain dict to the dtype"""
@@ -567,8 +562,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         n_domain = domain_location_list.pop()
                         count_entries += 1
                         if count_entries % 10000 == 0 and not dry_run:
-                            logger.debug('count {} correct_count {}'.format(count_entries,
-                                                                            correct_type_count))
+                            logger.info('count {} correct_count {}'.format(count_entries,
+                                                                           correct_type_count))
                         while n_domain.ip_for_version(ip_version) not in zmap_results:
                             update_domains(n_domain, util.DomainType.not_responding)
                             if not domain_location_list:
@@ -577,8 +572,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                             n_domain = domain_location_list.pop()
                             count_entries += 1
                             if count_entries % 10000 == 0 and not dry_run:
-                                logger.debug('count {} correct_count {}'.format(count_entries,
-                                                                                correct_type_count))
+                                logger.info('count {} correct_count {}'.format(count_entries,
+                                                                               correct_type_count))
 
                         return n_domain, zmap_results[n_domain.ip_for_version(ip_version)]
 
@@ -1098,7 +1093,7 @@ def create_and_check_measurement(ip_addr: [str, str],
     success, m_results = ripe_atlas.AtlasResultsRequest(
         **{'msm_id': measurement_id}).create()
     while not success:
-        logger.warning('ResultRequest error {}'.format(m_results))
+        logger.error('ResultRequest error {}'.format(m_results))
         time.sleep(10 + (random.randrange(0, 500) / 100))
         ripe_slow_down_sema.acquire()
         success, m_results = ripe_atlas.AtlasResultsRequest(
@@ -1119,7 +1114,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
     else:
         af = 6
 
-    #TODO RIPE pull request with bill to possibility
+    # TODO RIPE pull request with bill to possibility
     def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
@@ -1240,7 +1235,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             loc_retries += 1
 
             if loc_retries % 5 == 0:
-                logger.warning('Ripe next_batch error! {}'.format(ip_addr))
+                logger.error('Ripe next_batch error! {}'.format(ip_addr))
 
     max_age = int(time.time()) - ALLOWED_MEASUREMENT_AGE
     params = {
@@ -1265,7 +1260,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
         retries += 1
 
         if retries % 5 == 0:
-            logger.warning('Ripe MeasurementRequest error! {}'.format(ip_addr))
+            logger.error('Ripe MeasurementRequest error! {}'.format(ip_addr))
             time.sleep(30)
     next_batch(measurements)
     if measurements.total_count > 500:
