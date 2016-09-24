@@ -88,6 +88,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     ripe_group.add_argument('-raak', '--ripe-atlas-api-key', type=str, dest='api_key',
                             help='The RIPE Atlas Api key',
                             default='1dc0b3c2-5e97-4a87-8864-0e5a19374e60')
+    ripe_group.add_argument('-rabt', '--ripe-atlas-bill-to', type=str, dest='bill_to',
+                            help='The RIPE Atlas Bill to address')
     ripe_group.add_argument('-d', '--dry-run', action='store_true', dest='dry_run',
                             help='Turns on dry run which returns after the first time coputing '
                                  'the amount of matches to check')
@@ -229,7 +231,8 @@ def main():
                                        ripe_slow_down_sema,
                                        args.ip_version,
                                        args.dry_run,
-                                       args.append),
+                                       args.append,
+                                       args.bill_to),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
@@ -417,7 +420,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
                         ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool,
-                        append: bool):
+                        append: bool, bill_to_address: str=None):
     """Checks for all domains if the suspected locations are correct"""
     count_lock = threading.Lock()
     correct_type_count = collections.defaultdict(int)
@@ -450,7 +453,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
     if append:
         file_mode = 'a'
         append_entries = util.count_lines(util.remove_file_ending(filename_proto).format(pid) +
-                                        '.' + file_ending) * 1000
+                                          '.' + file_ending) * 1000
 
     with open(util.remove_file_ending(filename_proto).format(pid) + '.' + file_ending,
               file_mode) as output_file:
@@ -590,7 +593,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                     ripe_slow_down_sema,
                                                     ip_version,
                                                     dry_run,
-                                                    add_dry_run_matches))
+                                                    add_dry_run_matches,
+                                                    bill_to_address))
 
                     threads.append(thread)
                     thread.start()
@@ -632,7 +636,8 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
                                   ripe_slow_down_sema: mp.Semaphore,
                                   ip_version: str,
                                   dry_run: bool,
-                                  add_dry_run_matches: [[int], ]):
+                                  add_dry_run_matches: [[int], ],
+                                  bill_to_address: str=None):
     """The method called to create a thread and manage the domain checks"""
     next_domain_tuple = nextdomain()
     while next_domain_tuple:
@@ -641,7 +646,7 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
             check_domain_location_ripe(next_domain_tuple[0], update_domains, update_count_for_type,
                                        locations, zmap_locations, next_domain_tuple[1], distances,
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
-                                       add_dry_run_matches)
+                                       add_dry_run_matches, bill_to_address=bill_to_address)
         except Exception:
             logger.exception('Check Domain Error')
 
@@ -661,7 +666,8 @@ def check_domain_location_ripe(domain: util.Domain,
                                ripe_slow_down_sema: mp.Semaphore,
                                ip_version: str,
                                dry_run: bool,
-                               add_dry_run_matches: [[int], ]):
+                               add_dry_run_matches: [[int], ],
+                               bill_to_address: str=None):
     """checks if ip is at location"""
     matched = False
     results = []
@@ -776,7 +782,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
             m_results, near_node = create_and_check_measurement(
                 (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
-                ripe_create_sema, ripe_slow_down_sema)
+                ripe_create_sema, ripe_slow_down_sema, bill_to_address=bill_to_address)
             # logger.debug('after 2')
             if m_results is None:
                 matches.remove(next_match)
@@ -1037,7 +1043,8 @@ NON_WORKING_PROBES_LOCK = threading.Lock()
 def create_and_check_measurement(ip_addr: [str, str],
                                  location: util.Location, nodes: [[str, object]],
                                  ripe_create_sema: mp.Semaphore,
-                                 ripe_slow_down_sema: mp.Semaphore) -> \
+                                 ripe_slow_down_sema: mp.Semaphore,
+                                 bill_to_address: str=None) -> \
         ([str, object], [str, object]):
     """creates a measurement for the parameters and checks for the created measurement"""
     near_nodes = [node for node in nodes if node not in NON_WORKING_PROBES]
@@ -1056,7 +1063,7 @@ def create_and_check_measurement(ip_addr: [str, str],
     def new_measurement():
         """Create new measurement"""
         return create_ripe_measurement(ip_addr, location, near_node,
-                                       ripe_slow_down_sema)
+                                       ripe_slow_down_sema, bill_to_address=bill_to_address)
 
     def sleep_time(amount: int = 15):
         """Sleep for ten seconds"""
@@ -1104,7 +1111,7 @@ USE_WRAPPER = True
 
 
 def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_node: [str, object],
-                            ripe_slow_down_sema: mp.Semaphore) -> int:
+                            ripe_slow_down_sema: mp.Semaphore, bill_to_address: str=None) -> int:
     """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
     if ip_addr[1] == util.IPV4_IDENTIFIER:
@@ -1119,12 +1126,21 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
                                description=ip_addr[0] + ' test for location ' + location.city_name)
         source = ripe_atlas.AtlasSource(value=str(near_node['id']), requested=1,
                                         type='probes')
-        atlas_request = ripe_atlas.AtlasCreateRequest(
-            key=API_KEY,
-            measurements=[ping],
-            sources=[source],
-            is_oneoff=True
-        )
+        if bill_to_address:
+            atlas_request = ripe_atlas.AtlasCreateRequest(
+                key=API_KEY,
+                measurements=[ping],
+                sources=[source],
+                is_oneoff=True,
+                bill_to=bill_to_address
+            )
+        else:
+            atlas_request = ripe_atlas.AtlasCreateRequest(
+                key=API_KEY,
+                measurements=[ping],
+                sources=[source],
+                is_oneoff=True
+            )
         # ripe_slow_down_sema.acquire()
         (success, response) = atlas_request.create()
 
@@ -1213,7 +1229,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             try:
                 measurement.next_batch()
             except ripe_atlas.exceptions.APIResponseError:
-                logger.exception('MeasurementRequest APIResponseError next_batch')
+                # logger.exception('MeasurementRequest APIResponseError next_batch')
+                pass
             else:
                 break
 
@@ -1316,7 +1333,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
             check_res = get_rtt_from_result(result)
             if check_res is None:
                 continue
-            elif check_res == -1 :
+            elif check_res == -1:
                 if check_n is None:
                     check_n = check_res
                 if date_n is None or date_n < result['timestamp']:
