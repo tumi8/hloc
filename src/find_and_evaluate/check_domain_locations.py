@@ -1119,6 +1119,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
     else:
         af = 6
 
+    #TODO RIPE pull request with bill to possibility
     def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
 
@@ -1213,7 +1214,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
         response.close()
         return measurement_ids[0]
 
-    if bill_to_address:
+    if USE_WRAPPER:
         return create_ripe_measurement_wrapper()
     else:
         return create_ripe_measurement_post()
