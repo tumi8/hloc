@@ -1184,7 +1184,8 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
                     'requested': 1
                 }
             ],
-            'is_oneoff': True
+            'is_oneoff': True,
+            'bill_to': bill_to_address
         }
 
         params = {'key': API_KEY}
@@ -1212,7 +1213,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
         response.close()
         return measurement_ids[0]
 
-    if USE_WRAPPER:
+    if bill_to_address:
         return create_ripe_measurement_wrapper()
     else:
         return create_ripe_measurement_post()
