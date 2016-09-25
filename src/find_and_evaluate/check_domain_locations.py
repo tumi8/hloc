@@ -358,33 +358,22 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
     return None
 
 
-def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
+def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
     """Verifies the location with the geoip database"""
     geoipreader = geoip2.database.Reader(geoip_filename)
-    location_domain_file = open(filename_proto.format(pid) + '.locations', 'w')
 
-    correct_count = {
-        'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0
-        }
+    correct_count = collections.defaultdict(int)
 
-    with open(filename_proto.format(pid)) as domainFile:
-        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
+    with open(filename_proto.format(pid)) as domainFile, \
+            mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
+            open(util.remove_file_ending(filename_proto.format(pid)) +
+                 '.geoiplocations', 'w') as location_domain_file:
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
-            correct_locs = []
-            wrong_locs = []
             for domain in domain_location_list:
-                matching_location = geoip_get_domain_location(domain,
-                                                              geoipreader,
-                                                              locations,
-                                                              correct_count)
-                if matching_location is not None:
-                    domain.location_match = matching_location
-                    correct_locs.append(domain)
-                else:
-                    wrong_locs.append(domain)
-            util.json_dump(correct_locs, location_domain_file)
+                geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version)
+            util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
@@ -393,26 +382,28 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename):
     logger.info('correct count: {}'.format(correct_count))
 
 
-def geoip_get_domain_location(domain, geoipreader, locations, correct_count):
+def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version: str):
     """checks the domains locations with the geoipreader"""
-    geoip_location = geoipreader.city(domain.ip_address)
-    if (
-                geoip_location.location is None or geoip_location.location.longitude is None or
-            geoip_location.location.latitude is None):
-        return None
-    for i, label in enumerate(domain.domainLabels):
-        if i == 0:
-            # skip if tld
-            continue
+    ip_address = domain.ip_for_version(ip_version)
+    geoip_location = geoipreader.city(ip_address)
+    if geoip_location.location is None or geoip_location.location.longitude is None or \
+            geoip_location.location.latitude is None:
+        return False
 
-        for match in label.matches:
-            if locations[str(match.location_id)].is_in_radius(
-                    util.GPSLocation(geoip_location.location.latitude,
-                                     geoip_location.location.longitude)):
-                correct_count[match['type']] += 1
-                return match
+    for match in domain.all_matches:
+        location = locations[str(match.location_id)]
+        distance = location.gps_distance_equirectangular(
+            util.GPSLocation(geoip_location.location.latitude,
+                             geoip_location.location.longitude))
+        if distance < 100:
+            correct_count[match['type']] += 1
+            domain.location = locations[str(match.location_id)]
+            match.matching = True
+            match.matching_distance = distance
+            match.matching_rtt = -1
+            return True
 
-    return None
+    return False
 
 
 def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
