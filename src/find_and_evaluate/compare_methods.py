@@ -92,8 +92,8 @@ def main():
                     elif db_domain.location_id == ripe_domain.location_id:
                         classif_domains[CompareType.ripe_c_db_same].append((db_domain, ripe_domain))
                     else:
-                        db_location = locations[db_domain.location_id]
-                        ripe_location = locations[ripe_domain.location_id]
+                        db_location = locations[str(db_domain.location_id)]
+                        ripe_location = locations[str(ripe_domain.location_id)]
                         ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
                         distance = db_location.gps_distance_equirectangular(ripe_location)
                         if distance < ripe_matching_rtt*100:
