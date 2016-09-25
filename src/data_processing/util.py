@@ -579,14 +579,15 @@ class Domain(JSONBase):
 
     class_name_identifier = 'd'
 
-    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location']
+    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location_id',
+                 'location']
 
     class PropertyKey:
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
         domain_labels = '3'
-        location = '4'
+        location_id = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -601,11 +602,12 @@ class Domain(JSONBase):
         self.ip_address = ip_address
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
+        self.location_id = None
         self.location = None
 
     @property
     def drop_domain_keys(self):
-        """returns only the first level domain and the top level domain"""
+        """returns only the second level domain and the top level domain"""
         domain_parts = self.domain_name.split('.')
         if len(domain_parts) <= 1:
             return domain_parts
@@ -615,7 +617,7 @@ class Domain(JSONBase):
         return domain_parts[::-1]
 
     @property
-    def all_matches(self):
+    def all_matches(self) -> [util.DomainLabelMatch]:
         """Returns all matches of the domain"""
         matches = []
         location_ids = set()
@@ -627,9 +629,24 @@ class Domain(JSONBase):
         return matches
 
     @property
+    def possible_matches(self) -> [util.DomainLabelMatch]:
+        """Returns all matches which are possible (according to measurements)"""
+        return [match for match in self.all_matches if match.possible]
+
+    @property
     def matches_count(self) -> int:
         """Counts the amount of matches for this domain"""
         return len(self.all_matches)
+
+    @property
+    def matching_match(self) -> util.DomainLabelMatch:
+        """Returns the match where we found the correct location"""
+        if self.location_id:
+            for match in self.all_matches:
+                if match.matching:
+                    return match
+        else:
+            return None
 
     def ip_for_version(self, version: str) -> str:
         """returns the version corresponding ip address"""
@@ -650,8 +667,8 @@ class Domain(JSONBase):
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
         }
-        if self.location:
-            ret_dict[self.PropertyKey.location] = self.location.id
+        if self.location_id:
+            ret_dict[self.PropertyKey.location] = self.location_id
         return ret_dict
 
     @staticmethod
@@ -662,15 +679,17 @@ class Domain(JSONBase):
         if Domain.PropertyKey.domain_labels in dct:
             del obj.domain_labels[:]
             obj.domain_labels = dct[Domain.PropertyKey.domain_labels][:]
-        if Domain.PropertyKey.location in dct and locations and \
-                dct[Domain.PropertyKey.location] in locations:
-            obj.location = locations[dct[Domain.PropertyKey.location]]
+        if Domain.PropertyKey.location_id in dct:
+            obj.location_id = dct[Domain.PropertyKey.location_id]
+            if locations and obj.location_id in locations:
+                obj.location = locations[obj.location_id]
 
         return obj
 
     def copy(self):
         obj = Domain(self.domain_name, self.ip_address, self.ipv6_address)
         obj.domain_labels = [domain_label.copy() for domain_label in self.domain_labels]
+        obj.location_id = self.location_id
         obj.location = self.location
         return obj
 
