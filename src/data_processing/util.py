@@ -722,7 +722,7 @@ class DomainLabelMatch(JSONBase):
     class_name_identifier = 'dlm'
 
     __slots__ = ['location_id', 'code_type', 'code', 'matching',
-                 'matching_distance', 'matching_rtt']
+                 'matching_distance', 'matching_rtt', 'possible']
 
     class PropertyKey:
         location_id = '0'
@@ -731,8 +731,9 @@ class DomainLabelMatch(JSONBase):
         matching = '3'
         matching_distance = '4'
         matching_rtt = '5'
+        possible = '6'
 
-    def __init__(self, location_id: int, code_type: LocationCodeType, code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType, code=None, possible=True):
         """init"""
         self.location_id = location_id
         self.code_type = code_type
@@ -740,6 +741,7 @@ class DomainLabelMatch(JSONBase):
         self.matching = False
         self.matching_distance = None
         self.matching_rtt = None
+        self.possible = possible
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
@@ -748,6 +750,7 @@ class DomainLabelMatch(JSONBase):
             self.PropertyKey.location_id: self.location_id,
             self.PropertyKey.code_type: self.code_type.value,
             self.PropertyKey.code: self.code,
+            self.PropertyKey.possible: self.possible,
         }
         if self.matching:
             dct[self.PropertyKey.matching] = self.matching
@@ -770,10 +773,12 @@ class DomainLabelMatch(JSONBase):
             obj.matching_rtt = dct[DomainLabelMatch.PropertyKey.matching_rtt]
         if DomainLabelMatch.PropertyKey.code in dct:
             obj.code = dct[DomainLabelMatch.PropertyKey.code]
+        if DomainLabelMatch.PropertyKey.possible in dct:
+            obj.possible = dct[DomainLabelMatch.PropertyKey.possible]
         return obj
 
     def copy(self):
-        obj = DomainLabelMatch(self.location_id, self.code_type, code=self.code)
+        obj = DomainLabelMatch(self.location_id, self.code_type, self.code, self.possible)
         obj.matching = self.matching
         obj.matching_rtt = self.matching_rtt
         obj.matching_distance = self.matching_distance
