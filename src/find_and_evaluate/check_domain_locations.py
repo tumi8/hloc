@@ -806,15 +806,15 @@ def check_domain_location_ripe(domain: util.Domain,
             update_domains(domain, util.DomainType.not_responding)
             return
         else:
+            next_match.matching_rtt = chk_m
             node_location_dist = location.gps_distance_equirectangular(
                 util.GPSLocation(node['geometry']['coordinates'][1],
                                  node['geometry']['coordinates'][0]))
+            next_match.matching_distance = node_location_dist
             if chk_m < (MAX_RTT + node_location_dist / 100):
                 update_count_for_type(next_match.code_type)
                 matched = True
                 next_match.matching = True
-                next_match.matching_distance = node_location_dist
-                next_match.matching_rtt = chk_m
                 domain.location = location
                 update_domains(domain, util.DomainType.correct)
                 break
@@ -1326,7 +1326,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
 
     if check_n is not None:
         if check_n == -1:
-            if date_n < int(time.time() - 60*60*24*7):
+            if date_n < int(time.time() - 60*60*24*14):
                 return None, None
         return check_n, node_n
 
