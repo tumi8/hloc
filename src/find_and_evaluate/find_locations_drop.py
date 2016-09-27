@@ -107,7 +107,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
 
         def save_domain_with_location(loc_domain):
             domains_w_location.append(loc_domain)
-            if len(domains_w_location) >= 10**4:
+            if len(domains_w_location) >= 10**3:
                 domain_count['domains_w_location'] += len(domains_w_location)
                 util.json_dump(domains_w_location, loc_found_file)
                 loc_found_file.write('\n')
@@ -115,7 +115,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
 
         def save_domain_wo_location(loc_domain):
             domains_wo_location.append(loc_domain)
-            if len(domains_wo_location) >= 10 ** 4:
+            if len(domains_wo_location) >= 10**3:
                 domain_count['domains_wo_location'] += len(domains_wo_location)
                 util.json_dump(domains_wo_location, loc_found_wo_file)
                 loc_found_wo_file.write('\n')
@@ -123,7 +123,7 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
 
         def save_domain_no_location(loc_domain):
             domains_no_location.append(loc_domain)
-            if len(domains_no_location) >= 10 ** 4:
+            if len(domains_no_location) >= 10**3:
                 domain_count['domains_no_location'] += len(domains_no_location)
                 util.json_dump(domains_no_location, no_loc_found_file)
                 no_loc_found_file.write('\n')
