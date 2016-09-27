@@ -66,6 +66,8 @@ def main():
         results = util.parse_zmap_results(os.path.join(args.dirname, filename), location_name,
                                           results)
 
+    logger.info('parsed results for {} ips'.format(len(results)))
+
     with open(args.output_file, 'w') as output_file:
         util.json_dump(locations, output_file)
         output_file.write('\n')
