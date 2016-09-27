@@ -617,7 +617,7 @@ class Domain(JSONBase):
         return domain_parts[::-1]
 
     @property
-    def all_matches(self) -> [DomainLabelMatch]:
+    def all_matches(self):
         """Returns all matches of the domain"""
         matches = []
         location_ids = set()
@@ -629,7 +629,7 @@ class Domain(JSONBase):
         return matches
 
     @property
-    def possible_matches(self) -> [DomainLabelMatch]:
+    def possible_matches(self):
         """Returns all matches which are possible (according to measurements)"""
         return [match for match in self.all_matches if match.possible]
 
@@ -639,7 +639,7 @@ class Domain(JSONBase):
         return len(self.all_matches)
 
     @property
-    def matching_match(self) -> DomainLabelMatch:
+    def matching_match(self):
         """Returns the match where we found the correct location"""
         if self.location_id:
             for match in self.all_matches:
