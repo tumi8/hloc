@@ -828,7 +828,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
     if not matched:
         still_matches = filter_possible_matches(no_verification_matches, results, locations,
-                                                distances)
+                                                distances)[0]
         if still_matches:
             for domain_match in domain.all_matches:
                 if domain_match not in no_verification_matches:
