@@ -1,0 +1,18 @@
+{
+ "ran": ["frankfurt"],
+ "ost": ["boston"],
+ "lin": ["illinois", "carolina", "dublin", "colindale"],
+ "omi": ["bloomington"],
+ "cus": ["cust"],
+ "ata": ["kolkata"],
+ "est": ["rochester", "manchester", "charleston"],
+ "usto": ["houston"],
+ "gal": ["bangalore"],
+ "bal": ["baltimore"],
+ "ver": ["vancouver", "denver"],
+ "ron": ["toronto", "porthuron"],
+ "lan": ["lansdale", "milano", "atalanta"],
+ "ont": ["montreal", "toronto"],
+ "chi": ["pichincha", "michigan", "chicago", "chico"],
+ "ton": ["pendelton", "boston", "washington", "wellington", "houston", "burlington", "charleston"]
+}

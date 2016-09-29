@@ -9,18 +9,20 @@ import collections
 import re
 import sys
 import logging
+import os
 # import msgpack
 import json
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
+IPV4_IDENTIFIER = 'ipv4'
+IPV6_IDENTIFIER = 'ipv6'
 
 
 #######################################
 #    Different utility functions      #
 #######################################
-# TODO replace with round robin
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = subprocess.check_output(['wc', '-l', filename])
@@ -58,31 +60,74 @@ def is_ip_hex_encoded_simple(ip_address, domain):
     return hex_ip.upper() in domain.upper()
 
 
-def get_path_filename(path):
+def get_path_filename(path: str) -> str:
     """Extracts the filename from a path string"""
-    # TODO use os.basename
     if path[-1] == '/':
         raise NameError('The path leads to a directory')
-    file_index = path.find('/')
-    filename = path[:]
 
-    while file_index >= 0:
-        filename = filename[file_index + 1:]
-        file_index = filename.find('/')
-
-    return filename
+    return os.path.basename(path)
 
 
-def setup_logging(filename):
+def remove_file_ending(filenamepath: str) -> str:
+    """Removes the fileending of the paths file"""
+    return os.path.dirname(filenamepath) + '/' + \
+        '.'.join(get_path_filename(filenamepath).split('.')[:-1])
+
+
+def setup_logger(filename: str, loggername: str) -> logging.Logger:
     """does the basic config on logging"""
     logging.basicConfig(filename=filename, level=logging.DEBUG,
-                        format='[%(levelname)s][%(asctime)s]:[%(processName)s] '
-                               '%(filename)s:%(lineno)d %(message)s', datefmt='%d.%m %H:%M:%S')
+                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s] '
+                               u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
+                        datefmt='%d.%m %H:%M:%S')
+    logging.getLogger("requests").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
+    return logging.getLogger(loggername)
 
 
-#######################################
-#    JSON utility functions           #
-#######################################
+def parse_zmap_results(zmap_filename: str, location_name: str, present_results: dict):
+    """Parses a file """
+    zmap_results = {}
+    if present_results:
+        zmap_results = present_results.copy()
+    with open(zmap_filename) as zmap_file:
+        for line in zmap_file:
+            if line[0:5] == 'saddr':
+                continue
+            zmap_result = parse_zmap_line(line)
+            if zmap_result[0] in zmap_results:
+                if location_name:
+                    if location_name in zmap_results[zmap_result[0]]:
+                        if zmap_result[1] < zmap_results[zmap_result[0]][location_name]:
+                            zmap_results[zmap_result[0]][location_name] = zmap_result[1]
+                    else:
+                        zmap_results[zmap_result[0]][location_name] = zmap_result[1]
+                else:
+                    if zmap_result[1] < zmap_results[zmap_result[0]]:
+                        zmap_results[zmap_result[0]] = zmap_result[1]
+            else:
+                if location_name:
+                    zmap_results[zmap_result[0]] = {}
+                    zmap_results[zmap_result[0]][location_name] = zmap_result[1]
+                else:
+                    zmap_results[zmap_result[0]] = zmap_result[1]
+
+    return zmap_results
+
+
+def parse_zmap_line(zmap_line):
+    """Parses one line of an zmap output"""
+    rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
+        zmap_line.split(',')
+    if success:
+        sec_difference = int(rec_ts) - int(sent_ts)
+        u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
+        return rsaddr, (sec_difference + u_sec_diference) * 1000
+
+
+###################################################################################################
+#                                    JSON utility functions                                       #
+###################################################################################################
 def json_object_encoding(obj):
     """Overrides the default method from the JSONEncoder"""
     if isinstance(obj, JSONBase):
@@ -185,10 +230,11 @@ class LocationCodeType(enum.Enum):
 
 @enum.unique
 class DomainType(enum.Enum):
-    correct = 0
-    not_responding = 1
-    no_location = 2
-    blacklisted = 3
+    correct = '0'
+    not_responding = '1'
+    no_location = '2'
+    no_verification = '3'
+    blacklisted = '4'
 
 
 class JSONBase(object):
@@ -203,7 +249,10 @@ class JSONBase(object):
 
     @staticmethod
     def create_object_from_dict(dct):
-        raise NotImplementedError("JSONBase: Should have implemented this nethod")
+        raise NotImplementedError("JSONBase: Should have implemented this method")
+
+    def copy(self):
+        raise NotImplementedError("JSONBase: Should have implemented this method")
 
 
 class GPSLocation(JSONBase):
@@ -283,11 +332,11 @@ class GPSLocation(JSONBase):
         """Returns a dictionary with the information of the object"""
         ret_dict = {
             CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.lat: self.lat,
-            self.PropertyKey.lon: self.lon
+            GPSLocation.PropertyKey.lat: self.lat,
+            GPSLocation.PropertyKey.lon: self.lon
         }
         if self.id is not None:
-            ret_dict[self.PropertyKey.id] = self.id
+            ret_dict[GPSLocation.PropertyKey.id] = self.id
 
         return ret_dict
 
@@ -297,6 +346,11 @@ class GPSLocation(JSONBase):
         obj = GPSLocation(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon])
         if GPSLocation.PropertyKey.id in dct:
             obj.id = dct[GPSLocation.PropertyKey.id]
+        return obj
+
+    def copy(self):
+        obj = GPSLocation(self.lat, self.lon)
+        obj.id = self.id
         return obj
 
 
@@ -320,7 +374,9 @@ class Location(GPSLocation):
         clli = '7'
         alternate_names = '8'
         airport_info = '9'
-        locode = '10'
+        locode = 'a'
+        nodes = 'b'
+        available_nodes = 'c'
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
                  population=0):
@@ -366,6 +422,12 @@ class Location(GPSLocation):
         if self.locode:
             ret_dict[self.PropertyKey.locode] = self.locode.dict_representation()
 
+        if self.available_nodes:
+            ret_dict[self.PropertyKey.available_nodes] = self.available_nodes
+
+        if self.nodes:
+            ret_dict[self.PropertyKey.nodes] = self.nodes
+
         return ret_dict
 
     def code_id_type_tuples(self):
@@ -400,15 +462,29 @@ class Location(GPSLocation):
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a Location object from a dictionary"""
-        obj = Location(dct[Location.PropertyKey.lat], dct[Location.PropertyKey.lon],
+        obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
-        if Location.PropertyKey.id in dct:
-            obj.id = dct[Location.PropertyKey.id]
+        if GPSLocation.PropertyKey.id in dct:
+            obj.id = dct[GPSLocation.PropertyKey.id]
         if Location.PropertyKey.airport_info in dct:
             obj.airport_info = dct[Location.PropertyKey.airport_info]
         if Location.PropertyKey.locode in dct:
             obj.locode = dct[Location.PropertyKey.locode]
+        if Location.PropertyKey.available_nodes in dct:
+            obj.available_nodes = dct[Location.PropertyKey.available_nodes]
+        if Location.PropertyKey.nodes in dct:
+            obj.nodes = dct[Location.PropertyKey.nodes]
+        return obj
+
+    def copy(self):
+        obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
+                       self.population)
+        obj.id = self.id
+        obj.airport_info = self.airport_info.copy()
+        obj.locode = self.locode.copy()
+        obj.available_nodes = self.available_nodes.copy()
+        obj.nodes = self.nodes.copy()
         return obj
 
 
@@ -448,6 +524,13 @@ class AirportInfo(JSONBase):
         obj.icao_codes = dct[AirportInfo.PropertyKey.icao_codes]
         return obj
 
+    def copy(self):
+        obj = AirportInfo()
+        obj.faa_codes = self.faa_codes[:]
+        obj.icao_codes = self.icao_codes[:]
+        obj.iata_codes = self.iata_codes[:]
+        return obj
+
 
 class LocodeInfo(JSONBase):
     """Holds a list of locode codes"""
@@ -481,6 +564,12 @@ class LocodeInfo(JSONBase):
         obj.subdivision_codes = dct[LocodeInfo.PropertyKey.subdivision_codes]
         return obj
 
+    def copy(self):
+        obj = LocodeInfo()
+        obj.place_codes = self.place_codes[:]
+        obj.subdivision_codes = self.subdivision_codes[:]
+        return obj
+
 
 class Domain(JSONBase):
     """
@@ -490,14 +579,15 @@ class Domain(JSONBase):
 
     class_name_identifier = 'd'
 
-    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location']
+    __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location_id',
+                 'location']
 
     class PropertyKey:
         domain_name = '0'
         ip_address = '1'
         ipv6_address = '2'
         domain_labels = '3'
-        location = '4'
+        location_id = '4'
 
     def __init__(self, domain_name, ip_address=None, ipv6_address=None):
         """init"""
@@ -505,18 +595,19 @@ class Domain(JSONBase):
         def create_labels() -> [DomainLabel]:
             labels = []
             for label in domain_name.split('.')[::-1]:
-                labels.append(DomainLabel(label, domain=self))
+                labels.append(DomainLabel(label))
             return labels
 
         self.domain_name = domain_name
         self.ip_address = ip_address
         self.ipv6_address = ipv6_address
         self.domain_labels = create_labels()
+        self.location_id = None
         self.location = None
 
     @property
     def drop_domain_keys(self):
-        """returns only the first level domain and the top level domain"""
+        """returns only the second level domain and the top level domain"""
         domain_parts = self.domain_name.split('.')
         if len(domain_parts) <= 1:
             return domain_parts
@@ -524,6 +615,47 @@ class Domain(JSONBase):
         domain_parts.pop()
         domain_parts[-1] = main_domain
         return domain_parts[::-1]
+
+    @property
+    def all_matches(self):
+        """Returns all matches of the domain"""
+        matches = []
+        location_ids = set()
+        for label in self.domain_labels[::-1]:
+            for match in label.matches:
+                if match.location_id not in location_ids:
+                    location_ids.add(match.location_id)
+                    matches.append(match)
+        return matches
+
+    @property
+    def possible_matches(self):
+        """Returns all matches which are possible (according to measurements)"""
+        return [match for match in self.all_matches if match.possible]
+
+    @property
+    def matches_count(self) -> int:
+        """Counts the amount of matches for this domain"""
+        return len(self.all_matches)
+
+    @property
+    def matching_match(self):
+        """Returns the match where we found the correct location"""
+        if self.location_id:
+            for match in self.all_matches:
+                if match.matching:
+                    return match
+        else:
+            return None
+
+    def ip_for_version(self, version: str) -> str:
+        """returns the version corresponding ip address"""
+        if version == IPV4_IDENTIFIER:
+            return self.ip_address
+        elif version == IPV6_IDENTIFIER:
+            return self.ipv6_address
+        else:
+            raise ValueError('{} is not a valid IP version'.format(version))
 
     def dict_representation(self) -> [str, object]:
         """Returns a dictionary with the information of the object"""
@@ -535,25 +667,30 @@ class Domain(JSONBase):
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
         }
-        if self.location:
-            ret_dict[self.PropertyKey.location] = self.location.id
+        if self.location_id:
+            ret_dict[self.PropertyKey.location] = self.location_id
         return ret_dict
 
     @staticmethod
-    def create_object_from_dict(dct, locations: [str, Location]=None):
+    def create_object_from_dict(dct, locations: [str, object]=None):
         """Creates a Domain object from a dictionary"""
         obj = Domain(dct[Domain.PropertyKey.domain_name], dct[Domain.PropertyKey.ip_address],
                      dct[Domain.PropertyKey.ipv6_address])
         if Domain.PropertyKey.domain_labels in dct:
             del obj.domain_labels[:]
-            for label_dct in dct[Domain.PropertyKey.domain_labels]:
-                label_obj = label_dct
-                label_obj.domain = obj
-                obj.domain_labels.append(label_obj)
-        if Domain.PropertyKey.location in dct and locations and \
-                dct[Domain.PropertyKey.location] in locations:
-            obj.location = locations[dct[Domain.PropertyKey.location]]
+            obj.domain_labels = dct[Domain.PropertyKey.domain_labels][:]
+        if Domain.PropertyKey.location_id in dct:
+            obj.location_id = dct[Domain.PropertyKey.location_id]
+            if locations and obj.location_id in locations:
+                obj.location = locations[obj.location_id]
 
+        return obj
+
+    def copy(self):
+        obj = Domain(self.domain_name, self.ip_address, self.ipv6_address)
+        obj.domain_labels = [domain_label.copy() for domain_label in self.domain_labels]
+        obj.location_id = self.location_id
+        obj.location = self.location
         return obj
 
 
@@ -562,19 +699,18 @@ class DomainLabel(JSONBase):
 
     class_name_identifier = 'dl'
 
-    __slots__ = ['label', 'domain', 'matches']
+    __slots__ = ['label', 'matches']
 
     class PropertyKey:
         label = '0'
         matches = '1'
 
-    def __init__(self, label, domain=None):
+    def __init__(self, label):
         """
         init
-        :param domain: set a reference to the domain name object
+        :param label: the domain label
         """
         self.label = label
-        self.domain = domain
         self.matches = []
 
     def dict_representation(self):
@@ -589,11 +725,13 @@ class DomainLabel(JSONBase):
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabel(dct[DomainLabel.PropertyKey.label])
-        for match in dct[DomainLabel.PropertyKey.matches]:
-            match_obj = match
-            match_obj.domain = obj
-            obj.matches.append(match_obj)
+        obj.matches = dct[DomainLabel.PropertyKey.matches][:]
 
+        return obj
+
+    def copy(self):
+        obj = DomainLabel(self.label)
+        obj.matches = [match.copy() for match in self.matches]
         return obj
 
 
@@ -602,39 +740,67 @@ class DomainLabelMatch(JSONBase):
 
     class_name_identifier = 'dlm'
 
-    __slots__ = ['location_id', 'code_type', 'domain_label', 'code', 'matching']
+    __slots__ = ['location_id', 'code_type', 'code', 'matching',
+                 'matching_distance', 'matching_rtt', 'possible']
 
     class PropertyKey:
         location_id = '0'
         code_type = '1'
         code = '2'
         matching = '3'
+        matching_distance = '4'
+        matching_rtt = '5'
+        possible = '6'
 
-    def __init__(self, location_id: int, code_type: LocationCodeType,
-                 domain_label: DomainLabel=None, code=None):
+    def __init__(self, location_id: int, code_type: LocationCodeType, code=None, possible=True):
         """init"""
-        self.domain_label = domain_label
         self.location_id = location_id
         self.code_type = code_type
         self.code = code
         self.matching = False
+        self.matching_distance = None
+        self.matching_rtt = None
+        self.possible = possible
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
-        return {
+        dct = {
             CLASS_IDENTIFIER: self.class_name_identifier,
             self.PropertyKey.location_id: self.location_id,
             self.PropertyKey.code_type: self.code_type.value,
             self.PropertyKey.code: self.code,
-            self.PropertyKey.matching: self.matching
+            self.PropertyKey.possible: self.possible,
         }
+        if self.matching:
+            dct[self.PropertyKey.matching] = self.matching
+        if self.matching_distance:
+            dct[self.PropertyKey.matching_distance] = self.matching_distance
+        if self.matching_rtt:
+            dct[self.PropertyKey.matching_rtt] = self.matching_rtt
+        return dct
 
     @staticmethod
     def create_object_from_dict(dct):
         """Creates a DomainLabel object from a dictionary"""
         obj = DomainLabelMatch(dct[DomainLabelMatch.PropertyKey.location_id],
                                LocationCodeType(dct[DomainLabelMatch.PropertyKey.code_type]))
-        obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
+        if DomainLabelMatch.PropertyKey.matching in dct:
+            obj.matching = dct[DomainLabelMatch.PropertyKey.matching]
+        if DomainLabelMatch.PropertyKey.matching_distance in dct:
+            obj.matching_distance = dct[DomainLabelMatch.PropertyKey.matching_distance]
+        if DomainLabelMatch.PropertyKey.matching_rtt in dct:
+            obj.matching_rtt = dct[DomainLabelMatch.PropertyKey.matching_rtt]
+        if DomainLabelMatch.PropertyKey.code in dct:
+            obj.code = dct[DomainLabelMatch.PropertyKey.code]
+        if DomainLabelMatch.PropertyKey.possible in dct:
+            obj.possible = dct[DomainLabelMatch.PropertyKey.possible]
+        return obj
+
+    def copy(self):
+        obj = DomainLabelMatch(self.location_id, self.code_type, self.code, self.possible)
+        obj.matching = self.matching
+        obj.matching_rtt = self.matching_rtt
+        obj.matching_distance = self.matching_distance
         return obj
 
 
@@ -668,6 +834,9 @@ class LocationResult(JSONBase):
         """Creates a LocationResult object from a dictionary"""
         return LocationResult(dct[LocationResult.PropertyKey.location_id],
                               dct[LocationResult.PropertyKey.rtt])
+
+    def copy(self):
+        return LocationResult(self.location_id, self.rtt, location=self.location)
 
 
 class DRoPRule(JSONBase):
@@ -715,7 +884,7 @@ class DRoPRule(JSONBase):
         if self._regex_rules is None:
             ret_rules = []
             for rule in self._rules:
-                ret_rules.append((re.compile(rule.rule.format(rule.type.regex)), rule.type))
+                ret_rules.append((re.compile(rule.rule.replace('{}', rule.type.regex)), rule.type))
             self._regex_rules = ret_rules
 
         return self._regex_rules
@@ -731,6 +900,11 @@ class DRoPRule(JSONBase):
         for rule in dct[DRoPRule.PropertyKey.rules]:
             obj.add_rule(rule[DRoPRule.NamedTupleRule.PropertyKey.rule],
                          LocationCodeType(rule[DRoPRule.NamedTupleRule.PropertyKey.rule_type]))
+        return obj
+
+    def copy(self):
+        obj = DRoPRule(self.name, self.source)
+        obj._rules = [rule.copy() for rule in self._rules]
         return obj
 
     @staticmethod
@@ -768,3 +942,6 @@ class DRoPRule(JSONBase):
 
         def __str__(self):
             return 'Rule(regexrule: {}, type: {})'.format(self.rule, self.type.name)
+
+        def copy(self):
+            return DRoPRule.NamedTupleRule(self.rule, self.type)

@@ -6,9 +6,11 @@ import collections
 import time
 import src.data_processing.util as util
 import multiprocessing as mp
-import logging
 import pprint
+import heapq
 from src.data_processing.preprocess_drop_rules import RULE_NAME
+
+logger = None
 
 
 def __create_parser_arguments(parser):
@@ -31,6 +33,8 @@ def __create_parser_arguments(parser):
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-l', '--logging-file', type=str, default='find_drop.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-s', '--statistics-file', type=str, default='drop_statistics.log',
+                        dest='statistics_file_path', help='Specify a statistics logging file')
     # parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
     #                     dest='profile', action='store_true')
 
@@ -41,7 +45,8 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    util.setup_logging(args.log_file)
+    global logger
+    logger = util.setup_logger(args.log_file, 'find')
 
     with open(args.trie_file, 'rb') as trie_file:
         trie = pickle.load(trie_file)
@@ -53,7 +58,7 @@ def main():
     for index in range(0, args.fileCount):
         process = mp.Process(target=start_search_in_file,
                              args=(args.doaminfilename_proto, index, trie,
-                                   drop_rules, args.amount),
+                                   drop_rules, args.amount, args.statistics_file_path),
                              name='find_drop_{}'.format(index))
         processes.append(process)
 
@@ -65,50 +70,61 @@ def main():
 
 
 def start_search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                         amount: int):
+                         amount: int, stats_file_path: str):
     """Start searching in file and timer to know the elapsed time"""
     start_time = time.time()
-    search_in_file(domainfile_proto, index, trie, drop_rules, amount)
+    search_in_file(domainfile_proto, index, trie, drop_rules, amount, stats_file_path)
 
     end_time = time.time()
-    logging.info('running time: {}'.format((end_time - start_time)))
+    logger.info('running time: {}'.format((end_time - start_time)))
 
 
 def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, object],
-                   amount: int):
+                   amount: int,  stats_file_path: str):
     """Search in file"""
     match_count = collections.defaultdict(int)
-    entries_stats = {'count': 0, 'unique_loc_found_count': 0, 'unique_loc_trie_found_count': 0,
-                     'loc_found_count': 0, 'length': 0, 'rules_found': 0, 'false_positives': 0,
-                     'false_positive_with_hint': 0}
+    count_domains = 0
+    entries_stats = collections.defaultdict(dict)
+
+    def generate_def_dcts(gen_rules: [str, object]):
+        for gen_rule in gen_rules.values():
+            if isinstance(gen_rule, dict):
+                generate_def_dcts(gen_rule)
+                continue
+            entries_stats[gen_rule.name] = collections.defaultdict(int)
+
+    generate_def_dcts(drop_rules)
+
     filename = domainfile_proto.format(index)
-    with open(filename) as domain_file, open('.'.join(
-            filename.split('.')[:-1]) + '-found.json', 'w') as loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-not-found.json',
-                'w') as no_loc_found_file, open(
-                '.'.join(filename.split('.')[:-1]) + '-found-wo-loc.json',
-                'w') as loc_found_wo_file:
+    with open(filename) as domain_file, \
+            open(util.remove_file_ending(filename) + '.found', 'w') as loc_found_file, \
+            open(util.remove_file_ending(filename) + '.notfound', 'w') as no_loc_found_file, \
+            open(util.remove_file_ending(filename) + '.found-wo-trie', 'w') as loc_found_wo_file:
+        domain_count = collections.defaultdict(int)
         domains_w_location = []
         domains_wo_location = []
         domains_no_location = []
 
         def save_domain_with_location(loc_domain):
             domains_w_location.append(loc_domain)
-            if len(domains_w_location) >= 10**4:
+            if len(domains_w_location) >= 10**3:
+                domain_count['domains_w_location'] += len(domains_w_location)
                 util.json_dump(domains_w_location, loc_found_file)
                 loc_found_file.write('\n')
                 del domains_w_location[:]
 
         def save_domain_wo_location(loc_domain):
             domains_wo_location.append(loc_domain)
-            if len(domains_wo_location) >= 10 ** 4:
+            if len(domains_wo_location) >= 10**3:
+                domain_count['domains_wo_location'] += len(domains_wo_location)
                 util.json_dump(domains_wo_location, loc_found_wo_file)
                 loc_found_wo_file.write('\n')
                 del domains_wo_location[:]
 
         def save_domain_no_location(loc_domain):
             domains_no_location.append(loc_domain)
-            if len(domains_no_location) >= 10 ** 4:
+            if len(domains_no_location) >= 10**3:
+                domain_count['domains_no_location'] += len(domains_no_location)
                 util.json_dump(domains_no_location, no_loc_found_file)
                 no_loc_found_file.write('\n')
                 del domains_no_location[:]
@@ -126,43 +142,42 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             amount -= 1
             domains = util.json_loads(line)
             for domain in domains:
-                entries_stats['count'] += 1
-                entries_stats['length'] += len(domain.domain_name)
+                count_domains += 1
                 matched = False
                 locations_present = False
                 found_false_positive = False
                 rules = find_rules_for_domain(domain)
                 for rule in rules:
-                    entries_stats['rules_found'] += 1
+                    entries_stats[rule.name]['rules_used_count'] += 1
                     for regex, code_type in rule.regex_pattern_rules:
                         match = regex.search(domain.domain_name)
                         if match:
                             if not matched:
-                                entries_stats['unique_loc_found_count'] += 1
+                                entries_stats[rule.name]['domains_with_rule_match_count'] += 1
                                 matched = True
                             matched_str = match.group('type')
                             locations = [loc for loc in trie.get(matched_str, [])
                                          if loc[1] == code_type.value]
                             if locations and not locations_present:
-                                entries_stats['unique_loc_trie_found_count'] += 1
+                                entries_stats[rule.name]['domains_with_location_count'] += 1
                                 locations_present = True
-                            else:
+                            elif not locations_present:
                                 found_false_positive = True
-                            entries_stats['loc_found_count'] += len(locations)
+                            entries_stats[rule.name]['total_amount_found_locations'] += \
+                                len(locations)
                             for location in locations:
                                 match_count[code_type.name] += 1
                                 for label in domain.domain_labels:
                                     if matched_str in label.label:
                                         label.matches.append(util.DomainLabelMatch(location[0],
                                                                                    code_type,
-                                                                                   label,
                                                                                    matched_str))
                                         break
 
                 if found_false_positive and locations_present:
-                    entries_stats['false_positive_with_hint'] += 1
+                    entries_stats[rule.name]['false_positive_with_found_location'] += 1
                 if found_false_positive:
-                    entries_stats['false_positives'] += 1
+                    entries_stats[rule.name]['false_positives'] += 1
 
                 if locations_present:
                     save_domain_with_location(domain)
@@ -177,9 +192,69 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
         util.json_dump(domains_w_location, loc_found_file)
         util.json_dump(domains_wo_location, loc_found_wo_file)
         util.json_dump(domains_no_location, no_loc_found_file)
+        domain_count['domains_w_location'] += len(domains_w_location)
+        domain_count['domains_wo_location'] += len(domains_wo_location)
+        domain_count['domains_no_location'] += len(domains_no_location)
 
-        logging.info('entries stats {}'.format(pprint.pformat(entries_stats, indent=4)))
-        logging.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
+        new_better_stats = {}
+        for rule_name, rule_stat in entries_stats.items():
+            if not isinstance(rule_stat, dict):
+                continue
+            new_better_stats[rule_name] = {'count': rule_stat['rules_used_count']}
+            if rule_stat['rules_used_count'] < 10:
+                new_better_stats[rule_name]['low_usage'] = True
+                continue
+            new_better_stats[rule_name]['matching_percent'] = \
+                rule_stat['domains_with_rule_match_count'] / rule_stat['rules_used_count']
+            new_better_stats[rule_name]['true_matching_percent'] = \
+                rule_stat['domains_with_location_count'] / rule_stat['rules_used_count']
+            if rule_stat['domains_with_rule_match_count'] > 0:
+                new_better_stats[rule_name]['matching_percent_related'] = \
+                    rule_stat['domains_with_location_count'] / \
+                    rule_stat['domains_with_rule_match_count']
+            else:
+                new_better_stats[rule_name]['matching_percent_related'] = 2
+
+        with open(stats_file_path, 'w') as stats_file:
+            util.json_dump(new_better_stats, stats_file)
+
+        stats_for_used_rules = {}
+        for rule_name, stats in new_better_stats.items():
+            if 'low_usage' not in stats:
+                stats_for_used_rules[rule_name] = stats
+
+        ten_most_matching = heapq.nlargest(10, stats_for_used_rules.items(),
+                                           key=lambda stat: stat[1]['matching_percent'])
+        ten_most_true_matching = heapq.nlargest(10, stats_for_used_rules.items(),
+                                                key=lambda stat: stat[1]['true_matching_percent'])
+        ten_least_matching = heapq.nsmallest(10, stats_for_used_rules.items(),
+                                             key=lambda stat: stat[1]['matching_percent'])
+        ten_least_true_matching = heapq.nsmallest(10, stats_for_used_rules.items(),
+                                                  key=lambda stat: stat[1]['true_matching_percent'])
+        ten_lowest_related_matching = heapq.nsmallest(
+            10, stats_for_used_rules.items(), key=lambda stat: stat[1]['matching_percent_related'])
+
+        logger.info('Total amount domains: {}'.format(count_domains))
+        logger.info('Total amount domains with location: {}'.format(
+            domain_count['domains_w_location']))
+        logger.info('Total amount domains without location code: {}'.format(
+            domain_count['domains_wo_location']))
+        logger.info('Total amount domains without location: {}'.format(
+            domain_count['domains_no_location']))
+        logger.info('Total amount rules: {}'.format(len(new_better_stats)))
+        logger.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
+        logger.info('10 rules with highest matching percent: {}'.format(
+            pprint.pformat(ten_most_matching, indent=4)))
+        logger.info('10 rules with highest true matching percent: {}'.format(
+            pprint.pformat(ten_most_true_matching, indent=4)))
+        logger.info('10 rules with lowest matching percent: {}'.format(
+            pprint.pformat(ten_least_matching, indent=4)))
+        logger.info('10 rules with lowest true matching percent: {}'.format(
+            pprint.pformat(ten_least_true_matching, indent=4)))
+        logger.info('10 rules with lowest related matching percent: {}'.format(
+            pprint.pformat(ten_lowest_related_matching, indent=4)))
+
+        logger.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
 
 if __name__ == '__main__':
     main()
