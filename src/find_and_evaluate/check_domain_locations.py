@@ -1429,17 +1429,17 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             #     return
 
             slow_down_sema.acquire()
-            nodes = ripe_atlas.ProbeRequest(**params)
+            nodes = ripe_atlas.ProbeRequest(**params, return_objects=True)
 
             nodes.next_batch()
             if nodes.total_count > 0:
                 results = [node for node in nodes]
                 available_probes = [node for node in results
-                                    if (node['status']['name'] == 'Connected' and
+                                    if (node.status == 'Connected' and
                                         'system-{}-works'.format(ip_version) in
-                                        [tag['slug'] for tag in node['tags']] and
+                                        [tag['slug'] for tag in node.tags] and
                                         'system-{}-capable'.format(ip_version) in
-                                        [tag['slug'] for tag in node['tags']])]
+                                        [tag['slug'] for tag in node.tags])]
                 if len(available_probes) > 0:
                     location.nodes = results
                     location.available_nodes = available_probes
