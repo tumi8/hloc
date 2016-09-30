@@ -644,10 +644,9 @@ class Domain(JSONBase):
     @property
     def matching_match(self):
         """Returns the match where we found the correct location"""
-        if self.location_id:
-            for match in self.all_matches:
-                if match.matching:
-                    return match
+        for match in self.all_matches:
+            if match.matching:
+                return match
         else:
             return None
 
@@ -671,7 +670,12 @@ class Domain(JSONBase):
                                              self.domain_labels],
         }
         if self.location_id:
-            ret_dict[self.PropertyKey.location] = self.location_id
+            ret_dict[self.PropertyKey.location_id] = self.location_id
+        elif self.location:
+            if isinstance(self.location, Location):
+                ret_dict[self.PropertyKey.location_id] = self.location.id
+            else:
+                ret_dict[self.PropertyKey.location_id] = self.location.dict_representation()
         return ret_dict
 
     @staticmethod
@@ -683,9 +687,12 @@ class Domain(JSONBase):
             del obj.domain_labels[:]
             obj.domain_labels = dct[Domain.PropertyKey.domain_labels][:]
         if Domain.PropertyKey.location_id in dct:
-            obj.location_id = dct[Domain.PropertyKey.location_id]
-            if locations and obj.location_id in locations:
-                obj.location = locations[obj.location_id]
+            if isinstance(dct[Domain.PropertyKey.location_id], (int, str)):
+                obj.location_id = dct[Domain.PropertyKey.location_id]
+                if locations and obj.location_id in locations:
+                    obj.location = locations[obj.location_id]
+            elif isinstance(dct[Domain.PropertyKey.location_id], GPSLocation):
+                obj.location = dct[Domain.PropertyKey.location_id]
 
         return obj
 
