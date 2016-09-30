@@ -724,8 +724,9 @@ def check_domain_location_ripe(domain: util.Domain,
                     ret = matches[0]
                 return ret
 
-    next_match = get_next_match()
     logger.debug('first match')
+    next_match = get_next_match()
+
     no_verification_matches = []
 
     # TODO refactoring measurements are in dict format
@@ -736,6 +737,8 @@ def check_domain_location_ripe(domain: util.Domain,
         #                                                 len(measurements)))
     else:
         measurements = []
+
+    logger.debug('got measurements')
 
     while next_match is not None:
         location = locations[str(next_match.location_id)]
@@ -752,6 +755,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                                    near_nodes,
                                                    results,
                                                    ripe_slow_down_sema)
+        logger.debug('checked for measurement results')
 
         def add_new_result(new_result: util.LocationResult):
             remove_obj = None
@@ -837,8 +841,8 @@ def check_domain_location_ripe(domain: util.Domain,
 
         matches.remove(next_match)
         no_verification_matches.append(next_match)
-        next_match = get_next_match()
         logger.debug('next match')
+        next_match = get_next_match()
 
     if not matched:
         still_matches = filter_possible_matches(no_verification_matches, results, locations,
@@ -1015,14 +1019,13 @@ def get_min_rtt(ping_output: str) -> float:
 
 def get_rtt_from_result(measurement_entry: [str, float]) -> float:
     """gets the rtt from measurement_entry"""
-    if 'min' in measurement_entry.keys():
+    if 'min' in measurement_entry:
         return measurement_entry['min']
-    if 'result' in measurement_entry.keys() and len(
-            measurement_entry['rtt']) > 0:
-        min_rtt = min(measurement_entry['rtt'], key=lambda res: res['rtt'])[
+    if 'result' in measurement_entry and measurement_entry['result']:
+        min_rtt = min(measurement_entry['result'], key=lambda res: res['rtt'])[
             'rtt']
         return min_rtt
-    if 'avg' in measurement_entry.keys():
+    if 'avg' in measurement_entry:
         return measurement_entry['avg']
     return None
 
@@ -1222,11 +1225,10 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             try:
                 measurement.next_batch()
             except ripe_atlas.exceptions.APIResponseError:
-                # logger.exception('MeasurementRequest APIResponseError next_batch')
+                logger.exception('MeasurementRequest APIResponseError next_batch')
                 pass
             else:
                 break
-
             time.sleep(5)
             loc_retries += 1
 
@@ -1284,6 +1286,7 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
         retries = 0
         while not success and retries < 5:
+            logger.debug('AtlasResultsRequest error! {}'.format(result_list))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
             success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
@@ -1311,7 +1314,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
     measurement_results = get_measurements_for_nodes(measurements,
                                                      ripe_slow_down_sema,
                                                      nodes)
-
+    logger.debug('got measurement results')
     check_n = None
     node_n = None
     date_n = None
