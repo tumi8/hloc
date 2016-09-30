@@ -1320,10 +1320,11 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
     date_n = None
     near_node_ids = [node['id'] for node in nodes]
     for m_results in measurement_results:
+        logger.debug('next result {}'.format(len(m_results['results'])))
         for result in m_results['results']:
-            oldest_alowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
+            oldest_allowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
             if (result['prb_id'] not in near_node_ids or
-                    result['timestamp'] < oldest_alowed_time):
+                    result['timestamp'] < oldest_allowed_time):
                 continue
 
             check_res = get_rtt_from_result(result)
