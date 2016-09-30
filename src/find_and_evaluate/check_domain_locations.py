@@ -1237,8 +1237,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
 
     max_age = int(time.time()) - ALLOWED_MEASUREMENT_AGE
     params = {
-        'status': '2,4,5',
-        'target_ip': ip_addr,
+        'status__in': '2,4,5',
+        'target': ip_addr,
         'type': 'ping',
         'stop_time__gte': max_age
         }
@@ -1249,6 +1249,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
     while True:
         try:
             measurements = ripe_atlas.MeasurementRequest(**params)
+            logger.debug('atlas url {}'.format(measurements.atlas_url))
         except ripe_atlas.exceptions.APIResponseError:
             logger.exception('MeasurementRequest APIResponseError')
         else:
