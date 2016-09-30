@@ -98,6 +98,9 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
+                        choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the preferred log level')
 
 
 def __check_args(args):
@@ -130,7 +133,7 @@ def main():
     __check_args(args)
 
     global logger
-    logger = util.setup_logger(args.log_file, 'check')
+    logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level)
     logger.debug('starting')
 
     start_time = time.time()
@@ -684,12 +687,13 @@ def check_domain_location_ripe(domain: util.Domain,
         :rtype: DomainLabelMatch
         """
         nonlocal matches, matched
+        logger.debug('{} matches before filter'.format(len(matches)))
         return_val, return_tuple = filter_possible_matches(matches, results, locations, distances)
+        logger.debug('{} matches after filter ret val {}'.format(len(matches), return_val))
+
         if not return_val:
             return None
 
-        if gc.garbage:
-            logger.error('Garbage collection garbage not empty! {}'.format(len(gc.garbage)))
         if dry_run:
             if return_tuple:
                 update_domains(domain, util.DomainType.correct)
@@ -715,6 +719,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 return ret
 
     next_match = get_next_match()
+    logger.debug('first match')
     no_verification_matches = []
 
     # TODO refactoring measurements are in dict format
@@ -757,6 +762,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
         if chk_m is None:
             # only if no old measurement exists
+            logger.debug('creating measurement')
             available_nodes = location.available_nodes
             if not available_nodes:
                 matches.remove(next_match)
@@ -774,7 +780,7 @@ def check_domain_location_ripe(domain: util.Domain,
             node_location_dist = location.gps_distance_equirectangular(
                 util.GPSLocation(near_node['geometry']['coordinates'][1],
                                  near_node['geometry']['coordinates'][0]))
-
+            logger.debug('finished measurement')
             try:
                 result = next(iter(m_results))
             except StopIteration:
@@ -783,6 +789,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             chk_res = get_rtt_from_result(result)
+            logger.debug('got result {}'.format(chk_res))
             if chk_res is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -825,6 +832,7 @@ def check_domain_location_ripe(domain: util.Domain,
         matches.remove(next_match)
         no_verification_matches.append(next_match)
         next_match = get_next_match()
+        logger.debug('next match')
 
     if not matched:
         still_matches = filter_possible_matches(no_verification_matches, results, locations,
