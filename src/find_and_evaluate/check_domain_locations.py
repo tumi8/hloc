@@ -152,7 +152,10 @@ def main():
         ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
         global API_KEY, MAX_THREADS
         API_KEY = args.api_key
-        MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
+        if args.log_level == 'DEBUG':
+            MAX_THREADS = 1
+        else:
+            MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
         finish_event = threading.Event()
         generator_thread = threading.Thread(target=generate_ripe_request_tokens,
                                             args=(ripe_slow_down_sema, args.ripeRequestLimit,
@@ -219,7 +222,10 @@ def main():
     logger.debug('finished ripe')
 
     processes = []
-    for pid in range(0, args.fileCount):
+    file_count = args.fileCount
+    if args.log_level == 'DEBUG':
+        file_count = 1
+    for pid in range(0, file_count):
         process = None
         if args.verifingMethod == 'ripe':
             process = mp.Process(target=ripe_check_for_list,
