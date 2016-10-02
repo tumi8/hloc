@@ -7,7 +7,7 @@ import argparse
 import collections
 import mmap
 import enum
-import math
+import os
 
 import src.data_processing.util as util
 
@@ -67,13 +67,14 @@ def main():
     near_matching_distances = []
     wrong_matching_distances = []
 
-
     global logger
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
 
     with open(args.locationFile) as locationFile:
         locations = util.json_load(locationFile)
+
+    filepath = os.path.dirname(args.db_filename_proto)
 
     for index in range(0, args.fileCount):
         classif_domains = collections.defaultdict(list)
@@ -103,7 +104,8 @@ def main():
                         distance = db_domain.location.gps_distance_haversine(ripe_location)
                         if db_domain.matching_match and \
                                 db_domain.matching_match.location_id == ripe_domain.location_id:
-                            classif_domains[CompareType.ripe_c_db_same].append((db_domain, ripe_domain))
+                            classif_domains[CompareType.ripe_c_db_same].append(
+                                (db_domain, ripe_domain))
                             correct_matching_distances.append(distance)
                         else:
                             ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
@@ -130,7 +132,7 @@ def main():
                             else:
                                 classif_domains[CompareType.ripe_no_v_db_wrong].append(
                                     (db_domain, ripe_domain))
-                        elif db_match.location_id is not None in \
+                        elif db_match.location_id in \
                                 [match.location_id for match in ripe_domain.possible_matches]:
 
                             classif_domains[CompareType.ripe_no_v_db_l].append(
@@ -163,7 +165,7 @@ def main():
 
                 line = ripe_domain_file_mm.readline().decode('utf-8')
 
-        with open('compared-ripe-db-{}.out'.format(index), 'w') as output_file:
+        with open(filepath + 'compared-ripe-db-{}.out'.format(index), 'w') as output_file:
             for key, domain_list in classif_domains.items():
                 logger.info('{} len {}\n'.format(key, len(domain_list)))
                 output_file.write('{} len {}\n'.format(key, len(domain_list)))
@@ -172,23 +174,26 @@ def main():
 
         classif_domains.clear()
 
-    with open('compared-ripe-db-correct-distances.out', 'w') as output_file:
+    with open(filepath + 'compared-ripe-db-correct-distances.out', 'w') as output_file:
         for distance in correct_matching_distances:
             output_file.write('{}\n'.format(distance))
 
-        logger.info('correct distances avg {}'.format(sum(correct_matching_distances)/len(correct_matching_distances)))
+        logger.info('correct distances avg {}'.format(
+            sum(correct_matching_distances)/len(correct_matching_distances)))
 
-    with open('compared-ripe-db-near-distances.out', 'w') as output_file:
+    with open(filepath + 'compared-ripe-db-near-distances.out', 'w') as output_file:
         for distance in near_matching_distances:
             output_file.write('{}\n'.format(distance))
 
-        logger.info('near distances avg {}'.format(sum(near_matching_distances)/len(near_matching_distances)))
+        logger.info('near distances avg {}'.format(
+            sum(near_matching_distances)/len(near_matching_distances)))
 
-    with open('compared-ripe-db-wrong-distances.out', 'w') as output_file:
+    with open(filepath + 'compared-ripe-db-wrong-distances.out', 'w') as output_file:
         for distance in wrong_matching_distances:
             output_file.write('{}\n'.format(distance))
 
-        logger.info('wrong distances avg {}'.format(sum(wrong_matching_distances)/len(wrong_matching_distances)))
+        logger.info('wrong distances avg {}'.format(
+            sum(wrong_matching_distances)/len(wrong_matching_distances)))
 
 
 def location_possible(db_matches: [util.DomainLabelMatch], ripe_matches):
