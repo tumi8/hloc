@@ -322,6 +322,13 @@ def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, u
                                ip2locations_filename: str, ip_version: str):
     """Verifies the locations with the ip2locations database"""
     correct_count = collections.defaultdict(int)
+    count_locations = 0
+    count_entries = 0
+    count_matches = 0
+
+    def inc_locations():
+        nonlocal count_locations
+        count_locations += 1
 
     with open(filename_proto.format(pid)) as domainFile, \
             mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
@@ -332,23 +339,30 @@ def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, u
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
             for domain in domain_location_list:
-                ip2loc_get_domain_location(domain, ip2loc_obj, locations, correct_count, ip_version)
+                count_entries += 1
+                if ip2loc_get_domain_location(domain, ip2loc_obj, locations, correct_count,
+                                              ip_version, inc_locations):
+                    count_matches += 1
             util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
     logger.info('correct count: {}'.format(correct_count))
+    logger.info('count entries {}    count locations: {}    count matches: {}'.format(
+        count_entries, count_locations, count_matches))
 
 
 def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.IP2Location,
                                locations: [str, util.Location],
-                               correct_count: [util.DomainType, int], ip_version: str):
+                               correct_count: [util.DomainType, int], ip_version: str,
+                               inc_locations: [[], []]):
     """checks the domains locations with the geoipreader"""
     ip_address = domain.ip_for_version(ip_version)
     ip_location = ip2loc_reader.get_all(ip_address)
     if not ip_location:
         return False
 
+    inc_locations()
     ip_location_obj = util.GPSLocation(ip_location.latitude, ip_location.longitude)
     domain.location = ip_location_obj
 
@@ -368,6 +382,13 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
 def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
     """Verifies the location with the geoip database"""
     correct_count = collections.defaultdict(int)
+    count_locations = 0
+    count_entries = 0
+    count_matches = 0
+
+    def inc_locations():
+        nonlocal count_locations
+        count_locations += 1
 
     with open(filename_proto.format(pid)) as domainFile, \
             mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
@@ -378,21 +399,29 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_vers
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
             for domain in domain_location_list:
-                geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version)
+                count_entries += 1
+                if geoip_get_domain_location(domain, geoipreader, locations, correct_count,
+                                             ip_version, inc_locations):
+                    count_matches += 1
             util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
     logger.info('correct count: {}'.format(correct_count))
+    logger.info('count entries {}    count locations: {}    count matches: {}'.format(
+        count_entries, count_locations, count_matches))
 
 
-def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version: str):
+def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version: str,
+                              inc_locations: [[], []]):
     """checks the domains locations with the geoipreader"""
     ip_address = domain.ip_for_version(ip_version)
     geoip_location = geoipreader.city(ip_address)
     if geoip_location.location is None or geoip_location.location.longitude is None or \
             geoip_location.location.latitude is None:
         return False
+
+    inc_locations()
     geoip_location_obj = util.GPSLocation(geoip_location.location.latitude,
                                           geoip_location.location.longitude)
     domain.location = geoip_location_obj
