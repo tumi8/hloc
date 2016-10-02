@@ -217,9 +217,9 @@ def main():
 
         distances = init_coords_distances(zmap_locations, locations)
 
-    logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
-    logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
-    logger.debug('finished ripe')
+        logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
+        logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+        logger.debug('finished ripe')
 
     processes = []
     file_count = args.fileCount
@@ -275,9 +275,10 @@ def main():
                 process.join()
         except KeyboardInterrupt:
             pass
-
-    finish_event.set()
-    generator_thread.join()
+    if finish_event:
+        finish_event.set()
+    if generator_thread:
+        generator_thread.join()
     logger.debug('{} processes alive'.format(alive))
     end_time = time.time()
     logger.info('running time: {}'.format((end_time - start_time)))
@@ -315,8 +316,6 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     logger.debug('generate thread stoopped')
 
 
-# TODO falsify databases with all measurements
-
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
                                ip2locations_filename: str, ip_version: str):
     """Verifies the locations with the ip2locations database"""
@@ -324,8 +323,8 @@ def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, u
 
     with open(filename_proto.format(pid)) as domainFile, \
             mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
-            open(util.remove_file_ending(filename_proto.format(pid)) + '.locations', 'w') \
-                    as location_domain_file, \
+            open(util.remove_file_ending(filename_proto.format(pid)) + '.locations',
+                 'w') as location_domain_file, \
             IP2Location.IP2Location(filename=ip2locations_filename) as ip2loc_obj:
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
@@ -335,6 +334,8 @@ def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, u
             util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
+
+    logger.info('correct count: {}'.format(correct_count))
 
 
 def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.IP2Location,
@@ -364,14 +365,13 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
 
 def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
     """Verifies the location with the geoip database"""
-    geoipreader = geoip2.database.Reader(geoip_filename)
-
     correct_count = collections.defaultdict(int)
 
     with open(filename_proto.format(pid)) as domainFile, \
             mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
             open(util.remove_file_ending(filename_proto.format(pid)) +
-                 '.geoiplocations', 'w') as location_domain_file:
+                 '.geoiplocations', 'w') as location_domain_file, \
+            geoip2.database.Reader(geoip_filename) as geoipreader:
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
@@ -381,8 +381,6 @@ def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_vers
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
-    location_domain_file.close()
-    geoipreader.close()
     logger.info('correct count: {}'.format(correct_count))
 
 
