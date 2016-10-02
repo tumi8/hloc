@@ -85,7 +85,7 @@ def main():
             while len(line):
                 domain_dict = util.json_loads(line)
                 for ripe_domain in domain_dict[util.DomainType.correct]:
-                    drop_domain = drop_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
+                    drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_c_drop_no_match].append(
                             (drop_domain, ripe_domain))
@@ -115,7 +115,7 @@ def main():
                                 (drop_domain, ripe_domain))
 
                 for ripe_domain in domain_dict[util.DomainType.no_verification]:
-                    drop_domain = drop_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
+                    drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.location_id:
                         classif_domains[CompareType.ripe_no_v_drop_no_match].append(
                             (drop_domain, ripe_domain))
@@ -136,7 +136,7 @@ def main():
                                 (drop_domain, ripe_domain))
 
                 for ripe_domain in domain_dict[util.DomainType.no_location]:
-                    drop_domain = drop_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
+                    drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_no_l_drop_no_match].append(
                             (drop_domain, ripe_domain))
@@ -145,7 +145,7 @@ def main():
                             (drop_domain, ripe_domain))
 
                 for ripe_domain in domain_dict[util.DomainType.not_responding]:
-                    drop_domain = drop_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
+                    drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_no_data_drop_no_match].append(
                             (drop_domain, ripe_domain))
