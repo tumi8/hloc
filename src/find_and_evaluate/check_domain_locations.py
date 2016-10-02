@@ -318,53 +318,48 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
 # TODO falsify databases with all measurements
 
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
-                               ip2locations_filename: str):
+                               ip2locations_filename: str, ip_version: str):
     """Verifies the locations with the ip2locations database"""
-    ip2loc_obj = IP2Location.IP2Location()
-    ip2loc_obj.open(ip2locations_filename)
-
-    location_domain_file = open(filename_proto.format(pid) + '.locations', 'w')
-
     correct_count = collections.defaultdict(int)
 
-    with open(filename_proto.format(pid)) as domainFile:
-        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
+    with open(filename_proto.format(pid)) as domainFile, \
+            mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
+            open(util.remove_file_ending(filename_proto.format(pid)) + '.locations', 'w') \
+                    as location_domain_file, \
+            IP2Location.IP2Location(filename=ip2locations_filename) as ip2loc_obj:
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
-            correct_locs = []
-            wrong_locs = []
             for domain in domain_location_list:
-                location_label_match = ip2loc_get_domain_location(domain,
-                                                                  ip2loc_obj,
-                                                                  locations,
-                                                                  correct_count)
-                if location_label_match is not None:
-                    domain.location_match = location_label_match
-                    correct_locs.append(domain)
-                else:
-                    wrong_locs.append(domain)
-            util.json_dump(correct_locs, location_domain_file)
+                ip2loc_get_domain_location(domain, ip2loc_obj, locations, correct_count, ip_version)
+            util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
 
 def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.IP2Location,
                                locations: [str, util.Location],
-                               correct_count: [util.DomainType, int]):
+                               correct_count: [util.DomainType, int], ip_version: str):
     """checks the domains locations with the geoipreader"""
-    ip_location = ip2loc_reader.get_all(domain.ip_address)
-    for i, label in enumerate(domain.domain_labels):
-        if i == 0:
-            # skip if tld
-            continue
+    ip_address = domain.ip_for_version(ip_version)
+    ip_location = ip2loc_reader.get_all(ip_address)
+    if not ip_location:
+        return False
 
-        for match in label.matches:
-            if ip_location.country_short == locations[str(match.location_id)].stateCode:
-                correct_count[match.code_type] += 1
-                return match
+    ip_location_obj = util.GPSLocation(ip_location.latitude, ip_location.longitude)
+    domain.location = ip_location_obj
 
-    return None
+    for match in domain.all_matches:
+        location = locations[str(match.location_id)]
+        distance = location.gps_distance_equirectangular(ip_location_obj)
+        match.matching_distance = distance
+        if distance < 100:
+            correct_count[match['type']] += 1
+            match.matching = True
+            match.matching_rtt = -2
+            return True
+
+    return False
 
 
 def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
@@ -398,18 +393,17 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_
     if geoip_location.location is None or geoip_location.location.longitude is None or \
             geoip_location.location.latitude is None:
         return False
-
+    geoip_location_obj = util.GPSLocation(geoip_location.location.latitude,
+                                          geoip_location.location.longitude)
+    domain.location = geoip_location_obj
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_equirectangular(
-            util.GPSLocation(geoip_location.location.latitude,
-                             geoip_location.location.longitude))
+        distance = location.gps_distance_equirectangular(geoip_location_obj)
+        match.matching_distance = distance
         if distance < 100:
             correct_count[match['type']] += 1
-            domain.location = locations[str(match.location_id)]
             match.matching = True
-            match.matching_distance = distance
-            match.matching_rtt = -1
+            match.matching_rtt = -2
             return True
 
     return False
