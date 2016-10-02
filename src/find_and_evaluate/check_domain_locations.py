@@ -7,6 +7,7 @@ import requests
 import time
 import os.path
 import geoip2.database
+import geoip2.errors
 import random
 import mmap
 import IP2Location
@@ -416,7 +417,11 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_
                               inc_locations: [[], []]):
     """checks the domains locations with the geoipreader"""
     ip_address = domain.ip_for_version(ip_version)
-    geoip_location = geoipreader.city(ip_address)
+    try:
+        geoip_location = geoipreader.city(ip_address)
+    except geoip2.errors.AddressNotFoundError:
+        return False
+
     if geoip_location.location is None or geoip_location.location.longitude is None or \
             geoip_location.location.latitude is None:
         return False
