@@ -669,7 +669,7 @@ class Domain(JSONBase):
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
         }
-        if self.location_id:
+        if self.location_id is not None:
             ret_dict[self.PropertyKey.location_id] = self.location_id
         elif self.location:
             if isinstance(self.location, Location):

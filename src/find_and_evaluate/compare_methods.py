@@ -95,7 +95,7 @@ def main():
                 domain_dict = util.json_loads(line)
                 for ripe_domain in domain_dict[util.DomainType.correct.value]:
                     db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location:
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_c_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
@@ -118,7 +118,7 @@ def main():
 
                 for ripe_domain in domain_dict[util.DomainType.no_verification.value]:
                     db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                    if db_domain.location_id is None:
                         classif_domains[CompareType.ripe_no_v_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
@@ -130,7 +130,7 @@ def main():
                             else:
                                 classif_domains[CompareType.ripe_no_v_db_wrong].append(
                                     (db_domain, ripe_domain))
-                        elif db_match.location_id in \
+                        elif db_match.location_id is not None in \
                                 [match.location_id for match in ripe_domain.possible_matches]:
 
                             classif_domains[CompareType.ripe_no_v_db_l].append(
@@ -154,7 +154,7 @@ def main():
 
                 for ripe_domain in domain_dict[util.DomainType.not_responding.value]:
                     db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                    if db_domain.location_id is None:
                         classif_domains[CompareType.ripe_no_data_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
