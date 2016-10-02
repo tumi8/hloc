@@ -7,6 +7,7 @@ import argparse
 import collections
 import mmap
 import enum
+import math
 
 import src.data_processing.util as util
 
@@ -26,6 +27,7 @@ class CompareType(enum.Enum):
     ripe_no_v_db_wrong = 'ripe_no_v_db_wrong'
 
     ripe_no_l_db_no_data = 'ripe_no_l_db_no_data'
+    ripe_no_l_db_possible = 'ripe_no_l_db_possible'
     ripe_no_l_db_wrong = 'ripe_no_l_db_wrong'
 
     ripe_no_data_db_no_data = 'ripe_no_data_db_no_data'
@@ -61,6 +63,11 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    correct_matching_distances = []
+    near_matching_distances = []
+    wrong_matching_distances = []
+
+
     global logger
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
@@ -89,19 +96,23 @@ def main():
                     if not db_domain.location:
                         classif_domains[CompareType.ripe_c_db_no_data].append(
                             (db_domain, ripe_domain))
-                    elif db_domain.location_id == ripe_domain.location_id:
-                        classif_domains[CompareType.ripe_c_db_same].append((db_domain, ripe_domain))
                     else:
-                        db_location = locations[str(db_domain.location_id)]
                         ripe_location = locations[str(ripe_domain.location_id)]
-                        ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
-                        distance = db_location.gps_distance_equirectangular(ripe_location)
-                        if distance < ripe_matching_rtt*100:
-                            classif_domains[CompareType.ripe_c_db_near].append(
-                                (db_domain, ripe_domain))
+                        distance = db_domain.location.gps_distance_haversine(ripe_location)
+                        if db_domain.matching_match and \
+                                db_domain.matching_match.location_id == ripe_domain.location_id:
+                            classif_domains[CompareType.ripe_c_db_same].append((db_domain, ripe_domain))
+                            correct_matching_distances.append(distance)
                         else:
-                            classif_domains[CompareType.ripe_c_db_wrong].append(
-                                (db_domain, ripe_domain))
+                            ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
+                            if distance < ripe_matching_rtt*100:
+                                classif_domains[CompareType.ripe_c_db_near].append(
+                                    (db_domain, ripe_domain))
+                                near_matching_distances.append(distance)
+                            else:
+                                classif_domains[CompareType.ripe_c_db_wrong].append(
+                                    (db_domain, ripe_domain))
+                                wrong_matching_distances.append(distance)
 
                 for ripe_domain in domain_dict[util.DomainType.no_verification.value]:
                     db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
@@ -110,8 +121,16 @@ def main():
                             (db_domain, ripe_domain))
                     else:
                         db_match = db_domain.matching_match
-                        if db_match.location_id in \
+                        if not db_match:
+                            if location_possible(db_domain.all_matches, ripe_domain.all_matches):
+                                classif_domains[CompareType.ripe_no_v_db_l].append(
+                                    (db_domain, ripe_domain))
+                            else:
+                                classif_domains[CompareType.ripe_no_v_db_wrong].append(
+                                    (db_domain, ripe_domain))
+                        elif db_match.location_id in \
                                 [match.location_id for match in ripe_domain.possible_matches]:
+
                             classif_domains[CompareType.ripe_no_v_db_l].append(
                                 (db_domain, ripe_domain))
                         else:
@@ -120,12 +139,16 @@ def main():
 
                 for ripe_domain in domain_dict[util.DomainType.no_location.value]:
                     db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                    if not db_domain.location:
                         classif_domains[CompareType.ripe_no_l_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
-                        classif_domains[CompareType.ripe_no_l_db_wrong].append(
-                            (db_domain, ripe_domain))
+                        if location_possible(db_domain.all_matches, ripe_domain.all_matches):
+                            classif_domains[CompareType.ripe_no_l_db_possible].append(
+                                (db_domain, ripe_domain))
+                        else:
+                            classif_domains[CompareType.ripe_no_l_db_wrong].append(
+                                (db_domain, ripe_domain))
 
                 for ripe_domain in domain_dict[util.DomainType.not_responding.value]:
                     db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
@@ -146,6 +169,41 @@ def main():
                 output_file.write('\n')
 
         classif_domains.clear()
+
+    with open('compared-ripe-db-correct-distances.out', 'w') as output_file:
+        for distance in correct_matching_distances:
+            output_file.write('{}\n'.format(distance))
+
+        logger.info('correct distances avg {}'.format(sum(correct_matching_distances)/len(correct_matching_distances)))
+
+    with open('compared-ripe-db-near-distances.out', 'w') as output_file:
+        for distance in near_matching_distances:
+            output_file.write('{}\n'.format(distance))
+
+        logger.info('near distances avg {}'.format(sum(near_matching_distances)/len(near_matching_distances)))
+
+    with open('compared-ripe-db-wrong-distances.out', 'w') as output_file:
+        for distance in wrong_matching_distances:
+            output_file.write('{}\n'.format(distance))
+
+        logger.info('wrong distances avg {}'.format(sum(wrong_matching_distances)/len(wrong_matching_distances)))
+
+
+def location_possible(db_matches: [util.DomainLabelMatch], ripe_matches):
+    """Checks if the location is possible with the given match results"""
+    for db_match in db_matches:
+        ripe_match = None
+        for match in ripe_matches:
+            if match.location_id == db_match.location_id:
+                ripe_match = match
+                break
+
+        if ripe_match and ripe_match.matching_rtt:
+            if db_match.matching_distance > ripe_match.matching_rtt * 100:
+                return False
+
+    return True
+
 
 
 if __name__ == '__main__':
