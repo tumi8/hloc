@@ -247,14 +247,16 @@ def main():
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.geoipFile),
+                                       args.geoipFile,
+                                       args.ip_version),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'ip2location':
             process = mp.Process(target=ip2location_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.ip2locFile),
+                                       args.ip2locFile,
+                                       args.ip_version),
                                  name='domain_checking_{}'.format(pid))
         processes.append(process)
 
