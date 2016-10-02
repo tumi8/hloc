@@ -230,3 +230,18 @@ for i in range(0, 8):
 #         elems = json.loads(line)
 #         nets = [x for x in elems if 'net' in x['domainLabels'].values()]
 #         json.dump(nets, wfile, indent=2)
+
+
+
+# Fix old wrong dataformat
+for i in range(0,8):
+    o_file = open('/data2/trie-results/router.domains-{}-found.checked'.format(i))
+    r_file = open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i), 'w')
+    for line in o_file:
+        domains = util.json_loads(line)
+        for domain in domains[util.DomainType.correct.value]:
+            domain.location_id = domain.matching_match.location_id
+        util.json_dump(domains, r_file)
+        r_file.write('\n')
+    o_file.close()
+    r_file.close()
