@@ -357,7 +357,7 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
         distance = location.gps_distance_equirectangular(ip_location_obj)
         match.matching_distance = distance
         if distance < 100:
-            correct_count[match['type']] += 1
+            correct_count[match.code_type.name] += 1
             match.matching = True
             match.matching_rtt = -2
             return True
@@ -401,7 +401,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_
         distance = location.gps_distance_equirectangular(geoip_location_obj)
         match.matching_distance = distance
         if distance < 100:
-            correct_count[match['type']] += 1
+            correct_count[match.code_type.name] += 1
             match.matching = True
             match.matching_rtt = -2
             return True
