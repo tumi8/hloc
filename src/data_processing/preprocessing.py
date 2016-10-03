@@ -39,7 +39,7 @@ def __create_parser_arguments(parser):
     parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
                         help='if set the cProfile will profile the script for one process')
     parser.add_argument('-d', '--destination', type=str, dest='destination',
-                        help='Set the desination directory (must exist)')
+                        help='Set the desination directory (must not exist)')
     parser.add_argument('-i', '--isp-ip-filter', action='store_true', dest='isp_ip_filter',
                         help='set if you want to filter isp ip domain names')
     parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
@@ -192,17 +192,17 @@ def main():
 
     os.mkdir(config.destination)
 
-    processes = [None] * config.amount_processes
+    processes = []
 
-    for i in range(0, len(processes)):
+    for i in range(0, len(config.amount_processes)):
         if i == (config.amount_processes - 1):
-            processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                      args=(config, i, ipregex, tlds, args.cProfiling),
-                                      name='preprocessing_{}'.format(i))
+            processes.append(mp.Process(target=preprocess_file_part_profile,
+                                        args=(config, i, ipregex, tlds, args.cProfiling),
+                                        name='preprocessing_{}'.format(i)))
         else:
-            processes[i] = mp.Process(target=preprocess_file_part_profile,
-                                      args=(config, i, ipregex, tlds, False),
-                                      name='preprocessing_{}'.format(i))
+            processes.append(mp.Process(target=preprocess_file_part_profile,
+                                        args=(config, i, ipregex, tlds, False),
+                                        name='preprocessing_{}'.format(i)))
         processes[i].start()
 
     alive = len(processes)
@@ -277,8 +277,6 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             open(os.path.join(config.destination,
                               '{0}-{1}-ip-encoded.domain'.format(filename, pnr)),
                  'w', encoding='utf-8') as ip_encoded_file, \
-            open(os.path.join(config.destination, '{0}-{1}-hex-ip.domain'.format(filename, pnr)),
-                 'w', encoding='utf-8') as hex_ip_encoded_file, \
             open(os.path.join(config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
                  encoding='utf-8') as bad_file, \
             open(os.path.join(config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
@@ -329,6 +327,8 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 seek_after = BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1)
                 del lines[:]
 
+            prepare()
+
             for seek_line in rdns_file_handle:
                 if seek_after == 0 and seek_before == 0 and len(lines) >= BLOCK_SIZE:
                     prepare()
@@ -369,14 +369,6 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 ip_encoded_file.write('\n')
                 del isp_ip_lines[:]
 
-        def append_hex_ip_line(hex_line: str):
-            nonlocal hex_ip_lines
-            hex_ip_lines.append(hex_line)
-            if len(hex_ip_lines) >= 10 ** 3:
-                hex_ip_encoded_file.write('\n'.join(hex_ip_lines))
-                hex_ip_encoded_file.write('\n')
-                del hex_ip_lines[:]
-
         def append_custom_filter_line(custom_filter_line: str):
             nonlocal custom_filter_lines
             custom_filter_lines.append(custom_filter_line)
@@ -407,7 +399,6 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         count_good_lines = 0
         good_records = []
         bad_dns_records = []
-        hex_ip_lines = []
         isp_ip_lines = []
         custom_filter_lines = []
 
@@ -430,7 +421,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     elif filter_ips and is_standart_isp_domain(line):
                         append_isp_ip_line(line)
                     elif filter_ips and util.is_ip_hex_encoded_simple(ip_address, domain):
-                        append_hex_ip_line(line)
+                        append_isp_ip_line(line)
                     else:
                         if is_ipv6:
                             rdns_record = Domain(domain, ipv6_address=ip_address)
@@ -444,7 +435,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
 
         util.json_dump(good_records, correct_file)
         util.json_dump(bad_dns_records, bad_dns_file)
-        util.json_dump(hex_ip_lines, hex_ip_encoded_file)
+        util.json_dump(isp_ip_lines, ip_encoded_file)
 
         write_bad_lines(util.ACCEPTED_CHARACTER)
 
