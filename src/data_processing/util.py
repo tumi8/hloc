@@ -70,8 +70,8 @@ def get_path_filename(path: str) -> str:
 
 def remove_file_ending(filenamepath: str) -> str:
     """Removes the fileending of the paths file"""
-    return os.path.dirname(filenamepath) + '/' + \
-        '.'.join(get_path_filename(filenamepath).split('.')[:-1])
+    return os.path.join(os.path.dirname(filenamepath),
+                        '.'.join(get_path_filename(filenamepath).split('.')[:-1]))
 
 
 def setup_logger(filename: str, loggername: str, loglevel: str='DEBUG') -> logging.Logger:

@@ -165,7 +165,7 @@ def main():
 
                 line = ripe_domain_file_mm.readline().decode('utf-8')
 
-        with open(filepath + 'compared-ripe-db-{}.out'.format(index), 'w') as output_file:
+        with open(os.path.join(filepath, 'compared-ripe-db-{}.out'.format(index)), 'w') as output_file:
             for key, domain_list in classif_domains.items():
                 logger.info('{} len {}\n'.format(key, len(domain_list)))
                 output_file.write('{} len {}\n'.format(key, len(domain_list)))
@@ -174,21 +174,21 @@ def main():
 
         classif_domains.clear()
 
-    with open(filepath + 'compared-ripe-db-correct-distances.out', 'w') as output_file:
+    with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
         for distance in correct_matching_distances:
             output_file.write('{}\n'.format(distance))
 
         logger.info('correct distances avg {}'.format(
             sum(correct_matching_distances)/len(correct_matching_distances)))
 
-    with open(filepath + 'compared-ripe-db-near-distances.out', 'w') as output_file:
+    with open(os.path.join(filepath, 'compared-ripe-db-near-distances.out'), 'w') as output_file:
         for distance in near_matching_distances:
             output_file.write('{}\n'.format(distance))
 
         logger.info('near distances avg {}'.format(
             sum(near_matching_distances)/len(near_matching_distances)))
 
-    with open(filepath + 'compared-ripe-db-wrong-distances.out', 'w') as output_file:
+    with open(os.path.join(filepath, 'compared-ripe-db-wrong-distances.out'), 'w') as output_file:
         for distance in wrong_matching_distances:
             output_file.write('{}\n'.format(distance))
 
