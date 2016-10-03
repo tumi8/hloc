@@ -194,7 +194,7 @@ def main():
 
     processes = []
 
-    for i in range(0, len(config.amount_processes)):
+    for i in range(0, config.amount_processes):
         if i == (config.amount_processes - 1):
             processes.append(mp.Process(target=preprocess_file_part_profile,
                                         args=(config, i, ipregex, tlds, args.cProfiling),
