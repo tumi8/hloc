@@ -65,6 +65,8 @@ def main():
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
 
+    stats = collections.defaultdict(int)
+
     with open(args.locationFile) as locationFile:
         locations = util.json_load(locationFile)
 

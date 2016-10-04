@@ -158,7 +158,7 @@ def main():
 
                 for ripe_domain in domain_dict[util.DomainType.not_responding.value]:
                     db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if db_domain.location_id is None:
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_no_data_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
@@ -167,7 +167,8 @@ def main():
 
                 line = ripe_domain_file_mm.readline().decode('utf-8')
 
-        with open(os.path.join(filepath, 'compared-ripe-db-{}.out'.format(index)), 'w') as output_file:
+        with open(os.path.join(filepath, 'compared-ripe-db-{}.out'.format(index)),
+                  'w') as output_file:
             for key, domain_list in classif_domains.items():
                 stats[key] += len(domain_list)
                 logger.info('{} len {}'.format(key, len(domain_list)))
@@ -216,7 +217,6 @@ def location_possible(db_matches: [util.DomainLabelMatch], ripe_matches):
                 return False
 
     return True
-
 
 
 if __name__ == '__main__':
