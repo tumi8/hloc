@@ -434,8 +434,9 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                             append_bad_dns_record(rdns_record)
 
         util.json_dump(good_records, correct_file)
+        correct_file.write('\n')
         util.json_dump(bad_dns_records, bad_dns_file)
-        util.json_dump(isp_ip_lines, ip_encoded_file)
+        bad_dns_file.write('\n')
 
         write_bad_lines(util.ACCEPTED_CHARACTER)
 
