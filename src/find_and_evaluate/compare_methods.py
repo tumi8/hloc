@@ -177,7 +177,7 @@ def main():
         classif_domains.clear()
 
     sum_stats = sum(stats.values())
-    for key, value in stats.values():
+    for key, value in stats.items():
         logger.info('{} len {} percent {}'.format(key, value, value/sum_stats))
 
     with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
