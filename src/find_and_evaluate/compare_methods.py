@@ -67,6 +67,8 @@ def main():
     near_matching_distances = []
     wrong_matching_distances = []
 
+    stats = collections.defaultdict(int)
+
     global logger
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
@@ -167,12 +169,16 @@ def main():
 
         with open(os.path.join(filepath, 'compared-ripe-db-{}.out'.format(index)), 'w') as output_file:
             for key, domain_list in classif_domains.items():
-                logger.info('{} len {}\n'.format(key, len(domain_list)))
-                output_file.write('{} len {}\n'.format(key, len(domain_list)))
+                stats[key] += len(domain_list)
+                logger.info('{} len {}'.format(key, len(domain_list)))
                 util.json_dump(domain_list, output_file)
                 output_file.write('\n')
 
         classif_domains.clear()
+
+    sum_stats = sum(stats.values())
+    for key, value in stats:
+        logger.info('{} len {} percent {}'.format(key, value, value/sum_stats))
 
     with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
         for distance in correct_matching_distances:
