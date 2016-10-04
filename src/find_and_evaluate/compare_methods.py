@@ -122,7 +122,7 @@ def main():
 
                 for ripe_domain in domain_dict[util.DomainType.no_verification.value]:
                     db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if db_domain.location_id is None:
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_no_v_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
@@ -203,7 +203,7 @@ def main():
             sum(wrong_matching_distances)/len(wrong_matching_distances)))
 
 
-def location_possible(db_matches: [util.DomainLabelMatch], ripe_matches):
+def location_possible(db_matches, ripe_matches):
     """Checks if the location is possible with the given match results"""
     for db_match in db_matches:
         ripe_match = None
