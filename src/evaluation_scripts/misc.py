@@ -44,7 +44,7 @@ import os
 #     _ = output_file.write(string_to_write)
 
 
-def get_number_no_probe(no_probe_locations, filename_proto):
+def get_number_no_probe(no_probe_locations, filename_proto, ips):
     c_matches = 0
     c_u_matches = 0
     for i in range(0,8):
@@ -52,11 +52,12 @@ def get_number_no_probe(no_probe_locations, filename_proto):
             for line in file:
                 domains_dict = util.json_loads(line)
                 for domain in domains_dict[util.DomainType.no_verification.value]:
-                    for match in domain.possible_matches:
-                        if str(match.location_id) in no_probe_locations:
-                            c_matches += 1
-                            if len(domain.possible_matches) == 1:
-                                c_u_matches += 1
+                    if not ips or domain.ip_address in ips:
+                        for match in domain.possible_matches:
+                            if str(match.location_id) in no_probe_locations:
+                                c_matches += 1
+                                if len(domain.possible_matches) == 1:
+                                    c_u_matches += 1
     print(c_matches)
     print(c_u_matches)
 
