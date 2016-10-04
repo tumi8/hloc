@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.5
 
-import json
+import src.data_processing.util as util
+import collections
 
 
 # file=open('ip_results_m.json', 'r')
@@ -78,29 +79,31 @@ import json
 #     print('3', anz3, '4', anz4)
 #     return codes
 #
-#
-def collect_find_loc(file_proto):
-    loc_id_dict = {}
-    def inc_type(loc_id, m_type):
-        if loc_id not in loc_id_dict.keys():
-            loc_id_dict[loc_id] = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
-                                   'locode': 0}
-        loc_id_dict[loc_id][m_type] = loc_id_dict[loc_id][m_type] + 1
-    for index in range(0, 8):
-        find_file = open(file_proto.format(index), 'r')
-        for line in find_file:
-            find_domains = json.loads(line)
-            for domain in find_domains:
-                for key, label_dict in domain['domainLabels'].items():
-                    if key == 'tld':
-                        continue
-                    for match in label_dict['matches']:
-                        inc_type(match['location_id'], match['type'])
-    with open('loc_find_eval_type.json', 'w') as locFile:
-        json.dump(loc_id_dict, locFile)
-    # loc_s = sorted(list(loc_id_dict.items()), key=lambda am: am[1], reverse=True)
-    # for i in range(0, 20):
-    #     print(loc_s[i])
+
+# def collect_find_loc(file_proto):
+#     loc_id_dict = {}
+#     def inc_type(loc_id, m_type):
+#         if loc_id not in loc_id_dict.keys():
+#             loc_id_dict[loc_id] = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
+#                                    'locode': 0}
+#         loc_id_dict[loc_id][m_type] = loc_id_dict[loc_id][m_type] + 1
+#     for index in range(0, 8):
+#         find_file = open(file_proto.format(index), 'r')
+#         for line in find_file:
+#             find_domains = json.loads(line)
+#             for domain in find_domains:
+#                 for key, label_dict in domain['domainLabels'].items():
+#                     if key == 'tld':
+#                         continue
+#                     for match in label_dict['matches']:
+#                         inc_type(match['location_id'], match['type'])
+#     with open('loc_find_eval_type.json', 'w') as locFile:
+#         json.dump(loc_id_dict, locFile)
+#     # loc_s = sorted(list(loc_id_dict.items()), key=lambda am: am[1], reverse=True)
+#     # for i in range(0, 20):
+#     #     print(loc_s[i])
+
+
 #
 # f1.close()
 # f2.close()
@@ -174,14 +177,14 @@ def collect_find_loc(file_proto):
 #     nfile.close()
 #     ofile.close()
 
-file_proto = '20150902-rdns-{}.cor'
-total = 0
-for i in range(0, 8):
-    ofile = open(file_proto.format(i), 'r')
-    for line in ofile:
-        ds = json.loads(line)
-        total = total + len(ds)
-    ofile.close()
+# file_proto = '20150902-rdns-{}.cor'
+# total = 0
+# for i in range(0, 8):
+#     ofile = open(file_proto.format(i), 'r')
+#     for line in ofile:
+#         ds = json.loads(line)
+#         total = total + len(ds)
+#     ofile.close()
 
 
 # def get_data(file):
@@ -232,16 +235,118 @@ for i in range(0, 8):
 #         json.dump(nets, wfile, indent=2)
 
 
-
 # Fix old wrong dataformat
-for i in range(0,8):
-    o_file = open('/data2/trie-results/router.domains-{}-found.checked'.format(i))
-    r_file = open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i), 'w')
-    for line in o_file:
-        domains = util.json_loads(line)
-        for domain in domains[util.DomainType.correct.value]:
-            domain.location_id = domain.matching_match.location_id
-        util.json_dump(domains, r_file)
-        r_file.write('\n')
-    o_file.close()
-    r_file.close()
+# for i in range(0,8):
+#     o_file = open('/data2/trie-results/router.domains-{}-found.checked'.format(i))
+#     r_file = open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i), 'w')
+#     for line in o_file:
+#         domains = util.json_loads(line)
+#         for domain in domains[util.DomainType.correct.value]:
+#             domain.location_id = domain.matching_match.location_id
+#         util.json_dump(domains, r_file)
+#         r_file.write('\n')
+#     o_file.close()
+#     r_file.close()
+
+
+# for i in range(0,8):
+#     with open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i)) as file:
+#         for line in file:
+#             domains = util.json_loads(line)
+#             for domain in domains[util.DomainType.correct.value]:
+#                 if domain.location_id is None:
+#                     print(domain.ip_address)
+#                     print(domain.matching_match)
+#                     print(domain.matching_match.location_id)
+
+
+# ips = set()
+# for i in range(0,8):
+#     with open('/data2/router-ip-filtered/router.domains-{}.cor'.format(i)) as file:
+#         for line in file:
+#             domains = util.json_loads(line)
+#             for domain in domains:
+#                 ips.add(domain.ip_address)
+# with open('/data2/router-ip-filtered/cor-ips.data', '2') as output_file:
+#     string_to_write = ''
+#     for ip in ips:
+#         string_to_write += '{}\n'.format(ip)
+#     _ = output_file.write(string_to_write)
+
+
+ips = set()
+with open('/data2/router-ip-filtered/cor-ips.data') as ip_file:
+    for line in ip_file:
+        ips.add(line.strip())
+
+def split_results(filename, ip_version, ips):
+    for i in range(0,8):
+        with open(filename.format(i)) as file, \
+                open(filename.format(i) + '.wip', 'w') as w_ip_file, \
+                open(filename.format(i) + '.woip', 'w') as wo_ip_file:
+            domains_w_ip = collections.defaultdict(list)
+            count_w_ip = 0
+            domains_wo_ip = collections.defaultdict(list)
+            count_wo_ip = 0
+            for line in file:
+                domains_dict = util.json_loads(line)
+                # for key, d_list in domains_dict.items():
+                #     for domain in d_list:
+                #         if domain.ip_for_version(ip_version) in ips:
+                #             domains_w_ip[key].append(domain)
+                #             count_w_ip += 1
+                #             if count_w_ip >= 10**3:
+                #                 util.json_dump(domains_w_ip, w_ip_file)
+                #                 _ = w_ip_file.write('\n')
+                #                 domains_w_ip.clear()
+                #                 count_w_ip = 0
+                #         else:
+                #             domains_wo_ip[key].append(domain)
+                #             count_wo_ip += 1
+                #             if count_wo_ip >= 10**3:
+                #                 util.json_dump(domains_wo_ip, wo_ip_file)
+                #                 _ = wo_ip_file.write('\n')
+                #                 domains_wo_ip.clear()
+                #                 count_wo_ip = 0
+                for domain in domains_dict:
+                    if domain.ip_for_version(ip_version) in ips:
+                        domains_w_ip['0'].append(domain)
+                        count_w_ip += 1
+                        if count_w_ip >= 10 ** 3:
+                            util.json_dump(domains_w_ip, w_ip_file)
+                            _ = w_ip_file.write('\n')
+                            domains_w_ip.clear()
+                            count_w_ip = 0
+                    else:
+                        domains_wo_ip['0'].append(domain)
+                        count_wo_ip += 1
+                        if count_wo_ip >= 10 ** 3:
+                            util.json_dump(domains_wo_ip, wo_ip_file)
+                            _ = wo_ip_file.write('\n')
+                            domains_wo_ip.clear()
+                            count_wo_ip = 0
+            util.json_dump(domains_w_ip, w_ip_file)
+            w_ip_file.write('\n')
+            util.json_dump(domains_wo_ip, wo_ip_file)
+            wo_ip_file.write('\n')
+
+
+split_results('/data2/trie-results/router.domains-{}-found.json', 'ipv4', ips)
+
+def get_stats_for_filenameproto(filename_proto):
+    lens = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for key, value in domain_dict.items():
+                    lens[key] += len(value)
+    print(lens)
+
+def count_domains(filename_proto):
+    count_d = 0
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                count_d += len(json.loads(line))
+    print(count_d)
