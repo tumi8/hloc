@@ -2,7 +2,7 @@
 
 import src.data_processing.util as util
 import collections
-
+import os
 
 # file=open('ip_results_m.json', 'r')
 # for line in file:
@@ -350,3 +350,72 @@ def count_domains(filename_proto):
             for line in d_file:
                 count_d += len(json.loads(line))
     print(count_d)
+
+
+def collect_rtts(filename_proto):
+    cor_rtts = []
+    no_v_rtts = []
+    for i in range(0, 8):
+        with open(filename_proto.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                for domain in domains[util.DomainType.correct.value]:
+                    cor_rtts.append(domain.matching_match.matching_rtt)
+                for domain in domains[util.DomainType.no_verification.value]:
+                    rtts = [match.matching_rtt for match in domain.all_matches if match.matching_rtt and match.matching_rtt > 0]
+                    if rtts:
+                        no_v_rtts.append(min(rtts))
+    with open(os.path.join(os.path.dirname(filename_proto), 'corr_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in cor_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    with open(os.path.join(os.path.dirname(filename_proto), 'no_v_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in no_v_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    print('cor avg {}  min {}   max {}'.format((sum(cor_rtts)/len(cor_rtts)), min(cor_rtts),
+                                               max(cor_rtts)))
+    print('nov avg {}  min {}   max {}'.format((sum(no_v_rtts) / len(no_v_rtts)), min(no_v_rtts),
+                                               max(no_v_rtts)))
+
+
+collect_rtts('/data2/trie-results/router.domains-{}-found.checked')
+
+rtts=[]
+with open('/data2/trie-results/corr_rtts') as rtt_file:
+    for line in rtt_file:
+        rtts.append(float(line.strip()))
+
+
+
+# file_name_v4 = '/data2/trie-results/router.domains-{}-found.json'
+# file_name_v6 = '/data2/rdns-results-v6/ipv6_rdns-{}-found.json'
+def count_ips(file_name):
+    ips = []
+    for i in range(0, 8):
+        with open(file_name.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                ips.extend([domain.ipv6_address for domain in domains])
+    u_ips = set(ips)
+    a_ips = set()
+    # with open('/data/scan-2016-07-15/dallas/router.ips.announced') as ips_file:
+    with open('/data/rdns-parse/ipv6-router.ips.announced') as ips_file:
+        for line in ips_file:
+            line = line.strip()
+            a_ips.add(line)
+    # print(len(ips))
+    # print(len(u_ips.intersection(a_ips)))
+    print('filtered {}'.format(len(ips) - len(u_ips.intersection(a_ips))))
+    # with open('/data/cleared-ipv4-results.zmap') as zmap_file:
+    with open('/data/ipv6-zmap.results') as zmap_file:
+        _ = zmap_file.readline()
+        line = zmap_file.readline()
+        results = util.json_loads(line)
+    reachables = set(results.keys())
+    # print(len(reachables))
+    # print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    print('timeouts {}'.format(len(ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (len(ips) - len(u_ips.intersection(a_ips)))))
+
