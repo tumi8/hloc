@@ -74,7 +74,8 @@ def main():
         classif_domains = collections.defaultdict(list)
         drop_domains = {}
         with open(args.drop_filename_proto.format(index)) as drop_domain_file, \
-                mmap.mmap(drop_domain_file.fileno(), 0) as drop_domain_file_mm:
+                mmap.mmap(drop_domain_file.fileno(), 0,
+                          access=mmap.ACCESS_READ) as drop_domain_file_mm:
             line = drop_domain_file_mm.readline().decode('utf-8')
             while len(line):
                 domain_list = util.json_loads(line)
@@ -82,7 +83,8 @@ def main():
                     drop_domains[domain.ip_for_version(args.ip_version)] = domain
                 line = drop_domain_file_mm.readline().decode('utf-8')
         with open(args.ripe_filename_proto.format(index)) as ripe_domain_file, \
-                mmap.mmap(ripe_domain_file.fileno(), 0) as ripe_domain_file_mm:
+                mmap.mmap(ripe_domain_file.fileno(), 0,
+                          access=mmap.ACCESS_READ) as ripe_domain_file_mm:
             line = ripe_domain_file_mm.readline().decode('utf-8')
             while len(line):
                 domain_dict = util.json_loads(line)
