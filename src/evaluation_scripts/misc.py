@@ -30,18 +30,18 @@ import os
 #                     print(domain.matching_match.location_id)
 
 
-# ips = set()
-# for i in range(0,8):
-#     with open('/data2/router-ip-filtered/router.domains-{}.cor'.format(i)) as file:
-#         for line in file:
-#             domains = util.json_loads(line)
-#             for domain in domains:
-#                 ips.add(domain.ip_address)
-# with open('/data2/router-ip-filtered/cor-ips.data', '2') as output_file:
-#     string_to_write = ''
-#     for ip in ips:
-#         string_to_write += '{}\n'.format(ip)
-#     _ = output_file.write(string_to_write)
+ips = set()
+for i in range(0,8):
+    with open('/data2/router-ipv6-cleared/ipv6_cleaned_rdns-{}.cor'.format(i)) as file:
+        for line in file:
+            domains = util.json_loads(line)
+            for domain in domains:
+                ips.add(domain.ipv6_address)
+with open('/data2/router-ipv6-cleared/cor-ips.data', 'w') as output_file:
+    string_to_write = ''
+    for ip in ips:
+        string_to_write += '{}\n'.format(ip)
+    _ = output_file.write(string_to_write)
 
 
 def get_number_no_probe(no_probe_locations, filename_proto, ips):
@@ -234,6 +234,31 @@ with open('/data2/trie-results/corr_rtts') as rtt_file:
     for line in rtt_file:
         rtts.append(float(line.strip()))
 
+
+def count_ips_v6(filename_proto):
+    ips = []
+    with open('/data2/router-ipv6-cleared/cor-ips.data') as file:
+        for line in file:
+            ips.append(line.strip())
+    u_ips = set(ips)
+    print(len(ips))
+    print(len(u_ips))
+    a_ips = set()
+    with open('/data/rdns-parse/ipv6-router.ips.announced') as ips_file:
+        for line in ips_file:
+            line = line.strip()
+            a_ips.add(line)
+    print('filtered {}'.format(len(u_ips) - len(u_ips.intersection(a_ips))))
+    with open('/data/ipv6-zmap.results') as zmap_file:
+        _ = zmap_file.readline()
+        line = zmap_file.readline()
+        results = util.json_loads(line)
+    reachables = set(results.keys())
+    print(len(reachables))
+    print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    print('timeouts {}'.format(
+        len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
+        len(u_ips) - len(u_ips.intersection(a_ips)))))
 
 
 # file_name_v4 = '/data2/trie-results/router.domains-{}-found.json'
