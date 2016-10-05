@@ -424,9 +424,10 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                         rdns_record = Domain(domain, ip_address=ip_address)
                     if config.white_list is not None and ip_address not in config.white_list:
                         append_custom_filter_line(line)
-                    elif config.isp_ip_filter and is_standart_isp_domain(line):
+                    elif not is_ipv6 and config.isp_ip_filter and is_standart_isp_domain(line):
                         append_isp_ip_record(rdns_record)
-                    elif config.isp_ip_filter and util.is_ip_hex_encoded_simple(ip_address, domain):
+                    elif not is_ipv6 and config.isp_ip_filter and \
+                            util.is_ip_hex_encoded_simple(ip_address, domain):
                         append_isp_ip_record(rdns_record)
                     elif config.isp_ip_filter and util.int_to_alphanumeric(
                             util.ip_to_int(ip_address, config.ip_version)) in domain:
