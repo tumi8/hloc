@@ -32,12 +32,14 @@ import os
 
 ips = set()
 for i in range(0,8):
-    with open('/data2/router-ipv6-cleared/ipv6_cleaned_rdns-{}.cor'.format(i)) as file:
+    with open('/data2/trie-results/router.domains-{}-found.checked'.format(i)) as file:
         for line in file:
             domains = util.json_loads(line)
-            for domain in domains:
-                ips.add(domain.ipv6_address)
-with open('/data2/router-ipv6-cleared/cor-ips.data', 'w') as output_file:
+            for domain in domains[util.DomainType.no_verification.value]:
+                ips.add(domain.ip_address)
+            for domain in domains[util.DomainType.no_location.value]:
+                ips.add(domain.ip_address)
+with open('/data2/trie-results/not_verified.ips', 'w') as output_file:
     string_to_write = ''
     for ip in ips:
         string_to_write += '{}\n'.format(ip)
@@ -235,9 +237,9 @@ with open('/data2/trie-results/corr_rtts') as rtt_file:
         rtts.append(float(line.strip()))
 
 
-def count_ips_v6(filename_proto):
+def count_ips_v6():
     ips = []
-    with open('/data2/router-ipv6-cleared/cor-ips.data') as file:
+    with open('/data2/router-ipv6-cleared/ipfiltered/cor-ips.data') as file:
         for line in file:
             ips.append(line.strip())
     u_ips = set(ips)
