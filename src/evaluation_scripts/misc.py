@@ -156,6 +156,39 @@ def get_stats_for_filenameproto(filename_proto):
                     lens[key] += len(value)
     print(lens)
 
+def get_code_stats_checked(filename_proto):
+    stats_v = collections.defaultdict(int)
+    stats_no_v = collections.defaultdict(int)
+    stats_f = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for domains in domain_dict.values():
+                    for domain in domains:
+                        for match in domain.all_matches:
+                            if match == domain.matching_match:
+                                stats_v[match.code_type] += 1
+                            else:
+                                if match.possible:
+                                    stats_no_v[match.code_type] += 1
+                                else:
+                                    stats_f[match.code_type] += 1
+    print('verified {}'.format(stats_v))
+    print('not verified {}'.format(stats_no_v))
+    print('falsified {}'.format(stats_f))
+
+def get_code_stats(filename_proto):
+    stats = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_list = util.json_loads(line)
+                for domain in domain_list:
+                    for match in domain.all_matches:
+                        stats[match.code_type] += 1
+    print(stats)
+
 def count_domains(filename_proto):
     count_d = 0
     for i in range(0,8):
