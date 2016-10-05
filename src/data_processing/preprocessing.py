@@ -361,7 +361,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     bad_characters[character] += 1
                 bad_file.write('{0}\n'.format(bad_line))
 
-        def append_isp_ip_record(isp_line: str):
+        def append_isp_ip_record(isp_line: util.Domain):
             nonlocal isp_ip_lines, count_isp_lines
             isp_ip_lines.append(isp_line)
             count_isp_lines += 1
@@ -417,18 +417,18 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     ip_address, domain = line.split(',', 1)
                     # is not None is correct because it could also be an empty list and that is
                     # allowed
-                    filter_ips = not is_ipv6 and config.isp_ip_filter
+
                     if is_ipv6:
                         rdns_record = Domain(domain, ipv6_address=ip_address)
                     else:
                         rdns_record = Domain(domain, ip_address=ip_address)
                     if config.white_list is not None and ip_address not in config.white_list:
                         append_custom_filter_line(line)
-                    elif filter_ips and is_standart_isp_domain(line):
+                    elif config.isp_ip_filter and is_standart_isp_domain(line):
                         append_isp_ip_record(rdns_record)
-                    elif filter_ips and util.is_ip_hex_encoded_simple(ip_address, domain):
+                    elif config.isp_ip_filter and util.is_ip_hex_encoded_simple(ip_address, domain):
                         append_isp_ip_record(rdns_record)
-                    elif filter_ips and util.int_to_alphanumeric(
+                    elif config.isp_ip_filter and util.int_to_alphanumeric(
                             util.ip_to_int(ip_address, config.ip_version)) in domain:
                         append_isp_ip_record(rdns_record)
                     else:
