@@ -243,16 +243,16 @@ def search_in_file(domainfile_proto: str, index: int, trie, drop_rules: [str, ob
             domain_count['domains_no_location']))
         logger.info('Total amount rules: {}'.format(len(new_better_stats)))
         logger.info('Amount used rules: {}'.format(len(stats_for_used_rules)))
-        logger.info('10 rules with highest matching percent: {}'.format(
-            pprint.pformat(ten_most_matching, indent=4)))
-        logger.info('10 rules with highest true matching percent: {}'.format(
-            pprint.pformat(ten_most_true_matching, indent=4)))
-        logger.info('10 rules with lowest matching percent: {}'.format(
-            pprint.pformat(ten_least_matching, indent=4)))
-        logger.info('10 rules with lowest true matching percent: {}'.format(
-            pprint.pformat(ten_least_true_matching, indent=4)))
-        logger.info('10 rules with lowest related matching percent: {}'.format(
-            pprint.pformat(ten_lowest_related_matching, indent=4)))
+        # logger.info('10 rules with highest matching percent: {}'.format(
+        #     pprint.pformat(ten_most_matching, indent=4)))
+        # logger.info('10 rules with highest true matching percent: {}'.format(
+        #     pprint.pformat(ten_most_true_matching, indent=4)))
+        # logger.info('10 rules with lowest matching percent: {}'.format(
+        #     pprint.pformat(ten_least_matching, indent=4)))
+        # logger.info('10 rules with lowest true matching percent: {}'.format(
+        #     pprint.pformat(ten_least_true_matching, indent=4)))
+        # logger.info('10 rules with lowest related matching percent: {}'.format(
+        #     pprint.pformat(ten_lowest_related_matching, indent=4)))
 
         logger.info('matching stats {}'.format(pprint.pformat(match_count, indent=4)))
 
