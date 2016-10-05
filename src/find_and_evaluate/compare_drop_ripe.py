@@ -86,7 +86,7 @@ def main():
             line = ripe_domain_file_mm.readline().decode('utf-8')
             while len(line):
                 domain_dict = util.json_loads(line)
-                for ripe_domain in domain_dict[util.DomainType.correct]:
+                for ripe_domain in domain_dict[util.DomainType.correct.value]:
                     drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_c_drop_no_match].append(
@@ -116,9 +116,9 @@ def main():
                             classif_domains[CompareType.ripe_c_drop_wrong].append(
                                 (drop_domain, ripe_domain))
 
-                for ripe_domain in domain_dict[util.DomainType.no_verification]:
+                for ripe_domain in domain_dict[util.DomainType.no_verification.value]:
                     drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
-                    if not drop_domain.location_id:
+                    if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_no_v_drop_no_match].append(
                             (drop_domain, ripe_domain))
                     else:
@@ -137,7 +137,7 @@ def main():
                             classif_domains[CompareType.ripe_no_v_drop_wrong].append(
                                 (drop_domain, ripe_domain))
 
-                for ripe_domain in domain_dict[util.DomainType.no_location]:
+                for ripe_domain in domain_dict[util.DomainType.no_location.value]:
                     drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_no_l_drop_no_match].append(
@@ -146,7 +146,7 @@ def main():
                         classif_domains[CompareType.ripe_no_l_drop_wrong].append(
                             (drop_domain, ripe_domain))
 
-                for ripe_domain in domain_dict[util.DomainType.not_responding]:
+                for ripe_domain in domain_dict[util.DomainType.not_responding.value]:
                     drop_domain = drop_domains[ripe_domain.ip_for_version(args.ip_version)]
                     if not drop_domain.all_matches:
                         classif_domains[CompareType.ripe_no_data_drop_no_match].append(
@@ -159,8 +159,11 @@ def main():
         with open('compared-ripe-drop-{}.out'.format(index), 'w') as output_file:
             for key, domain_list in classif_domains.items():
                 logger.info('{} len {}\n'.format(key, len(domain_list)))
-                output_file.write('{} len {}\n'.format(key, len(domain_list)))
+                stats[key] += len(domain_list)
                 util.json_dump(domain_list, output_file)
                 output_file.write('\n')
 
         classif_domains.clear()
+
+    for key, value in stats.items():
+        logger.info('{} len {}'.format(key, value))
