@@ -275,7 +275,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
     with open(os.path.join(config.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
               encoding='utf-8') as correct_file, \
             open(os.path.join(config.destination,
-                              '{0}-{1}-ip-encoded.domain'.format(filename, pnr)),
+                              '{0}-{1}.ipencoded'.format(filename, pnr)),
                  'w', encoding='utf-8') as ip_encoded_file, \
             open(os.path.join(config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
                  encoding='utf-8') as bad_file, \
@@ -361,11 +361,12 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     bad_characters[character] += 1
                 bad_file.write('{0}\n'.format(bad_line))
 
-        def append_isp_ip_line(isp_line: str):
-            nonlocal isp_ip_lines
+        def append_isp_ip_record(isp_line: str):
+            nonlocal isp_ip_lines, count_isp_lines
             isp_ip_lines.append(isp_line)
+            count_isp_lines += 1
             if len(isp_ip_lines) >= 10 ** 3:
-                ip_encoded_file.write('\n'.join(isp_ip_lines))
+                util.json_dump(isp_ip_lines, ip_encoded_file)
                 ip_encoded_file.write('\n')
                 del isp_ip_lines[:]
 
@@ -397,6 +398,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         bad_characters = collections.defaultdict(int)
         bad_lines = []
         count_good_lines = 0
+        count_isp_lines = 0
         good_records = []
         bad_dns_records = []
         isp_ip_lines = []
@@ -416,17 +418,20 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                     # is not None is correct because it could also be an empty list and that is
                     # allowed
                     filter_ips = not is_ipv6 and config.isp_ip_filter
+                    if is_ipv6:
+                        rdns_record = Domain(domain, ipv6_address=ip_address)
+                    else:
+                        rdns_record = Domain(domain, ip_address=ip_address)
                     if config.white_list is not None and ip_address not in config.white_list:
                         append_custom_filter_line(line)
                     elif filter_ips and is_standart_isp_domain(line):
-                        append_isp_ip_line(line)
+                        append_isp_ip_record(rdns_record)
                     elif filter_ips and util.is_ip_hex_encoded_simple(ip_address, domain):
-                        append_isp_ip_line(line)
+                        append_isp_ip_record(rdns_record)
+                    elif filter_ips and util.int_to_alphanumeric(
+                            util.ip_to_int(ip_address, config.ip_version)) in domain:
+                        append_isp_ip_record(rdns_record)
                     else:
-                        if is_ipv6:
-                            rdns_record = Domain(domain, ipv6_address=ip_address)
-                        else:
-                            rdns_record = Domain(domain, ip_address=ip_address)
                         if rdns_record.domain_labels[0].label.lower() in tlds:
                             count_good_lines += 1
                             append_good_record(rdns_record)
@@ -437,10 +442,12 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         correct_file.write('\n')
         util.json_dump(bad_dns_records, bad_dns_file)
         bad_dns_file.write('\n')
+        util.json_dump(isp_ip_lines, ip_encoded_file)
+        ip_encoded_file.write('\n')
 
         write_bad_lines(util.ACCEPTED_CHARACTER)
 
-        logger.info('good lines: {}'.format(count_good_lines))
+        logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
         with open(os.path.join(config.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(bad_characters, characterStatsFile)

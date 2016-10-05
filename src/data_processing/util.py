@@ -12,6 +12,8 @@ import logging
 import os
 # import msgpack
 import json
+import socket
+import binascii
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
@@ -126,6 +128,25 @@ def parse_zmap_line(zmap_line):
         sec_difference = int(rec_ts) - int(sent_ts)
         u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
         return rsaddr, (sec_difference + u_sec_diference) * 1000
+
+
+def ip_to_int(ip_addr, ip_version):
+    if ip_version == IPV6_IDENTIFIER:
+        return int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, ip_addr)), 16)
+    elif ip_version == IPV4_IDENTIFIER:
+        return int(binascii.hexlify(socket.inet_pton(socket.AF_INET, ip_addr)), 16)
+
+def int_to_alphanumeric(num: int):
+    rest = num % 36
+    if rest < 10:
+        rest_ret = '{}'.format(rest)
+    else:
+        rest_ret = '{}'.format(chr(ord('a')+rest-10))
+    div = num // 36
+    if div == 0:
+        return rest_ret
+    else:
+        return int_to_alphanumeric(div) + rest_ret
 
 
 ###################################################################################################
@@ -579,6 +600,8 @@ class Domain(JSONBase):
     Holds the information for one domain
     DO NOT SET the DOMAIN NAME after calling the constructor!
     """
+
+    # TODO use ipaddress stdlib module
 
     class_name_identifier = 'd'
 
