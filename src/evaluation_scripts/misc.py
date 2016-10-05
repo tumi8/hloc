@@ -122,14 +122,6 @@ def split_results(filename, ip_version, ips):
                 #                 count_wo_ip = 0
                 for domain in domains_dict:
                     if domain.ip_for_version(ip_version) in ips:
-                        domains_wo_ip['0'].append(domain)
-                        count_wo_ip += 1
-                        if count_wo_ip >= 10 ** 3:
-                            util.json_dump(domains_wo_ip['0'], wo_ip_file)
-                            _ = wo_ip_file.write('\n')
-                            domains_wo_ip.clear()
-                            count_wo_ip = 0
-                    else:
                         domains_w_ip['0'].append(domain)
                         count_w_ip += 1
                         if count_w_ip >= 10 ** 3:
@@ -137,6 +129,14 @@ def split_results(filename, ip_version, ips):
                             _ = w_ip_file.write('\n')
                             domains_w_ip.clear()
                             count_w_ip = 0
+                    else:
+                        domains_wo_ip['0'].append(domain)
+                        count_wo_ip += 1
+                        if count_wo_ip >= 10 ** 3:
+                            util.json_dump(domains_wo_ip['0'], wo_ip_file)
+                            _ = wo_ip_file.write('\n')
+                            domains_wo_ip.clear()
+                            count_wo_ip = 0
             util.json_dump(domains_w_ip, w_ip_file)
             w_ip_file.write('\n')
             util.json_dump(domains_wo_ip, wo_ip_file)
@@ -228,7 +228,7 @@ def count_ips(file_name):
     # print(len(ips))
     print(len(u_ips.intersection(a_ips)))
     print('filtered {}'.format(len(u_ips) - len(u_ips.intersection(a_ips))))
-    with open('/data/cleared-ipv4-results.zmap.wip') as zmap_file:
+    with open('/data/cleared-ipv4-results.zmap.woip') as zmap_file:
     # with open('/data/ipv6-zmap.results') as zmap_file:
         # _ = zmap_file.readline()
         line = zmap_file.readline()
@@ -236,5 +236,5 @@ def count_ips(file_name):
     reachables = set(results.keys())
     print(len(reachables))
     print(len(u_ips.intersection(a_ips).intersection(reachables)))
-    print('timeouts {}'.format(len(ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (len(ips) - len(u_ips.intersection(a_ips)))))
+    print('timeouts {}'.format(len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (len(u_ips) - len(u_ips.intersection(a_ips)))))
 
