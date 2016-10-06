@@ -852,7 +852,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return
         else:
             next_match.matching_rtt = chk_m
-            node_location_dist = location.gps_distance_haverisne(
+            node_location_dist = location.gps_distance_haversine(
                 util.GPSLocation(node['geometry']['coordinates'][1],
                                  node['geometry']['coordinates'][0]))
             next_match.matching_distance = node_location_dist
@@ -926,7 +926,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                     distance = distances[result.location_id][str(match.location_id)]
                 else:
                     distance = \
-                        locations[str(result.location_id)].gps_distance_haverisne(
+                        locations[str(result.location_id)].gps_distance_haversine(
                             locations[str(match.location_id)])
 
                 if distance > (result.rtt * 100):
