@@ -52,6 +52,8 @@ def __create_parser_arguments(parser):
                         default=util.IPV4_IDENTIFIER,
                         choices=[util.IPV4_IDENTIFIER, util.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
+    parser.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename', required=True,
+                        help='The results of the zmap scan of the ip addresses')
     parser.add_argument('-l', '--logging-file', type=str, default='compare_methods.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
@@ -77,6 +79,15 @@ def main():
         locations = util.json_load(locationFile)
 
     filepath = os.path.dirname(args.db_filename_proto)
+
+    with open(args.zmap_filename) as zmap_file:
+        location_line = zmap_file.readline()
+        results_line = zmap_file.readline()
+
+    zmap_locations = util.json_loads(location_line)
+    zmap_results = util.json_loads(results_line)
+    del location_line
+    del results_line
 
     for index in range(0, args.fileCount):
         classif_domains = collections.defaultdict(list)
@@ -128,7 +139,10 @@ def main():
                     else:
                         db_match = db_domain.matching_match
                         if not db_match:
-                            if location_possible(db_domain.all_matches, ripe_domain.all_matches):
+                            if location_possible(db_domain.all_matches, ripe_domain.all_matches) \
+                                and location_possible_zmap(db_domain.location,
+                                                           zmap_results,
+                                                           zmap_locations):
                                 classif_domains[CompareType.ripe_no_v_db_l].append(
                                     (db_domain, ripe_domain))
                             else:
@@ -149,7 +163,10 @@ def main():
                         classif_domains[CompareType.ripe_no_l_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
-                        if location_possible(db_domain.all_matches, ripe_domain.all_matches):
+                        if location_possible(db_domain.all_matches, ripe_domain.all_matches) \
+                                and location_possible_zmap(db_domain.location,
+                                                           zmap_results,
+                                                           zmap_locations):
                             classif_domains[CompareType.ripe_no_l_db_possible].append(
                                 (db_domain, ripe_domain))
                         else:
@@ -200,6 +217,15 @@ def main():
 
         logger.info('wrong distances avg {}'.format(
             sum(wrong_matching_distances)/len(wrong_matching_distances)))
+
+
+def location_possible_zmap(location, zmap_results, zmap_locations):
+    for zmap_id, zmap_location in zmap_locations.items():
+        distance = zmap_location.gps_distance_equirectangular(location)
+        rtt = zmap_results[zmap_id]
+        if distance > rtt * 100:
+            return False
+    return True
 
 
 def location_possible(db_matches, ripe_matches):
