@@ -75,9 +75,6 @@ def main():
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
 
-    with open(args.locationFile) as locationFile:
-        locations = util.json_load(locationFile)
-
     filepath = os.path.dirname(args.db_filename_proto)
 
     with open(args.zmap_filename) as zmap_file:
@@ -88,6 +85,9 @@ def main():
     zmap_results = util.json_loads(results_line)
     del location_line
     del results_line
+
+    with open(args.locationFile) as loc_file:
+        locations = util.json_load(loc_file)
 
     for index in range(0, args.fileCount):
         classif_domains = collections.defaultdict(list)
@@ -139,7 +139,8 @@ def main():
                     else:
                         db_match = db_domain.matching_match
                         if not db_match:
-                            if location_possible(db_domain.all_matches, ripe_domain.all_matches) \
+                            if location_possible(db_domain.location, ripe_domain.all_matches,
+                                                 locations) \
                                 and location_possible_zmap(db_domain.location,
                                                            zmap_results,
                                                            zmap_locations):
@@ -163,7 +164,8 @@ def main():
                         classif_domains[CompareType.ripe_no_l_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
-                        if location_possible(db_domain.all_matches, ripe_domain.all_matches) \
+                        if location_possible(db_domain.location, ripe_domain.all_matches,
+                                             locations) \
                                 and location_possible_zmap(db_domain.location,
                                                            zmap_results,
                                                            zmap_locations):
@@ -221,7 +223,7 @@ def main():
 
 def location_possible_zmap(location, zmap_results, zmap_locations):
     for zmap_id, zmap_location in zmap_locations.items():
-        distance = zmap_location.gps_distance_equirectangular(location)
+        distance = zmap_location.gps_distance_haversine(location)
         if zmap_id in zmap_results:
             rtt = zmap_results[zmap_id]
             if distance > rtt * 100:
@@ -229,19 +231,12 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
     return True
 
 
-def location_possible(db_matches, ripe_matches):
+def location_possible(db_location, ripe_matches, locations):
     """Checks if the location is possible with the given match results"""
-    for db_match in db_matches:
-        ripe_match = None
-        for match in ripe_matches:
-            if match.location_id == db_match.location_id:
-                ripe_match = match
-                break
-
-        if ripe_match and ripe_match.matching_rtt:
-            if db_match.matching_distance > ripe_match.matching_rtt * 100:
-                return False
-
+    for match in ripe_matches:
+        distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
+        if distance > match.matching_rtt * 100:
+            return False
     return True
 
 
