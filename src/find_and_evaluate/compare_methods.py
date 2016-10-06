@@ -222,9 +222,10 @@ def main():
 def location_possible_zmap(location, zmap_results, zmap_locations):
     for zmap_id, zmap_location in zmap_locations.items():
         distance = zmap_location.gps_distance_equirectangular(location)
-        rtt = zmap_results[zmap_id]
-        if distance > rtt * 100:
-            return False
+        if zmap_id in zmap_results:
+            rtt = zmap_results[zmap_id]
+            if distance > rtt * 100:
+                return False
     return True
 
 
