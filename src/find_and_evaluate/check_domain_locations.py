@@ -32,7 +32,7 @@ MEASUREMENT_URL = ATLAS_API_URL + API_MEASUREMENT_ENDPOINT + '/'
 
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
-DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
+DISTANCE_METHOD = util.GPSLocation.gps_distance_haverisne
 
 MAX_THREADS = 20
 logger = None
@@ -369,7 +369,7 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
 
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_equirectangular(ip_location_obj)
+        distance = location.gps_distance_haverisne(ip_location_obj)
         match.matching_distance = distance
         if distance < 100:
             correct_count[match.code_type.name] += 1
@@ -432,7 +432,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_
     domain.location = geoip_location_obj
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_equirectangular(geoip_location_obj)
+        distance = location.gps_distance_haverisne(geoip_location_obj)
         match.matching_distance = distance
         if distance < 100:
             correct_count[match.code_type.name] += 1
@@ -815,7 +815,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 next_match = get_next_match()
                 continue
 
-            node_location_dist = location.gps_distance_equirectangular(
+            node_location_dist = location.gps_distance_haversine(
                 util.GPSLocation(near_node['geometry']['coordinates'][1],
                                  near_node['geometry']['coordinates'][0]))
             logger.debug('finished measurement')
@@ -852,7 +852,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return
         else:
             next_match.matching_rtt = chk_m
-            node_location_dist = location.gps_distance_equirectangular(
+            node_location_dist = location.gps_distance_haverisne(
                 util.GPSLocation(node['geometry']['coordinates'][1],
                                  node['geometry']['coordinates'][0]))
             next_match.matching_distance = node_location_dist
@@ -926,7 +926,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                     distance = distances[result.location_id][str(match.location_id)]
                 else:
                     distance = \
-                        locations[str(result.location_id)].gps_distance_equirectangular(
+                        locations[str(result.location_id)].gps_distance_haverisne(
                             locations[str(match.location_id)])
 
                 if distance > (result.rtt * 100):
