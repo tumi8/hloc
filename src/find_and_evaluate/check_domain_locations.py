@@ -1373,7 +1373,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
 
     if check_n is not None:
         if check_n == -1:
-            if date_n < int(time.time() - 60*60*24*14):
+            if date_n < int(time.time() - 60*60*24*30):
                 return None, None
         return check_n, node_n
 
