@@ -32,7 +32,7 @@ CLLI_LOCATION_CODES = []
 GEONAMES_LOCATION_CODES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
-NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE) # TODO use set
+NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9/\.\-_\s]+$', flags=re.MULTILINE) # TODO use set
 
 
 class WorldAirportCodesParser(HTMLParser):
