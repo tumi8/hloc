@@ -489,7 +489,7 @@ class Location(GPSLocation):
         obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
-        if GPSLocation.PropertyKey.clli in dct:
+        if Location.PropertyKey.clli in dct:
             obj.clli = dct[Location.PropertyKey.clli]
         if GPSLocation.PropertyKey.id in dct:
             obj.id = dct[GPSLocation.PropertyKey.id]
