@@ -490,7 +490,7 @@ class Location(GPSLocation):
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
         if GPSLocation.PropertyKey.clli in dct:
-            obj.clli = dct[GPSLocation.PropertyKey.clli]
+            obj.clli = dct[Location.PropertyKey.clli]
         if GPSLocation.PropertyKey.id in dct:
             obj.id = dct[GPSLocation.PropertyKey.id]
         if Location.PropertyKey.airport_info in dct:
