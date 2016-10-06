@@ -191,6 +191,19 @@ def get_code_stats(filename_proto):
                         stats[match.code_type] += 1
     print(stats)
 
+def get_clli_falsified(filename_proto):
+    clli_domains = []
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for domain in domain_dict[util.DomainType.no_location.value]:
+                    clli_matches = [match for match in domain.all_matches
+                                    if match.code_type == util.LocationCodeType.clli]
+                    if clli_matches:
+                        clli_domains.append(domain)
+    return clli_domains
+
 def count_domains(filename_proto):
     count_d = 0
     for i in range(0,8):
@@ -298,3 +311,13 @@ def count_ips(file_name):
     print(len(u_ips.intersection(a_ips).intersection(reachables)))
     print('timeouts {}'.format(len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (len(u_ips) - len(u_ips.intersection(a_ips)))))
 
+# clli_locs = []
+# with open('/data/rdns-parse/src/data_processing/collectedData/clli-lat-lon.txt') as clli_file:
+#     for line in clli_file:
+#         line = line.strip()
+#         clli, lat, lon = line.split('\t')
+#         newClliInfo = util.Location(lat=float(lat), lon=float(lon))
+#         newClliInfo.clli.append(clli[0:6])
+#         clli_locs.append(newClliInfo)
+#
+# add_locations(locs, clli_locs, 100, create_new_locations=False)
