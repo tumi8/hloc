@@ -315,14 +315,8 @@ class GPSLocation(JSONBase):
             raise
 
     def is_in_radius(self, location, radius):
-        """Returns a True if the location is within the radius with the equirectangular method"""
-        lon1 = math.radians(float(self.lon))
-        lat1 = math.radians(float(self.lat))
-        lon2 = math.radians(float(location.lon))
-        lat2 = math.radians(float(location.lat))
-        # Radius of earth in kilometers. Use 3956 for miles
-        return (((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
-            lat2 - lat1) ** 2) <= (radius / 6371) ** 2
+        """Returns a True if the location is within the radius with the haversine method"""
+        return self.gps_distance_haversine(location) <= radius
 
     def gps_distance_equirectangular(self, location):
         """Return the distance between the two locations using the equirectangular method"""
