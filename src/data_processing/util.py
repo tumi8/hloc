@@ -465,22 +465,22 @@ class Location(GPSLocation):
         #     raise ValueError('id is not int')
         ret_list = []
         if self.city_name:
-            ret_list.append((self.city_name, (self.id, LocationCodeType.geonames.value)))
+            ret_list.append((self.city_name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
-            ret_list.append((code, (self.id, LocationCodeType.clli.value)))
+            ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id, LocationCodeType.geonames.value)))
+            ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
         if self.locode and self.state_code:
             for code in self.locode.place_codes:
-                ret_list.append(('{}{}'.format(self.state_code, code),
+                ret_list.append(('{}{}'.format(self.state_code.lower(), code.lower()),
                                  (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id, LocationCodeType.iata.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.iata.value)))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id, LocationCodeType.icao.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.icao.value)))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id, LocationCodeType.faa.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.faa.value)))
         return ret_list
 
     @staticmethod

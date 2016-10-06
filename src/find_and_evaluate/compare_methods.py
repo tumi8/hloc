@@ -195,7 +195,7 @@ def main():
         classif_domains.clear()
 
     for key, value in stats.items():
-        logger.info('{} len {}'.format(key, value))
+        logger.info('final {} len {}'.format(key, value))
 
     with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
         for distance in correct_matching_distances:
