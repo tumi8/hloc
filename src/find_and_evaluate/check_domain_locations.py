@@ -1149,7 +1149,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
             city_name = location.id
 
         ping = ripe_atlas.Ping(af=af, packets=1, target=ip_addr[0],
-                               description=ip_addr[0] + ' test for location ' + location.city_name)
+                               description=ip_addr[0] + ' test for location ' + city_name)
         source = ripe_atlas.AtlasSource(value=str(near_node['id']), requested=1,
                                         type='probes')
         if bill_to_address:
@@ -1312,7 +1312,7 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
         params = {
             'msm_id': measure['id'],
             'start': allowed_start_time,
-            'probe_ids': [node['id'] for node in near_nodes]
+            'probe_ids': [node['id'] for node in near_nodes][:1000]
             }
         ripe_slow_down_sema.acquire()
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
