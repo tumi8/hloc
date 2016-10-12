@@ -28,7 +28,11 @@ import os
 #                     print(domain.ip_address)
 #                     print(domain.matching_match)
 #                     print(domain.matching_match.location_id)
-
+count_not_found = 0
+for i in range(0,8):
+    with open('/data2/trie-results/wip/router.domains-{}-found.json'.format(i)) as d_file:
+        for line in d_file:
+            count_not_found += len(util.json_loads(line))
 
 ips = set()
 for i in range(0,8):
@@ -91,62 +95,6 @@ def split_zmap(filename, ip_version, ips):
         json.dump(results_wo_ip, wo_ip_file)
         print('w ip {}'.format(count_w_ip))
         print('wo ip {}'.format(count_wo_ip))
-
-
-def split_results(filename, ip_version, ips):
-    for i in range(0,8):
-        with open(filename.format(i)) as file, \
-                open(filename.format(i) + '.wip', 'w') as w_ip_file, \
-                open(filename.format(i) + '.woip', 'w') as wo_ip_file:
-            domains_w_ip = collections.defaultdict(list)
-            count_w_ip = 0
-            domains_wo_ip = collections.defaultdict(list)
-            count_wo_ip = 0
-            for line in file:
-                domains_dict = util.json_loads(line)
-                # for key, d_list in domains_dict.items():
-                #     for domain in d_list:
-                #         if domain.ip_for_version(ip_version) in ips:
-                #             domains_w_ip[key].append(domain)
-                #             count_w_ip += 1
-                #             if count_w_ip >= 10**3:
-                #                 util.json_dump(domains_w_ip, w_ip_file)
-                #                 _ = w_ip_file.write('\n')
-                #                 domains_w_ip.clear()
-                #                 count_w_ip = 0
-                #         else:
-                #             domains_wo_ip[key].append(domain)
-                #             count_wo_ip += 1
-                #             if count_wo_ip >= 10**3:
-                #                 util.json_dump(domains_wo_ip, wo_ip_file)
-                #                 _ = wo_ip_file.write('\n')
-                #                 domains_wo_ip.clear()
-                #                 count_wo_ip = 0
-                for domain in domains_dict:
-                    if domain.ip_for_version(ip_version) in ips:
-                        domains_w_ip['0'].append(domain)
-                        count_w_ip += 1
-                        if count_w_ip >= 10 ** 3:
-                            util.json_dump(domains_w_ip['0'], w_ip_file)
-                            _ = w_ip_file.write('\n')
-                            domains_w_ip.clear()
-                            count_w_ip = 0
-                    else:
-                        domains_wo_ip['0'].append(domain)
-                        count_wo_ip += 1
-                        if count_wo_ip >= 10 ** 3:
-                            util.json_dump(domains_wo_ip['0'], wo_ip_file)
-                            _ = wo_ip_file.write('\n')
-                            domains_wo_ip.clear()
-                            count_wo_ip = 0
-            util.json_dump(domains_w_ip, w_ip_file)
-            w_ip_file.write('\n')
-            util.json_dump(domains_wo_ip, wo_ip_file)
-            wo_ip_file.write('\n')
-
-
-split_results('/data2/trie-results/router.domains-{}-found.json', 'ipv4', ips)
-count_ips('/data2/trie-results/router.domains-{}-found.json')
 
 def get_stats_for_filenameproto(filename_proto):
     lens = collections.defaultdict(int)
@@ -269,8 +217,8 @@ def count_ips_v6():
         line = zmap_file.readline()
         results = util.json_loads(line)
     reachables = set(results.keys())
-    print(len(reachables))
-    print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    # print(len(reachables))
+    # print(len(u_ips.intersection(a_ips).intersection(reachables)))
     print('timeouts {}'.format(
         len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
         len(u_ips) - len(u_ips.intersection(a_ips)))))
@@ -278,46 +226,31 @@ def count_ips_v6():
 
 # file_name_v4 = '/data2/trie-results/router.domains-{}-found.json'
 # file_name_v6 = '/data2/rdns-results-v6/ipv6_rdns-{}-found.json'
-def count_ips(file_name):
+def count_ips():
+    file_name = '/data2/router-ip-filtered/router.domains-{}.cor'
     ips = []
+
     for i in range(0, 8):
         with open(file_name.format(i)) as file:
             for line in file:
                 domains = util.json_loads(line)
                 ips.extend([domain.ip_address for domain in domains])
     u_ips = set(ips)
-    ips = []
-    with open('/data2/router-ip-filtered/cor-ips.data') as file:
-        for line in file:
-            ips.append(line.strip())
-    u_ips = u_ips.difference(set(ips))
     print(len(u_ips))
     a_ips = set()
     with open('/data/scan-2016-07-15/dallas/router.ips.announced') as ips_file:
-    # with open('/data/rdns-parse/ipv6-router.ips.announced') as ips_file:
         for line in ips_file:
             line = line.strip()
             a_ips.add(line)
-    # print(len(ips))
     print(len(u_ips.intersection(a_ips)))
     print('filtered {}'.format(len(u_ips) - len(u_ips.intersection(a_ips))))
-    with open('/data/cleared-ipv4-results.zmap.woip') as zmap_file:
-    # with open('/data/ipv6-zmap.results') as zmap_file:
-        # _ = zmap_file.readline()
+    with open('/data/cleared-ipv4-results.zmap') as zmap_file:
+        _ = zmap_file.readline()
         line = zmap_file.readline()
         results = util.json_loads(line)
     reachables = set(results.keys())
-    print(len(reachables))
-    print(len(u_ips.intersection(a_ips).intersection(reachables)))
-    print('timeouts {}'.format(len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (len(u_ips) - len(u_ips.intersection(a_ips)))))
-
-# clli_locs = []
-# with open('/data/rdns-parse/src/data_processing/collectedData/clli-lat-lon.txt') as clli_file:
-#     for line in clli_file:
-#         line = line.strip()
-#         clli, lat, lon = line.split('\t')
-#         newClliInfo = util.Location(lat=float(lat), lon=float(lon))
-#         newClliInfo.clli.append(clli[0:6])
-#         clli_locs.append(newClliInfo)
-#
-# add_locations(locs, clli_locs, 100, create_new_locations=False)
+    # print(len(reachables))
+    # print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    print('timeouts {}'.format(
+        len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
+        len(u_ips) - len(u_ips.intersection(a_ips)))))
