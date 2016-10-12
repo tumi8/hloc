@@ -254,3 +254,33 @@ def count_ips():
     print('timeouts {}'.format(
         len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
         len(u_ips) - len(u_ips.intersection(a_ips)))))
+
+
+def count_domains(filename):
+    sum_count = 0
+    for i in range(0, 8):
+        with open(filename.format(i)) as d_file:
+            for line in d_file:
+                domains = util.json_loads(line)
+                sum_count += len(domains)
+    print(sum_count)
+
+
+def filter_code_type(filename, code_type):
+    w_domains = []
+    sum_count = 0
+    for i in range(0, 8):
+        with open(filename.format(i)) as d_file:
+            for line in d_file:
+                domains = util.json_loads(line)
+                for domain in domains:
+                    sum_count += 1
+                    matches = domain.all_matches
+                    for match in matches:
+                        if match.code_type == code_type:
+                            w_domains.append(domain)
+                            break
+    with open(filename.format('filter'), 'w') as o_file:
+        util.json_dump(w_domains, o_file)
+        o_file.write('\n')
+    print('len {} form {}'.format(len(w_domains), sum_count))

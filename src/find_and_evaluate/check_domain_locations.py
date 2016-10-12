@@ -1146,7 +1146,7 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
         city_name = location.city_name
         if not city_name:
-            city_name = location.id
+            city_name = str(location.id)
 
         ping = ripe_atlas.Ping(af=af, packets=1, target=ip_addr[0],
                                description=ip_addr[0] + ' test for location ' + city_name)
