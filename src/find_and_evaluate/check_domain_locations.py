@@ -1144,6 +1144,9 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
     # TODO RIPE pull request with bill to possibility
     def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
+        city_name = location.city_name
+        if not city_name:
+            city_name = location.id
 
         ping = ripe_atlas.Ping(af=af, packets=1, target=ip_addr[0],
                                description=ip_addr[0] + ' test for location ' + location.city_name)
@@ -1440,7 +1443,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             logger.critical('max_distance must be a multiple of 50')
             return
 
-        distances = [25, 50, 100, 250, 500, 1000]
+        distances = [100, 250, 500, 1000]
         if max_distance not in distances:
             distances.append(max_distance)
             distances.sort()
