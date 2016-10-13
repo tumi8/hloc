@@ -611,7 +611,12 @@ def parse_codes(args):
         parse_airport_codes(args)
         if args.metropolitan_file:
             metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
-            add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius, create_new_locations=False)
+            if args.merge_radius:
+                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
+                              create_new_locations=False)
+            else:
+                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
+                              create_new_locations=False)
 
     if args.locode:
         parse_locode_codes(args.locode)
