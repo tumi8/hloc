@@ -237,6 +237,8 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
 def location_possible(db_location, ripe_matches, locations):
     """Checks if the location is possible with the given match results"""
     for match in ripe_matches:
+        if not match.matching_rtt:
+            continue
         distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
         if distance > match.matching_rtt * 100:
             return False

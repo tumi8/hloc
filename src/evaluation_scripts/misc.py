@@ -259,7 +259,7 @@ with open('/data2/trie-results/corr_rtts') as rtt_file:
 
 def count_ips_v6():
     ips = []
-    filename = '/data2/router-ipv6-cleared/ipfiltered/ipv6_cleaned_rdns-0-found.json'
+    filename = '/data2/router-ipv6-cleared/ipfiltered/ipv6_cleaned_rdns-{}-found.json'
     for i in range(0, 8):
         with open(filename.format(i)) as file:
             for line in file:
