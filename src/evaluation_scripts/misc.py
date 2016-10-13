@@ -50,51 +50,50 @@ with open('/data2/trie-results/not_verified.ips', 'w') as output_file:
     _ = output_file.write(string_to_write)
 
 
-def get_number_no_probe(no_probe_locations, filename_proto, ips):
+def get_number_no_probe(no_probe_locations, filename_proto):
     c_matches = 0
     c_u_matches = 0
+    domains_no_probe = 0
     for i in range(0,8):
         with open(filename_proto.format(i)) as file:
             for line in file:
                 domains_dict = util.json_loads(line)
                 for domain in domains_dict[util.DomainType.no_verification.value]:
-                    if not ips or domain.ip_address in ips:
-                        for match in domain.possible_matches:
-                            if str(match.location_id) in no_probe_locations:
-                                c_matches += 1
-                                if len(domain.possible_matches) == 1:
-                                    c_u_matches += 1
+                    done = False
+                    for match in domain.possible_matches:
+                        if str(match.location_id) in no_probe_locations:
+                            done = True
+                            c_matches += 1
+                            if len(domain.possible_matches) == 1:
+                                c_u_matches += 1
+                    if done:
+                        domains_no_probe += 1
+    print(domains_no_probe)
     print(c_matches)
     print(c_u_matches)
 
 
-ips = set()
-with open('/data2/router-ip-filtered/cor-ips.data') as ip_file:
-    for line in ip_file:
-        ips.add(line.strip())
-
-
-def split_zmap(filename, ip_version, ips):
-    with open(filename) as file, \
-            open(filename + '.wip', 'w') as w_ip_file, \
-            open(filename + '.woip', 'w') as wo_ip_file:
-        count_w_ip = 0
-        count_wo_ip = 0
-        results_w_ip = {}
-        results_wo_ip = {}
+def get_number_no_probe_for_file(no_probe_locations, filename):
+    c_matches = 0
+    c_u_matches = 0
+    domains_no_probe = 0
+    with open(filename) as file:
         for line in file:
-            results = json.loads(line)
-            for ip, result in results.items():
-                if ip in ips:
-                    results_w_ip[ip] = result
-                    count_w_ip += 1
-                else:
-                    results_wo_ip[ip] = result
-                    count_wo_ip += 1
-        json.dump(results_w_ip, w_ip_file)
-        json.dump(results_wo_ip, wo_ip_file)
-        print('w ip {}'.format(count_w_ip))
-        print('wo ip {}'.format(count_wo_ip))
+            domains_dict = util.json_loads(line)
+            for domain in domains_dict[util.DomainType.no_verification.value]:
+                done = False
+                for match in domain.possible_matches:
+                    if str(match.location_id) in no_probe_locations:
+                        done = True
+                        c_matches += 1
+                        if len(domain.possible_matches) == 1:
+                            c_u_matches += 1
+                if done:
+                    domains_no_probe += 1
+    print(domains_no_probe)
+    print(c_matches)
+    print(c_u_matches)
+
 
 def get_stats_for_filenameproto(filename_proto):
     lens = collections.defaultdict(int)
@@ -105,6 +104,38 @@ def get_stats_for_filenameproto(filename_proto):
                 for key, value in domain_dict.items():
                     lens[key] += len(value)
     print(lens)
+
+def get_stat_for_file(filename):
+    lens = collections.defaultdict(int)
+    with open(filename) as d_file:
+        for line in d_file:
+            domain_dict = util.json_loads(line)
+            for key, value in domain_dict.items():
+                lens[key] += len(value)
+    print(lens)
+
+
+def get_code_stats_checked_for_file(filename):
+    stats_v = collections.defaultdict(int)
+    stats_no_v = collections.defaultdict(int)
+    stats_f = collections.defaultdict(int)
+    with open(filename) as d_file:
+        for line in d_file:
+            domain_dict = util.json_loads(line)
+            for domains in domain_dict.values():
+                for domain in domains:
+                    for match in domain.all_matches:
+                        if match == domain.matching_match:
+                            stats_v[match.code_type] += 1
+                        else:
+                            if match.possible:
+                                stats_no_v[match.code_type] += 1
+                            else:
+                                stats_f[match.code_type] += 1
+    print('verified {}'.format(stats_v))
+    print('not verified {}'.format(stats_no_v))
+    print('falsified {}'.format(stats_f))
+
 
 def get_code_stats_checked(filename_proto):
     stats_v = collections.defaultdict(int)
@@ -200,9 +231,12 @@ with open('/data2/trie-results/corr_rtts') as rtt_file:
 
 def count_ips_v6():
     ips = []
-    with open('/data2/router-ipv6-cleared/ipfiltered/cor-ips.data') as file:
-        for line in file:
-            ips.append(line.strip())
+    filename = '/data2/router-ipv6-cleared/ipfiltered/ipv6_cleaned_rdns-0-found.json'
+    for i in range(0, 8):
+        with open(filename.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                ips.extend([domain.ipv6_address for domain in domains])
     u_ips = set(ips)
     print(len(ips))
     print(len(u_ips))
@@ -227,9 +261,8 @@ def count_ips_v6():
 # file_name_v4 = '/data2/trie-results/router.domains-{}-found.json'
 # file_name_v6 = '/data2/rdns-results-v6/ipv6_rdns-{}-found.json'
 def count_ips():
-    file_name = '/data2/router-ip-filtered/router.domains-{}.cor'
+    file_name = '/data2/router-ip-filtered/woip/router.domains-{}-found.json'
     ips = []
-
     for i in range(0, 8):
         with open(file_name.format(i)) as file:
             for line in file:
