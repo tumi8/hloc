@@ -147,14 +147,14 @@ def get_code_stats_checked(filename_proto):
                 domain_dict = util.json_loads(line)
                 for domains in domain_dict.values():
                     for domain in domains:
+                        if domain.matching_match:
+                            stats_v[domain.matching_match.code_type] += 1
+                            continue
                         for match in domain.all_matches:
-                            if match == domain.matching_match:
-                                stats_v[match.code_type] += 1
+                            if match.possible:
+                                stats_no_v[match.code_type] += 1
                             else:
-                                if match.possible:
-                                    stats_no_v[match.code_type] += 1
-                                else:
-                                    stats_f[match.code_type] += 1
+                                stats_f[match.code_type] += 1
     print('verified {}'.format(stats_v))
     print('not verified {}'.format(stats_no_v))
     print('falsified {}'.format(stats_f))
@@ -211,6 +211,34 @@ def collect_rtts(filename_proto):
             wr_str += '{}\n'.format(rtt)
         output_file.write(wr_str)
     with open(os.path.join(os.path.dirname(filename_proto), 'no_v_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in no_v_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    print('cor avg {}  min {}   max {}'.format((sum(cor_rtts)/len(cor_rtts)), min(cor_rtts),
+                                               max(cor_rtts)))
+    print('nov avg {}  min {}   max {}'.format((sum(no_v_rtts) / len(no_v_rtts)), min(no_v_rtts),
+                                               max(no_v_rtts)))
+
+def collect_rtts_for_file(filename):
+    cor_rtts = []
+    no_v_rtts = []
+    for i in range(0, 8):
+        with open(filename.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                for domain in domains[util.DomainType.correct.value]:
+                    cor_rtts.append(domain.matching_match.matching_rtt)
+                for domain in domains[util.DomainType.no_verification.value]:
+                    rtts = [match.matching_rtt for match in domain.all_matches if match.matching_rtt and match.matching_rtt > 0]
+                    if rtts:
+                        no_v_rtts.append(min(rtts))
+    with open(os.path.join(os.path.dirname(filename), 'corr_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in cor_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    with open(os.path.join(os.path.dirname(filename), 'no_v_rtts'), 'w') as output_file:
         wr_str = ''
         for rtt in no_v_rtts:
             wr_str += '{}\n'.format(rtt)
