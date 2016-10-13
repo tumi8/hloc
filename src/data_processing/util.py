@@ -463,7 +463,8 @@ class Location(GPSLocation):
         for code in self.clli:
             ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
-            ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
+            if name:
+                ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
         if self.locode and self.state_code:
             for code in self.locode.place_codes:
                 ret_list.append(('{}{}'.format(self.state_code.lower(), code.lower()),
