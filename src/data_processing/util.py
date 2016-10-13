@@ -244,7 +244,7 @@ class LocationCodeType(enum.Enum):
         elif self == LocationCodeType.locode:
             pattern = base + r'{5}'
         elif self == LocationCodeType.geonames:
-            pattern = r'[a-zA-Z-]+'
+            pattern = r'[a-zA-Z]+'
         else:
             logging.error('WTF? should not be possible')
             return
