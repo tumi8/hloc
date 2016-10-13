@@ -43,6 +43,8 @@ def __create_parser_arguments(parser):
                              ' results saved')
     parser.add_argument('-r', '--profile', help='Profiles process 1 and 7',
                         dest='profile', action='store_true')
+    parser.add_argument('-e', '--exclude-sld', help='Exclude sld from search',
+                        dest='exclude_sld', action='store_true')
     parser.add_argument('-s', '--special-filter-file', dest='special_filter', type=str)
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log', dest='log_file',
                         help='Specify a logging file where the log should be saved')
@@ -82,7 +84,7 @@ def main():
 
         process = Process(target=start_search_in_file,
                           args=(args.doaminfilename_proto, index, trie,
-                                popular_labels, special_filter, args.profile),
+                                popular_labels, special_filter, args.exclude_sld, args.profile),
                           kwargs={'amount': args.amount},
                           name='find_locations_{}'.format(index))
         process.start()
@@ -106,8 +108,8 @@ def main():
         json.dump(popular_labels, popular_file)
 
 
-def start_search_in_file(filename_proto, index, trie, popular_labels, special_filter, profile,
-                         amount=1000):
+def start_search_in_file(filename_proto, index, trie, popular_labels, special_filter, exclude_sld,
+                         profile, amount=1000):
     """for all amount=0"""
     start_time = time.time()
     if profile and index in [1, 7]:
@@ -115,13 +117,15 @@ def start_search_in_file(filename_proto, index, trie, popular_labels, special_fi
             'search_in_file(filename_proto, index, trie, popular_labels, special_filter, '
             'amount=amount)', globals(), locals())
     else:
-        search_in_file(filename_proto, index, trie, popular_labels, special_filter, amount=amount)
+        search_in_file(filename_proto, index, trie, popular_labels, special_filter, exclude_sld,
+                       amount=amount)
     end_time = time.time()
     logger.info('index {0}: search_in_file running time: {1}'.format(
         index, (end_time - start_time)))
 
 
-def search_in_file(filename_proto, index, trie, popular_labels, special_filter, amount=1000):
+def search_in_file(filename_proto, index, trie, popular_labels, special_filter, exclude_sld,
+                   amount=1000):
     """for all amount=0"""
     filename = filename_proto.format(index)
     match_count = collections.defaultdict(int)
@@ -165,7 +169,7 @@ def search_in_file(filename_proto, index, trie, popular_labels, special_filter, 
                     if i == 0:
                         # if tld skip
                         continue
-                    if i == 1:
+                    if exclude_sld and i == 1:
                         # test for skipping the second level domain
                         continue
                     label_count += 1
