@@ -89,9 +89,8 @@ def main():
     with open(args.locationFile) as loc_file:
         locations = util.json_load(loc_file)
 
+    database_domains = {}
     for index in range(0, args.fileCount):
-        classif_domains = collections.defaultdict(list)
-        database_domains = {}
         with open(args.db_filename_proto.format(index)) as database_domain_file, \
                 mmap.mmap(database_domain_file.fileno(), 0,
                           access=mmap.ACCESS_READ) as database_domain_file_mm:
@@ -101,6 +100,10 @@ def main():
                 for domain in domain_list:
                     database_domains[domain.ip_for_version(args.ip_version)] = domain
                 line = database_domain_file_mm.readline().decode('utf-8')
+
+    for index in range(0, args.fileCount):
+        classif_domains = collections.defaultdict(list)
+
         with open(args.ripe_filename_proto.format(index)) as ripe_domain_file, \
                 mmap.mmap(ripe_domain_file.fileno(), 0,
                           access=mmap.ACCESS_READ) as ripe_domain_file_mm:
