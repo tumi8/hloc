@@ -369,7 +369,7 @@ def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.I
 
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_haverisne(ip_location_obj)
+        distance = location.gps_distance_haversine(ip_location_obj)
         match.matching_distance = distance
         if distance < 100:
             correct_count[match.code_type.name] += 1
@@ -432,7 +432,7 @@ def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_
     domain.location = geoip_location_obj
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_haverisne(geoip_location_obj)
+        distance = location.gps_distance_haversine(geoip_location_obj)
         match.matching_distance = distance
         if distance < 100:
             correct_count[match.code_type.name] += 1
