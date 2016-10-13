@@ -624,7 +624,8 @@ def parse_codes(args):
         get_geo_names(args.geonames, args.min_population)
         print('Finished geonames parsing')
 
-    location_codes = merge_location_codes(args.merge_radius)
+    if args.merge_radius:
+        location_codes = merge_location_codes(args.merge_radius)
 
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')
