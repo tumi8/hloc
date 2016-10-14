@@ -200,11 +200,16 @@ def collect_rtts(filename_proto):
             for line in file:
                 domains = util.json_loads(line)
                 for domain in domains[util.DomainType.correct.value]:
-                    cor_rtts.append(domain.matching_match.matching_rtt)
+                    if not domain.matching_match.matching_rtt:
+                        print(domain.domain_name)
+                        print(domain.ip_address)
+                    else:
+                        cor_rtts.append(domain.matching_match.matching_rtt)
                 for domain in domains[util.DomainType.no_verification.value]:
                     rtts = [match.matching_rtt for match in domain.all_matches if match.matching_rtt and match.matching_rtt > 0]
                     if rtts:
                         no_v_rtts.append(min(rtts))
+    print('finished collecting')
     with open(os.path.join(os.path.dirname(filename_proto), 'corr_rtts'), 'w') as output_file:
         wr_str = ''
         for rtt in cor_rtts:
@@ -220,36 +225,9 @@ def collect_rtts(filename_proto):
     print('nov avg {}  min {}   max {}'.format((sum(no_v_rtts) / len(no_v_rtts)), min(no_v_rtts),
                                                max(no_v_rtts)))
 
-def collect_rtts_for_file(filename):
-    cor_rtts = []
-    no_v_rtts = []
-    for i in range(0, 8):
-        with open(filename.format(i)) as file:
-            for line in file:
-                domains = util.json_loads(line)
-                for domain in domains[util.DomainType.correct.value]:
-                    cor_rtts.append(domain.matching_match.matching_rtt)
-                for domain in domains[util.DomainType.no_verification.value]:
-                    rtts = [match.matching_rtt for match in domain.all_matches if match.matching_rtt and match.matching_rtt > 0]
-                    if rtts:
-                        no_v_rtts.append(min(rtts))
-    with open(os.path.join(os.path.dirname(filename), 'corr_rtts'), 'w') as output_file:
-        wr_str = ''
-        for rtt in cor_rtts:
-            wr_str += '{}\n'.format(rtt)
-        output_file.write(wr_str)
-    with open(os.path.join(os.path.dirname(filename), 'no_v_rtts'), 'w') as output_file:
-        wr_str = ''
-        for rtt in no_v_rtts:
-            wr_str += '{}\n'.format(rtt)
-        output_file.write(wr_str)
-    print('cor avg {}  min {}   max {}'.format((sum(cor_rtts)/len(cor_rtts)), min(cor_rtts),
-                                               max(cor_rtts)))
-    print('nov avg {}  min {}   max {}'.format((sum(no_v_rtts) / len(no_v_rtts)), min(no_v_rtts),
-                                               max(no_v_rtts)))
 
-
-collect_rtts('/data2/trie-results/router.domains-{}-found.checked')
+collect_rtts('/data2/router-ip-filtered/wip/router.domains-{}-found.checked')
+collect_rtts('/data2/router-ipv6-cleared/ipv6_cleaned_rdns-{}-found.checked')
 
 rtts=[]
 with open('/data2/trie-results/corr_rtts') as rtt_file:
