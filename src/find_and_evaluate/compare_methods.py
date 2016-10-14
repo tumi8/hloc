@@ -68,6 +68,7 @@ def main():
     correct_matching_distances = []
     near_matching_distances = []
     wrong_matching_distances = []
+    wrong_rtt_diffs = []
 
     stats = collections.defaultdict(int)
 
@@ -147,10 +148,17 @@ def main():
                             loc_pss_zmap = location_possible_zmap(db_domain.location,
                                                                   zmap_results,
                                                                   zmap_locations)
-                            if loc_pss_ripe == True and loc_pss_zmap == True:
+
+                            if not loc_pss_zmap and not loc_pss_ripe:
                                 classif_domains[CompareType.ripe_no_v_db_l].append(
                                     (db_domain, ripe_domain))
                             else:
+                                if loc_pss_zmap and loc_pss_ripe:
+                                    wrong_rtt_diffs.append(min(loc_pss_ripe, loc_pss_zmap))
+                                elif loc_pss_ripe:
+                                    wrong_rtt_diffs.append(loc_pss_ripe)
+                                elif loc_pss_zmap:
+                                    wrong_rtt_diffs.append(loc_pss_zmap)
                                 classif_domains[CompareType.ripe_no_v_db_wrong].append(
                                     (db_domain, ripe_domain))
                         elif db_match.location_id in \
@@ -168,14 +176,21 @@ def main():
                         classif_domains[CompareType.ripe_no_l_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
-                        if location_possible(db_domain.location, ripe_domain.all_matches,
-                                             locations) \
-                                and location_possible_zmap(db_domain.location,
-                                                           zmap_results,
-                                                           zmap_locations):
+                        loc_pss_ripe = location_possible(db_domain.location,
+                                                         ripe_domain.all_matches, locations)
+                        loc_pss_zmap = location_possible_zmap(db_domain.location,
+                                                              zmap_results,
+                                                              zmap_locations)
+                        if not loc_pss_zmap and not loc_pss_ripe:
                             classif_domains[CompareType.ripe_no_l_db_possible].append(
                                 (db_domain, ripe_domain))
                         else:
+                            if loc_pss_zmap and loc_pss_ripe:
+                                wrong_rtt_diffs.append(min(loc_pss_ripe, loc_pss_zmap))
+                            elif loc_pss_ripe:
+                                wrong_rtt_diffs.append(loc_pss_ripe)
+                            elif loc_pss_zmap:
+                                wrong_rtt_diffs.append(loc_pss_zmap)
                             classif_domains[CompareType.ripe_no_l_db_wrong].append(
                                 (db_domain, ripe_domain))
 
@@ -203,26 +218,37 @@ def main():
     for key, value in stats.items():
         logger.info('final {} len {}'.format(key, value))
 
-    with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
-        for distance in correct_matching_distances:
-            output_file.write('{}\n'.format(distance))
+    if correct_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
+            for distance in correct_matching_distances:
+                output_file.write('{}\n'.format(distance))
 
-        logger.info('correct distances avg {}'.format(
-            sum(correct_matching_distances)/len(correct_matching_distances)))
+            logger.info('correct distances avg {}'.format(
+                sum(correct_matching_distances)/len(correct_matching_distances)))
 
-    with open(os.path.join(filepath, 'compared-ripe-db-near-distances.out'), 'w') as output_file:
-        for distance in near_matching_distances:
-            output_file.write('{}\n'.format(distance))
+    if near_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-near-distances.out'), 'w') as output_file:
+            for distance in near_matching_distances:
+                output_file.write('{}\n'.format(distance))
 
-        logger.info('near distances avg {}'.format(
-            sum(near_matching_distances)/len(near_matching_distances)))
+            logger.info('near distances avg {}'.format(
+                sum(near_matching_distances)/len(near_matching_distances)))
 
-    with open(os.path.join(filepath, 'compared-ripe-db-wrong-distances.out'), 'w') as output_file:
-        for distance in wrong_matching_distances:
-            output_file.write('{}\n'.format(distance))
+    if wrong_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-wrong-distances.out'), 'w') as output_file:
+            for distance in wrong_matching_distances:
+                output_file.write('{}\n'.format(distance))
 
-        logger.info('wrong distances avg {}'.format(
-            sum(wrong_matching_distances)/len(wrong_matching_distances)))
+            logger.info('wrong distances avg {}'.format(
+                sum(wrong_matching_distances)/len(wrong_matching_distances)))
+
+    if wrong_rtt_diffs:
+        with open(os.path.join(filepath, 'compared-ripe-db-wrong-rtt-diffs.out'), 'w') as output_file:
+            for distance in wrong_rtt_diffs:
+                output_file.write('{}\n'.format(distance))
+
+            logger.info('wrong distances avg {}'.format(
+                sum(wrong_rtt_diffs)/len(wrong_rtt_diffs)))
 
 
 def location_possible_zmap(location, zmap_results, zmap_locations):
@@ -232,7 +258,7 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
             rtt = zmap_results[zmap_id]
             if distance > rtt * 100:
                 return distance/100 - rtt * 100
-    return True
+    return None
 
 
 def location_possible(db_location, ripe_matches, locations):
@@ -243,7 +269,7 @@ def location_possible(db_location, ripe_matches, locations):
         distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
         if distance > match.matching_rtt * 100:
             return distance/100 - match.matching_rtt * 100
-    return True
+    return None
 
 
 if __name__ == '__main__':
