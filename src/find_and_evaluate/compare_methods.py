@@ -257,7 +257,7 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
         if zmap_id in zmap_results:
             rtt = zmap_results[zmap_id]
             if distance > rtt * 100:
-                return distance/100 - rtt * 100
+                return distance/100 - rtt 
     return None
 
 
@@ -268,7 +268,7 @@ def location_possible(db_location, ripe_matches, locations):
             continue
         distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
         if distance > match.matching_rtt * 100:
-            return distance/100 - match.matching_rtt * 100
+            return distance/100 - match.matching_rtt
     return None
 
 
