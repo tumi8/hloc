@@ -125,7 +125,7 @@ def main():
                             correct_matching_distances.append(distance)
                         else:
                             ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
-                            if not ripe_matching_rtt and distance < ripe_matching_rtt*100:
+                            if not ripe_matching_rtt or distance < ripe_matching_rtt*100:
                                 classif_domains[CompareType.ripe_c_db_near].append(
                                     (db_domain, ripe_domain))
                                 near_matching_distances.append(distance)
