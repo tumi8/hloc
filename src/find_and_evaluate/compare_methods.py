@@ -125,7 +125,7 @@ def main():
                             correct_matching_distances.append(distance)
                         else:
                             ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
-                            if distance < ripe_matching_rtt*100:
+                            if not ripe_matching_rtt and distance < ripe_matching_rtt*100:
                                 classif_domains[CompareType.ripe_c_db_near].append(
                                     (db_domain, ripe_domain))
                                 near_matching_distances.append(distance)
@@ -142,11 +142,12 @@ def main():
                     else:
                         db_match = db_domain.matching_match
                         if not db_match:
-                            if location_possible(db_domain.location, ripe_domain.all_matches,
-                                                 locations) \
-                                and location_possible_zmap(db_domain.location,
-                                                           zmap_results,
-                                                           zmap_locations):
+                            loc_pss_ripe = location_possible(db_domain.location,
+                                                             ripe_domain.all_matches, locations)
+                            loc_pss_zmap = location_possible_zmap(db_domain.location,
+                                                                  zmap_results,
+                                                                  zmap_locations)
+                            if loc_pss_ripe == True and loc_pss_zmap == True:
                                 classif_domains[CompareType.ripe_no_v_db_l].append(
                                     (db_domain, ripe_domain))
                             else:
@@ -230,7 +231,7 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
         if zmap_id in zmap_results:
             rtt = zmap_results[zmap_id]
             if distance > rtt * 100:
-                return False
+                return distance/100 - rtt * 100
     return True
 
 
@@ -241,7 +242,7 @@ def location_possible(db_location, ripe_matches, locations):
             continue
         distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
         if distance > match.matching_rtt * 100:
-            return False
+            return distance/100 - match.matching_rtt * 100
     return True
 
 
