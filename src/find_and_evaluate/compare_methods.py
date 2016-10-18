@@ -257,7 +257,7 @@ def location_possible_zmap(location, zmap_results, zmap_locations):
         if zmap_id in zmap_results:
             rtt = zmap_results[zmap_id]
             if distance > rtt * 100:
-                return distance/100 - rtt 
+                return distance/100 - rtt
     return None
 
 

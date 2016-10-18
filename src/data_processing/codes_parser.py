@@ -426,6 +426,8 @@ def location_merge(location1, location2):
             location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
             location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
     location1.alternate_names.extend(location2.alternate_names)
+    if location2.city_name != location1.city_name:
+        location1.alternate_names.append(location2.city_name)
 
 
 def merge_locations_to_location(location, locations, radius, start=0):
