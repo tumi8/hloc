@@ -32,7 +32,7 @@ CLLI_LOCATION_CODES = []
 GEONAMES_LOCATION_CODES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
-NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9\.\-_]+$', flags=re.MULTILINE) # TODO use set
+NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9/\.\-_\s]+$', flags=re.MULTILINE) # TODO use set
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -426,6 +426,8 @@ def location_merge(location1, location2):
             location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
             location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
     location1.alternate_names.extend(location2.alternate_names)
+    if location2.city_name != location1.city_name:
+        location1.alternate_names.append(location2.city_name)
 
 
 def merge_locations_to_location(location, locations, radius, start=0):
@@ -611,7 +613,12 @@ def parse_codes(args):
         parse_airport_codes(args)
         if args.metropolitan_file:
             metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
-            add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius, create_new_locations=False)
+            if args.merge_radius:
+                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
+                              create_new_locations=False)
+            else:
+                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
+                              create_new_locations=False)
 
     if args.locode:
         parse_locode_codes(args.locode)
@@ -625,7 +632,7 @@ def parse_codes(args):
         print('Finished geonames parsing')
 
     location_codes = merge_location_codes(args.merge_radius)
-
+    
     locations = idfy_codes(location_codes)
     characterCodesFile = open(args.filename, 'w')
     util.json_dump(locations, characterCodesFile)

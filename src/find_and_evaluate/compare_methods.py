@@ -7,6 +7,7 @@ import argparse
 import collections
 import mmap
 import enum
+import os
 
 import src.data_processing.util as util
 
@@ -26,6 +27,7 @@ class CompareType(enum.Enum):
     ripe_no_v_db_wrong = 'ripe_no_v_db_wrong'
 
     ripe_no_l_db_no_data = 'ripe_no_l_db_no_data'
+    ripe_no_l_db_possible = 'ripe_no_l_db_possible'
     ripe_no_l_db_wrong = 'ripe_no_l_db_wrong'
 
     ripe_no_data_db_no_data = 'ripe_no_data_db_no_data'
@@ -50,6 +52,8 @@ def __create_parser_arguments(parser):
                         default=util.IPV4_IDENTIFIER,
                         choices=[util.IPV4_IDENTIFIER, util.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
+    parser.add_argument('-z', '--zmap-file', type=str, dest='zmap_filename', required=True,
+                        help='The results of the zmap scan of the ip addresses')
     parser.add_argument('-l', '--logging-file', type=str, default='compare_methods.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
@@ -61,75 +65,138 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    correct_matching_distances = []
+    near_matching_distances = []
+    wrong_matching_distances = []
+    wrong_rtt_diffs = []
+
+    stats = collections.defaultdict(int)
+
     global logger
     logger = util.setup_logger(args.log_file, 'compare')
     logger.debug('starting')
 
-    with open(args.locationFile) as locationFile:
-        locations = util.json_load(locationFile)
+    filepath = os.path.dirname(args.db_filename_proto)
 
+    with open(args.zmap_filename) as zmap_file:
+        location_line = zmap_file.readline()
+        results_line = zmap_file.readline()
+
+    zmap_locations = util.json_loads(location_line)
+    zmap_results = util.json_loads(results_line)
+    del location_line
+    del results_line
+
+    with open(args.locationFile) as loc_file:
+        locations = util.json_load(loc_file)
+
+    database_domains = {}
     for index in range(0, args.fileCount):
-        classif_domains = collections.defaultdict(list)
-        database_domains = {}
         with open(args.db_filename_proto.format(index)) as database_domain_file, \
-                mmap.mmap(database_domain_file.fileno(), 0) as database_domain_file_mm:
+                mmap.mmap(database_domain_file.fileno(), 0,
+                          access=mmap.ACCESS_READ) as database_domain_file_mm:
             line = database_domain_file_mm.readline().decode('utf-8')
             while len(line):
                 domain_list = util.json_loads(line)
                 for domain in domain_list:
                     database_domains[domain.ip_for_version(args.ip_version)] = domain
                 line = database_domain_file_mm.readline().decode('utf-8')
+
+    for index in range(0, args.fileCount):
+        classif_domains = collections.defaultdict(list)
+
         with open(args.ripe_filename_proto.format(index)) as ripe_domain_file, \
-                mmap.mmap(ripe_domain_file.fileno(), 0) as ripe_domain_file_mm:
+                mmap.mmap(ripe_domain_file.fileno(), 0,
+                          access=mmap.ACCESS_READ) as ripe_domain_file_mm:
             line = ripe_domain_file_mm.readline().decode('utf-8')
             while len(line):
                 domain_dict = util.json_loads(line)
-                for ripe_domain in domain_dict[util.DomainType.correct]:
-                    db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                for ripe_domain in domain_dict[util.DomainType.correct.value]:
+                    db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_c_db_no_data].append(
                             (db_domain, ripe_domain))
-                    elif db_domain.location_id == ripe_domain.location_id:
-                        classif_domains[CompareType.ripe_c_db_same].append((db_domain, ripe_domain))
                     else:
-                        db_location = locations[str(db_domain.location_id)]
                         ripe_location = locations[str(ripe_domain.location_id)]
-                        ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
-                        distance = db_location.gps_distance_equirectangular(ripe_location)
-                        if distance < ripe_matching_rtt*100:
-                            classif_domains[CompareType.ripe_c_db_near].append(
+                        distance = db_domain.location.gps_distance_haversine(ripe_location)
+                        if db_domain.matching_match and \
+                                db_domain.matching_match.location_id == ripe_domain.location_id:
+                            classif_domains[CompareType.ripe_c_db_same].append(
                                 (db_domain, ripe_domain))
+                            correct_matching_distances.append(distance)
                         else:
-                            classif_domains[CompareType.ripe_c_db_wrong].append(
-                                (db_domain, ripe_domain))
+                            ripe_matching_rtt = ripe_domain.matching_match.matching_rtt
+                            if not ripe_matching_rtt or distance < ripe_matching_rtt*100:
+                                classif_domains[CompareType.ripe_c_db_near].append(
+                                    (db_domain, ripe_domain))
+                                near_matching_distances.append(distance)
+                            else:
+                                classif_domains[CompareType.ripe_c_db_wrong].append(
+                                    (db_domain, ripe_domain))
+                                wrong_matching_distances.append(distance)
 
-                for ripe_domain in domain_dict[util.DomainType.no_verification]:
-                    db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                for ripe_domain in domain_dict[util.DomainType.no_verification.value]:
+                    db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_no_v_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
                         db_match = db_domain.matching_match
-                        if db_match.location_id in \
+                        if not db_match:
+                            loc_pss_ripe = location_possible(db_domain.location,
+                                                             ripe_domain.all_matches, locations)
+                            loc_pss_zmap = location_possible_zmap(db_domain.location,
+                                                                  zmap_results,
+                                                                  zmap_locations)
+
+                            if not loc_pss_zmap and not loc_pss_ripe:
+                                classif_domains[CompareType.ripe_no_v_db_l].append(
+                                    (db_domain, ripe_domain))
+                            else:
+                                if loc_pss_zmap and loc_pss_ripe:
+                                    wrong_rtt_diffs.append(min(loc_pss_ripe, loc_pss_zmap))
+                                elif loc_pss_ripe:
+                                    wrong_rtt_diffs.append(loc_pss_ripe)
+                                elif loc_pss_zmap:
+                                    wrong_rtt_diffs.append(loc_pss_zmap)
+                                classif_domains[CompareType.ripe_no_v_db_wrong].append(
+                                    (db_domain, ripe_domain))
+                        elif db_match.location_id in \
                                 [match.location_id for match in ripe_domain.possible_matches]:
+
                             classif_domains[CompareType.ripe_no_v_db_l].append(
                                 (db_domain, ripe_domain))
                         else:
                             classif_domains[CompareType.ripe_no_v_db_wrong].append(
                                 (db_domain, ripe_domain))
 
-                for ripe_domain in domain_dict[util.DomainType.no_location]:
-                    db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                for ripe_domain in domain_dict[util.DomainType.no_location.value]:
+                    db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
+                    if not db_domain.location:
                         classif_domains[CompareType.ripe_no_l_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
-                        classif_domains[CompareType.ripe_no_l_db_wrong].append(
-                            (db_domain, ripe_domain))
+                        loc_pss_ripe = location_possible(db_domain.location,
+                                                         ripe_domain.all_matches, locations)
+                        loc_pss_zmap = location_possible_zmap(db_domain.location,
+                                                              zmap_results,
+                                                              zmap_locations)
+                        if not loc_pss_zmap and not loc_pss_ripe:
+                            classif_domains[CompareType.ripe_no_l_db_possible].append(
+                                (db_domain, ripe_domain))
+                        else:
+                            if loc_pss_zmap and loc_pss_ripe:
+                                wrong_rtt_diffs.append(min(loc_pss_ripe, loc_pss_zmap))
+                            elif loc_pss_ripe:
+                                wrong_rtt_diffs.append(loc_pss_ripe)
+                            elif loc_pss_zmap:
+                                wrong_rtt_diffs.append(loc_pss_zmap)
+                            classif_domains[CompareType.ripe_no_l_db_wrong].append(
+                                (db_domain, ripe_domain))
 
-                for ripe_domain in domain_dict[util.DomainType.not_responding]:
-                    db_domain = database_domains[ripe_domain.domain.ip_for_version(args.ip_version)]
-                    if not db_domain.location_id:
+                for ripe_domain in domain_dict[util.DomainType.not_responding.value]:
+                    db_domain = database_domains[ripe_domain.ip_for_version(args.ip_version)]
+                    if db_domain.location is None:
                         classif_domains[CompareType.ripe_no_data_db_no_data].append(
                             (db_domain, ripe_domain))
                     else:
@@ -138,14 +205,71 @@ def main():
 
                 line = ripe_domain_file_mm.readline().decode('utf-8')
 
-        with open('compared-ripe-db-{}.out'.format(index), 'w') as output_file:
+        with open(os.path.join(filepath, 'compared-ripe-db-{}.out'.format(index)),
+                  'w') as output_file:
             for key, domain_list in classif_domains.items():
-                logger.info('{} len {}\n'.format(key, len(domain_list)))
-                output_file.write('{} len {}\n'.format(key, len(domain_list)))
+                stats[key] += len(domain_list)
+                logger.info('{} len {}'.format(key, len(domain_list)))
                 util.json_dump(domain_list, output_file)
                 output_file.write('\n')
 
         classif_domains.clear()
+
+    for key, value in stats.items():
+        logger.info('final {} len {}'.format(key, value))
+
+    if correct_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-correct-distances.out'), 'w') as output_file:
+            for distance in correct_matching_distances:
+                output_file.write('{}\n'.format(distance))
+
+            logger.info('correct distances avg {}'.format(
+                sum(correct_matching_distances)/len(correct_matching_distances)))
+
+    if near_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-near-distances.out'), 'w') as output_file:
+            for distance in near_matching_distances:
+                output_file.write('{}\n'.format(distance))
+
+            logger.info('near distances avg {}'.format(
+                sum(near_matching_distances)/len(near_matching_distances)))
+
+    if wrong_matching_distances:
+        with open(os.path.join(filepath, 'compared-ripe-db-wrong-distances.out'), 'w') as output_file:
+            for distance in wrong_matching_distances:
+                output_file.write('{}\n'.format(distance))
+
+            logger.info('wrong distances avg {}'.format(
+                sum(wrong_matching_distances)/len(wrong_matching_distances)))
+
+    if wrong_rtt_diffs:
+        with open(os.path.join(filepath, 'compared-ripe-db-wrong-rtt-diffs.out'), 'w') as output_file:
+            for distance in wrong_rtt_diffs:
+                output_file.write('{}\n'.format(distance))
+
+            logger.info('wrong distances avg {}'.format(
+                sum(wrong_rtt_diffs)/len(wrong_rtt_diffs)))
+
+
+def location_possible_zmap(location, zmap_results, zmap_locations):
+    for zmap_id, zmap_location in zmap_locations.items():
+        distance = zmap_location.gps_distance_haversine(location)
+        if zmap_id in zmap_results:
+            rtt = zmap_results[zmap_id]
+            if distance > rtt * 100:
+                return distance/100 - rtt
+    return None
+
+
+def location_possible(db_location, ripe_matches, locations):
+    """Checks if the location is possible with the given match results"""
+    for match in ripe_matches:
+        if not match.matching_rtt:
+            continue
+        distance = db_location.gps_distance_haversine(locations[str(match.location_id)])
+        if distance > match.matching_rtt * 100:
+            return distance/100 - match.matching_rtt
+    return None
 
 
 if __name__ == '__main__':

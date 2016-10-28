@@ -7,6 +7,7 @@ import requests
 import time
 import os.path
 import geoip2.database
+import geoip2.errors
 import random
 import mmap
 import IP2Location
@@ -31,7 +32,7 @@ MEASUREMENT_URL = ATLAS_API_URL + API_MEASUREMENT_ENDPOINT + '/'
 
 LOCATION_RADIUS = 100
 LOCATION_RADIUS_PRECOMPUTED = (LOCATION_RADIUS / 6371) ** 2
-DISTANCE_METHOD = util.GPSLocation.gps_distance_equirectangular
+DISTANCE_METHOD = util.GPSLocation.gps_distance_haversine
 
 MAX_THREADS = 20
 logger = None
@@ -98,6 +99,9 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
+                        choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the preferred log level')
 
 
 def __check_args(args):
@@ -130,7 +134,7 @@ def main():
     __check_args(args)
 
     global logger
-    logger = util.setup_logger(args.log_file, 'check')
+    logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level)
     logger.debug('starting')
 
     start_time = time.time()
@@ -149,7 +153,10 @@ def main():
         ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
         global API_KEY, MAX_THREADS
         API_KEY = args.api_key
-        MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
+        if args.log_level == 'DEBUG':
+            MAX_THREADS = 1
+        else:
+            MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
         finish_event = threading.Event()
         generator_thread = threading.Thread(target=generate_ripe_request_tokens,
                                             args=(ripe_slow_down_sema, args.ripeRequestLimit,
@@ -211,12 +218,15 @@ def main():
 
         distances = init_coords_distances(zmap_locations, locations)
 
-    logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
-    logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
-    logger.debug('finished ripe')
+        logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
+        logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+        logger.debug('finished ripe')
 
     processes = []
-    for pid in range(0, args.fileCount):
+    file_count = args.fileCount
+    if args.log_level == 'DEBUG':
+        file_count = 1
+    for pid in range(0, file_count):
         process = None
         if args.verifingMethod == 'ripe':
             process = mp.Process(target=ripe_check_for_list,
@@ -238,14 +248,16 @@ def main():
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.geoipFile),
+                                       args.geoipFile,
+                                       args.ip_version),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'ip2location':
             process = mp.Process(target=ip2location_check_for_list,
                                  args=(args.filename_proto,
                                        pid,
                                        locations,
-                                       args.ip2locFile),
+                                       args.ip2locFile,
+                                       args.ip_version),
                                  name='domain_checking_{}'.format(pid))
         processes.append(process)
 
@@ -266,9 +278,10 @@ def main():
                 process.join()
         except KeyboardInterrupt:
             pass
-
-    finish_event.set()
-    generator_thread.join()
+    if finish_event:
+        finish_event.set()
+    if generator_thread:
+        generator_thread.join()
     logger.debug('{} processes alive'.format(alive))
     end_time = time.time()
     logger.info('running time: {}'.format((end_time - start_time)))
@@ -306,101 +319,125 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     logger.debug('generate thread stoopped')
 
 
-# TODO falsify databases with all measurements
-
 def ip2location_check_for_list(filename_proto: str, pid: int, locations: [str, util.Location],
-                               ip2locations_filename: str):
+                               ip2locations_filename: str, ip_version: str):
     """Verifies the locations with the ip2locations database"""
-    ip2loc_obj = IP2Location.IP2Location()
-    ip2loc_obj.open(ip2locations_filename)
-
-    location_domain_file = open(filename_proto.format(pid) + '.locations', 'w')
-
     correct_count = collections.defaultdict(int)
+    count_locations = 0
+    count_entries = 0
+    count_matches = 0
 
-    with open(filename_proto.format(pid)) as domainFile:
-        domain_file_mm = mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ)
-        line = domain_file_mm.readline().decode('utf-8')
-        while len(line) > 0:
-            domain_location_list = util.json_loads(line)
-            correct_locs = []
-            wrong_locs = []
-            for domain in domain_location_list:
-                location_label_match = ip2loc_get_domain_location(domain,
-                                                                  ip2loc_obj,
-                                                                  locations,
-                                                                  correct_count)
-                if location_label_match is not None:
-                    domain.location_match = location_label_match
-                    correct_locs.append(domain)
-                else:
-                    wrong_locs.append(domain)
-            util.json_dump(correct_locs, location_domain_file)
-            location_domain_file.write('\n')
-            line = domain_file_mm.readline().decode('utf-8')
-
-
-def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.IP2Location,
-                               locations: [str, util.Location],
-                               correct_count: [util.DomainType, int]):
-    """checks the domains locations with the geoipreader"""
-    ip_location = ip2loc_reader.get_all(domain.ip_address)
-    for i, label in enumerate(domain.domain_labels):
-        if i == 0:
-            # skip if tld
-            continue
-
-        for match in label.matches:
-            if ip_location.country_short == locations[str(match.location_id)].stateCode:
-                correct_count[match.code_type] += 1
-                return match
-
-    return None
-
-
-def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
-    """Verifies the location with the geoip database"""
-    geoipreader = geoip2.database.Reader(geoip_filename)
-
-    correct_count = collections.defaultdict(int)
+    def inc_locations():
+        nonlocal count_locations
+        count_locations += 1
 
     with open(filename_proto.format(pid)) as domainFile, \
             mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
-            open(util.remove_file_ending(filename_proto.format(pid)) +
-                 '.geoiplocations', 'w') as location_domain_file:
+            open(util.remove_file_ending(filename_proto.format(pid)) + '.locations',
+                 'w') as location_domain_file, \
+            IP2Location.IP2Location(filename=ip2locations_filename) as ip2loc_obj:
         line = domain_file_mm.readline().decode('utf-8')
         while len(line) > 0:
             domain_location_list = util.json_loads(line)
             for domain in domain_location_list:
-                geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version)
+                count_entries += 1
+                if ip2loc_get_domain_location(domain, ip2loc_obj, locations, correct_count,
+                                              ip_version, inc_locations):
+                    count_matches += 1
             util.json_dump(domain_location_list, location_domain_file)
             location_domain_file.write('\n')
             line = domain_file_mm.readline().decode('utf-8')
 
-    location_domain_file.close()
-    geoipreader.close()
     logger.info('correct count: {}'.format(correct_count))
+    logger.info('count entries {}    count locations: {}    count matches: {}'.format(
+        count_entries, count_locations, count_matches))
 
 
-def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version: str):
+def ip2loc_get_domain_location(domain: util.Domain, ip2loc_reader: IP2Location.IP2Location,
+                               locations: [str, util.Location],
+                               correct_count: [util.DomainType, int], ip_version: str,
+                               inc_locations: [[], []]):
     """checks the domains locations with the geoipreader"""
     ip_address = domain.ip_for_version(ip_version)
-    geoip_location = geoipreader.city(ip_address)
+    ip_location = ip2loc_reader.get_all(ip_address)
+    if not ip_location:
+        return False
+
+    inc_locations()
+    ip_location_obj = util.GPSLocation(ip_location.latitude, ip_location.longitude)
+    domain.location = ip_location_obj
+
+    for match in domain.all_matches:
+        location = locations[str(match.location_id)]
+        distance = location.gps_distance_haversine(ip_location_obj)
+        match.matching_distance = distance
+        if distance < 100:
+            correct_count[match.code_type.name] += 1
+            match.matching = True
+            match.matching_rtt = -2
+            return True
+
+    return False
+
+
+def geoip_check_for_list(filename_proto, pid, locations, geoip_filename, ip_version: str):
+    """Verifies the location with the geoip database"""
+    correct_count = collections.defaultdict(int)
+    count_locations = 0
+    count_entries = 0
+    count_matches = 0
+
+    def inc_locations():
+        nonlocal count_locations
+        count_locations += 1
+
+    with open(filename_proto.format(pid)) as domainFile, \
+            mmap.mmap(domainFile.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
+            open(util.remove_file_ending(filename_proto.format(pid)) +
+                 '.geoiplocations', 'w') as location_domain_file, \
+            geoip2.database.Reader(geoip_filename) as geoipreader:
+        line = domain_file_mm.readline().decode('utf-8')
+        while len(line) > 0:
+            domain_location_list = util.json_loads(line)
+            for domain in domain_location_list:
+                count_entries += 1
+                if geoip_get_domain_location(domain, geoipreader, locations, correct_count,
+                                             ip_version, inc_locations):
+                    count_matches += 1
+            util.json_dump(domain_location_list, location_domain_file)
+            location_domain_file.write('\n')
+            line = domain_file_mm.readline().decode('utf-8')
+
+    logger.info('correct count: {}'.format(correct_count))
+    logger.info('count entries {}    count locations: {}    count matches: {}'.format(
+        count_entries, count_locations, count_matches))
+
+
+def geoip_get_domain_location(domain, geoipreader, locations, correct_count, ip_version: str,
+                              inc_locations: [[], []]):
+    """checks the domains locations with the geoipreader"""
+    ip_address = domain.ip_for_version(ip_version)
+    try:
+        geoip_location = geoipreader.city(ip_address)
+    except geoip2.errors.AddressNotFoundError:
+        return False
+
     if geoip_location.location is None or geoip_location.location.longitude is None or \
             geoip_location.location.latitude is None:
         return False
 
+    inc_locations()
+    geoip_location_obj = util.GPSLocation(geoip_location.location.latitude,
+                                          geoip_location.location.longitude)
+    domain.location = geoip_location_obj
     for match in domain.all_matches:
         location = locations[str(match.location_id)]
-        distance = location.gps_distance_equirectangular(
-            util.GPSLocation(geoip_location.location.latitude,
-                             geoip_location.location.longitude))
+        distance = location.gps_distance_haversine(geoip_location_obj)
+        match.matching_distance = distance
         if distance < 100:
-            correct_count[match['type']] += 1
-            domain.location = locations[str(match.location_id)]
+            correct_count[match.code_type.name] += 1
             match.matching = True
-            match.matching_distance = distance
-            match.matching_rtt = -1
+            match.matching_rtt = -2
             return True
 
     return False
@@ -684,12 +721,13 @@ def check_domain_location_ripe(domain: util.Domain,
         :rtype: DomainLabelMatch
         """
         nonlocal matches, matched
+        logger.debug('{} matches before filter'.format(len(matches)))
         return_val, return_tuple = filter_possible_matches(matches, results, locations, distances)
+        logger.debug('{} matches after filter ret val {}'.format(len(matches), return_val))
+
         if not return_val:
             return None
 
-        if gc.garbage:
-            logger.error('Garbage collection garbage not empty! {}'.format(len(gc.garbage)))
         if dry_run:
             if return_tuple:
                 update_domains(domain, util.DomainType.correct)
@@ -714,7 +752,9 @@ def check_domain_location_ripe(domain: util.Domain,
                     ret = matches[0]
                 return ret
 
+    logger.debug('first match')
     next_match = get_next_match()
+
     no_verification_matches = []
 
     # TODO refactoring measurements are in dict format
@@ -725,6 +765,8 @@ def check_domain_location_ripe(domain: util.Domain,
         #                                                 len(measurements)))
     else:
         measurements = []
+
+    logger.debug('got measurements')
 
     while next_match is not None:
         location = locations[str(next_match.location_id)]
@@ -741,6 +783,7 @@ def check_domain_location_ripe(domain: util.Domain,
                                                    near_nodes,
                                                    results,
                                                    ripe_slow_down_sema)
+        logger.debug('checked for measurement results')
 
         def add_new_result(new_result: util.LocationResult):
             remove_obj = None
@@ -757,6 +800,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
         if chk_m is None:
             # only if no old measurement exists
+            logger.debug('creating measurement')
             available_nodes = location.available_nodes
             if not available_nodes:
                 matches.remove(next_match)
@@ -771,10 +815,10 @@ def check_domain_location_ripe(domain: util.Domain,
                 next_match = get_next_match()
                 continue
 
-            node_location_dist = location.gps_distance_equirectangular(
+            node_location_dist = location.gps_distance_haversine(
                 util.GPSLocation(near_node['geometry']['coordinates'][1],
                                  near_node['geometry']['coordinates'][0]))
-
+            logger.debug('finished measurement')
             try:
                 result = next(iter(m_results))
             except StopIteration:
@@ -783,6 +827,7 @@ def check_domain_location_ripe(domain: util.Domain,
                 continue
 
             chk_res = get_rtt_from_result(result)
+            logger.debug('got result {}'.format(chk_res))
             if chk_res is None:
                 matches.remove(next_match)
                 next_match = get_next_match()
@@ -807,7 +852,7 @@ def check_domain_location_ripe(domain: util.Domain,
             return
         else:
             next_match.matching_rtt = chk_m
-            node_location_dist = location.gps_distance_equirectangular(
+            node_location_dist = location.gps_distance_haversine(
                 util.GPSLocation(node['geometry']['coordinates'][1],
                                  node['geometry']['coordinates'][0]))
             next_match.matching_distance = node_location_dist
@@ -824,6 +869,7 @@ def check_domain_location_ripe(domain: util.Domain,
 
         matches.remove(next_match)
         no_verification_matches.append(next_match)
+        logger.debug('next match')
         next_match = get_next_match()
 
     if not matched:
@@ -880,7 +926,7 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
                     distance = distances[result.location_id][str(match.location_id)]
                 else:
                     distance = \
-                        locations[str(result.location_id)].gps_distance_equirectangular(
+                        locations[str(result.location_id)].gps_distance_haversine(
                             locations[str(match.location_id)])
 
                 if distance > (result.rtt * 100):
@@ -1001,14 +1047,13 @@ def get_min_rtt(ping_output: str) -> float:
 
 def get_rtt_from_result(measurement_entry: [str, float]) -> float:
     """gets the rtt from measurement_entry"""
-    if 'min' in measurement_entry.keys():
+    if 'min' in measurement_entry:
         return measurement_entry['min']
-    if 'result' in measurement_entry.keys() and len(
-            measurement_entry['rtt']) > 0:
-        min_rtt = min(measurement_entry['rtt'], key=lambda res: res['rtt'])[
+    if 'result' in measurement_entry and measurement_entry['result']:
+        min_rtt = min(measurement_entry['result'], key=lambda res: res['rtt'])[
             'rtt']
         return min_rtt
-    if 'avg' in measurement_entry.keys():
+    if 'avg' in measurement_entry:
         return measurement_entry['avg']
     return None
 
@@ -1099,9 +1144,12 @@ def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_n
     # TODO RIPE pull request with bill to possibility
     def create_ripe_measurement_wrapper():
         """Creates a new ripe measurement to the first near node and returns the measurement id"""
+        city_name = location.city_name
+        if not city_name:
+            city_name = str(location.id)
 
         ping = ripe_atlas.Ping(af=af, packets=1, target=ip_addr[0],
-                               description=ip_addr[0] + ' test for location ' + location.city_name)
+                               description=ip_addr[0] + ' test for location ' + city_name)
         source = ripe_atlas.AtlasSource(value=str(near_node['id']), requested=1,
                                         type='probes')
         if bill_to_address:
@@ -1208,11 +1256,10 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
             try:
                 measurement.next_batch()
             except ripe_atlas.exceptions.APIResponseError:
-                # logger.exception('MeasurementRequest APIResponseError next_batch')
+                logger.exception('MeasurementRequest APIResponseError next_batch')
                 pass
             else:
                 break
-
             time.sleep(5)
             loc_retries += 1
 
@@ -1221,8 +1268,8 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
 
     max_age = int(time.time()) - ALLOWED_MEASUREMENT_AGE
     params = {
-        'status': '2,4,5',
-        'target_ip': ip_addr,
+        'status__in': '2,4,5',
+        'target': ip_addr,
         'type': 'ping',
         'stop_time__gte': max_age
         }
@@ -1233,6 +1280,7 @@ def get_measurements(ip_addr: str, ripe_slow_down_sema: mp.Semaphore) -> [ripe_a
     while True:
         try:
             measurements = ripe_atlas.MeasurementRequest(**params)
+            logger.debug('atlas url {}'.format(measurements.atlas_url))
         except ripe_atlas.exceptions.APIResponseError:
             logger.exception('MeasurementRequest APIResponseError')
         else:
@@ -1264,12 +1312,13 @@ def get_measurements_for_nodes(measurements: [[str, object]], ripe_slow_down_sem
         params = {
             'msm_id': measure['id'],
             'start': allowed_start_time,
-            'probe_ids': [node['id'] for node in near_nodes]
+            'probe_ids': [node['id'] for node in near_nodes][:1000]
             }
         ripe_slow_down_sema.acquire()
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
         retries = 0
         while not success and retries < 5:
+            logger.debug('AtlasResultsRequest error! {}'.format(result_list))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
             success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
@@ -1297,16 +1346,17 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
     measurement_results = get_measurements_for_nodes(measurements,
                                                      ripe_slow_down_sema,
                                                      nodes)
-
+    logger.debug('got measurement results')
     check_n = None
     node_n = None
     date_n = None
     near_node_ids = [node['id'] for node in nodes]
     for m_results in measurement_results:
+        logger.debug('next result {}'.format(len(m_results['results'])))
         for result in m_results['results']:
-            oldest_alowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
+            oldest_allowed_time = int(time.time()) - ALLOWED_MEASUREMENT_AGE
             if (result['prb_id'] not in near_node_ids or
-                    result['timestamp'] < oldest_alowed_time):
+                    result['timestamp'] < oldest_allowed_time):
                 continue
 
             check_res = get_rtt_from_result(result)
@@ -1326,7 +1376,7 @@ def check_measurements_for_nodes(measurements: [object], location: util.Location
 
     if check_n is not None:
         if check_n == -1:
-            if date_n < int(time.time() - 60*60*24*14):
+            if date_n < int(time.time() - 60*60*24*30):
                 return None, None
         return check_n, node_n
 
@@ -1393,7 +1443,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             logger.critical('max_distance must be a multiple of 50')
             return
 
-        distances = [25, 50, 100, 250, 500, 1000]
+        distances = [100, 250, 500, 1000]
         if max_distance not in distances:
             distances.append(max_distance)
             distances.sort()
@@ -1429,17 +1479,17 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
             #     return
 
             slow_down_sema.acquire()
-            nodes = ripe_atlas.ProbeRequest(**params, return_objects=True)
+            nodes = ripe_atlas.ProbeRequest(**params)
 
             nodes.next_batch()
             if nodes.total_count > 0:
                 results = [node for node in nodes]
                 available_probes = [node for node in results
-                                    if (node.status == 'Connected' and
+                                    if (node['status']['name'] == 'Connected' and
                                         'system-{}-works'.format(ip_version) in
-                                        [tag['slug'] for tag in node.tags] and
+                                        [tag['slug'] for tag in node['tags']] and
                                         'system-{}-capable'.format(ip_version) in
-                                        [tag['slug'] for tag in node.tags])]
+                                        [tag['slug'] for tag in node['tags']])]
                 if len(available_probes) > 0:
                     location.nodes = results
                     location.available_nodes = available_probes

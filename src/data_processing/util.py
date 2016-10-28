@@ -12,6 +12,8 @@ import logging
 import os
 # import msgpack
 import json
+import socket
+import binascii
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
@@ -70,13 +72,16 @@ def get_path_filename(path: str) -> str:
 
 def remove_file_ending(filenamepath: str) -> str:
     """Removes the fileending of the paths file"""
-    return os.path.dirname(filenamepath) + '/' + \
-        '.'.join(get_path_filename(filenamepath).split('.')[:-1])
+    return os.path.join(os.path.dirname(filenamepath),
+                        '.'.join(get_path_filename(filenamepath).split('.')[:-1]))
 
 
-def setup_logger(filename: str, loggername: str) -> logging.Logger:
+def setup_logger(filename: str, loggername: str, loglevel: str='DEBUG') -> logging.Logger:
     """does the basic config on logging"""
-    logging.basicConfig(filename=filename, level=logging.DEBUG,
+    numeric_level = getattr(logging, loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: {}'.format(loglevel))
+    logging.basicConfig(filename=filename, level=numeric_level,
                         format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
                         datefmt='%d.%m %H:%M:%S')
@@ -123,6 +128,25 @@ def parse_zmap_line(zmap_line):
         sec_difference = int(rec_ts) - int(sent_ts)
         u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
         return rsaddr, (sec_difference + u_sec_diference) * 1000
+
+
+def ip_to_int(ip_addr, ip_version):
+    if ip_version == IPV6_IDENTIFIER:
+        return int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, ip_addr)), 16)
+    elif ip_version == IPV4_IDENTIFIER:
+        return int(binascii.hexlify(socket.inet_pton(socket.AF_INET, ip_addr)), 16)
+
+def int_to_alphanumeric(num: int):
+    rest = num % 36
+    if rest < 10:
+        rest_ret = '{}'.format(rest)
+    else:
+        rest_ret = '{}'.format(chr(ord('a')+rest-10))
+    div = num // 36
+    if div == 0:
+        return rest_ret
+    else:
+        return int_to_alphanumeric(div) + rest_ret
 
 
 ###################################################################################################
@@ -220,7 +244,7 @@ class LocationCodeType(enum.Enum):
         elif self == LocationCodeType.locode:
             pattern = base + r'{5}'
         elif self == LocationCodeType.geonames:
-            pattern = r'[a-zA-Z ]+'
+            pattern = r'[a-zA-Z]+'
         else:
             logging.error('WTF? should not be possible')
             return
@@ -291,14 +315,8 @@ class GPSLocation(JSONBase):
             raise
 
     def is_in_radius(self, location, radius):
-        """Returns a True if the location is within the radius with the equirectangular method"""
-        lon1 = math.radians(float(self.lon))
-        lat1 = math.radians(float(self.lat))
-        lon2 = math.radians(float(location.lon))
-        lat2 = math.radians(float(location.lat))
-        # Radius of earth in kilometers. Use 3956 for miles
-        return (((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
-            lat2 - lat1) ** 2) <= (radius / 6371) ** 2
+        """Returns a True if the location is within the radius with the haversine method"""
+        return self.gps_distance_haversine(location) <= radius
 
     def gps_distance_equirectangular(self, location):
         """Return the distance between the two locations using the equirectangular method"""
@@ -441,22 +459,23 @@ class Location(GPSLocation):
         #     raise ValueError('id is not int')
         ret_list = []
         if self.city_name:
-            ret_list.append((self.city_name, (self.id, LocationCodeType.geonames.value)))
+            ret_list.append((self.city_name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
-            ret_list.append((code, (self.id, LocationCodeType.clli.value)))
+            ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
-            ret_list.append((name, (self.id, LocationCodeType.geonames.value)))
+            if name:
+                ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
         if self.locode and self.state_code:
             for code in self.locode.place_codes:
-                ret_list.append(('{}{}'.format(self.state_code, code),
+                ret_list.append(('{}{}'.format(self.state_code.lower(), code.lower()),
                                  (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
-                ret_list.append((code, (self.id, LocationCodeType.iata.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.iata.value)))
             for code in self.airport_info.icao_codes:
-                ret_list.append((code, (self.id, LocationCodeType.icao.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.icao.value)))
             for code in self.airport_info.faa_codes:
-                ret_list.append((code, (self.id, LocationCodeType.faa.value)))
+                ret_list.append((code.lower(), (self.id, LocationCodeType.faa.value)))
         return ret_list
 
     @staticmethod
@@ -465,6 +484,10 @@ class Location(GPSLocation):
         obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
+        if Location.PropertyKey.clli in dct:
+            obj.clli = dct[Location.PropertyKey.clli]
+        if Location.PropertyKey.alternate_names in dct:
+            obj.alternate_names = dct[Location.PropertyKey.alternate_names]
         if GPSLocation.PropertyKey.id in dct:
             obj.id = dct[GPSLocation.PropertyKey.id]
         if Location.PropertyKey.airport_info in dct:
@@ -481,6 +504,7 @@ class Location(GPSLocation):
         obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
                        self.population)
         obj.id = self.id
+        obj.clli = clli
         obj.airport_info = self.airport_info.copy()
         obj.locode = self.locode.copy()
         obj.available_nodes = self.available_nodes.copy()
@@ -577,6 +601,8 @@ class Domain(JSONBase):
     DO NOT SET the DOMAIN NAME after calling the constructor!
     """
 
+    # TODO use ipaddress stdlib module
+
     class_name_identifier = 'd'
 
     __slots__ = ['domain_name', 'ip_address', 'ipv6_address', 'domain_labels', 'location_id',
@@ -641,10 +667,9 @@ class Domain(JSONBase):
     @property
     def matching_match(self):
         """Returns the match where we found the correct location"""
-        if self.location_id:
-            for match in self.all_matches:
-                if match.matching:
-                    return match
+        for match in self.all_matches:
+            if match.matching:
+                return match
         else:
             return None
 
@@ -667,8 +692,13 @@ class Domain(JSONBase):
             self.PropertyKey.domain_labels: [label.dict_representation() for label in
                                              self.domain_labels],
         }
-        if self.location_id:
-            ret_dict[self.PropertyKey.location] = self.location_id
+        if self.location_id is not None:
+            ret_dict[self.PropertyKey.location_id] = self.location_id
+        elif self.location:
+            if isinstance(self.location, Location):
+                ret_dict[self.PropertyKey.location_id] = self.location.id
+            else:
+                ret_dict[self.PropertyKey.location_id] = self.location.dict_representation()
         return ret_dict
 
     @staticmethod
@@ -680,9 +710,12 @@ class Domain(JSONBase):
             del obj.domain_labels[:]
             obj.domain_labels = dct[Domain.PropertyKey.domain_labels][:]
         if Domain.PropertyKey.location_id in dct:
-            obj.location_id = dct[Domain.PropertyKey.location_id]
-            if locations and obj.location_id in locations:
-                obj.location = locations[obj.location_id]
+            if isinstance(dct[Domain.PropertyKey.location_id], (int, str)):
+                obj.location_id = dct[Domain.PropertyKey.location_id]
+                if locations and obj.location_id in locations:
+                    obj.location = locations[obj.location_id]
+            elif isinstance(dct[Domain.PropertyKey.location_id], GPSLocation):
+                obj.location = dct[Domain.PropertyKey.location_id]
 
         return obj
 

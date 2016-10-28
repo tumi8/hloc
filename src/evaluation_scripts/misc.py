@@ -1,232 +1,325 @@
 #!/usr/bin/env python3.5
 
-import json
+import src.data_processing.util as util
+import collections
+import os
 
 
-# file=open('ip_results_m.json', 'r')
-# for line in file:
-#     es = json.loads(line)
-#     for e in es:
-#         count = count + 1
-#         if e['blacklisted']:
-#             blacklisted = blacklisted + 1
-#         elif e['rtt']['munich'] is None:
-#             countN = countN + 1
-#         else:
-#             if e['rtt']['munich'] > 10000:
-#                 print(e)
-#                 continue
-#             sum = sum + e['rtt']['munich']
-#
-#
-# def extract_coords(loc_file):
-#     locs = json.load(loc_file)
-#     coords = []
-#     for loc in locs.values():
-#         codes = 1
-#         if loc['locode'] is not None:
-#             codes = codes + len(loc['locode']['placeCodes'])
-#         codes = codes + len(loc['alternateNames'])
-#         codes = codes + len(loc['clli'])
-#         if loc['airportInfo'] is not None:
-#             if len(loc['airportInfo']['iataCode']) > 0:
-#                 codes = codes + len(loc['airportInfo']['iataCode'])
-#             if len(loc['airportInfo']['icaoCode']) > 0:
-#                 codes = codes + len(loc['airportInfo']['icaoCode'])
-#             if len(loc['airportInfo']['faaCode']) > 0:
-#                 codes = codes + len(loc['airportInfo']['faaCode'])
-#         coords.append({'id': loc['id'], 'lat': loc['lat'], 'lng': loc['lon'], 'amount_codes': codes})
-#     with open('google_coords.json', 'w') as gFile:
-#         json.dump(coords, gFile)
-#
-# def ana_codes(locs):
-#     anz3 = 0
-#     anz4 = 0
-#     codes = {}
-#     def update_anzs(code):
-#         nonlocal anz3
-#         nonlocal anz4
-#         if code is None:
-#             return
-#         if code not in codes.keys():
-#             codes[code] = 1
-#             if len(code) == 3:
-#                 anz3 = anz3 + 1
-#             elif len(code) == 4:
-#                 anz4 = anz4 + 1
-#         else:
-#             codes[code] = codes[code] + 1
-#     for loc in locs.values():
-#         if loc['locode'] is not None:
-#             for c in loc['locode']['placeCodes']:
-#                 update_anzs(c)
-#         for c in loc['alternateNames']:
-#             update_anzs(c)
-#         for c in loc['clli']:
-#             update_anzs(c)
-#         update_anzs(loc['cityName'])
-#         if loc['airportInfo'] is not None:
-#             if len(loc['airportInfo']['iataCode']) > 0:
-#                 for c in loc['airportInfo']['iataCode']:
-#                     update_anzs(c)
-#             if len(loc['airportInfo']['icaoCode']) > 0:
-#                 for c in loc['airportInfo']['icaoCode']:
-#                     update_anzs(c)
-#             if len(loc['airportInfo']['faaCode']) > 0:
-#                 for c in loc['airportInfo']['faaCode']:
-#                     update_anzs(c)
-#     print('3', anz3, '4', anz4)
-#     return codes
-#
-#
-def collect_find_loc(file_proto):
-    loc_id_dict = {}
-    def inc_type(loc_id, m_type):
-        if loc_id not in loc_id_dict.keys():
-            loc_id_dict[loc_id] = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0,
-                                   'locode': 0}
-        loc_id_dict[loc_id][m_type] = loc_id_dict[loc_id][m_type] + 1
-    for index in range(0, 8):
-        find_file = open(file_proto.format(index), 'r')
-        for line in find_file:
-            find_domains = json.loads(line)
-            for domain in find_domains:
-                for key, label_dict in domain['domainLabels'].items():
-                    if key == 'tld':
-                        continue
-                    for match in label_dict['matches']:
-                        inc_type(match['location_id'], match['type'])
-    with open('loc_find_eval_type.json', 'w') as locFile:
-        json.dump(loc_id_dict, locFile)
-    # loc_s = sorted(list(loc_id_dict.items()), key=lambda am: am[1], reverse=True)
-    # for i in range(0, 20):
-    #     print(loc_s[i])
-#
-# f1.close()
-# f2.close()
-# f3.close()
-# f1 = open('ip_results_m.json', 'r')
-# f2 = open('ip_results_s.json', 'r')
-# f3 = open('ip_results_d.json', 'r')
-#
-#
-# def merge_rtt_measures(file1, file2, file3):
-#     tomerge = {}
-#     final = {}
-#     blacklisted = {}
-#     def merge(items):
-#         for i in items:
-#             if i['blacklisted']:
-#                 blacklisted[i['ip']] = i
-#             elif i['ip'] not in tomerge.keys():
-#                 tomerge[i['ip']] = i
-#             else:
-#                 tomerge[i['ip']]['rtt'].update(i['rtt'])
-#                 if len(tomerge[i['ip']]['rtt']) == 3:
-#                     final[i['ip']] = tomerge.pop(i['ip'], None)
-#     for line in file1:
-#         merge(json.loads(line))
-#         while len(tomerge) > 10**4:
-#             merge(json.loads(file2.readline()))
-#             merge(json.loads(file3.readline()))
-#     line2 = file2.readline()
-#     while len(line2) > 0:
-#         merge(json.loads(line2))
-#         line2 = file2.readline()
-#     line3 = file3.readline()
-#     while len(line3) > 0:
-#         merge(json.loads(line3))
-#         line3 = file3.readline()
-#     with open('merged_rtts.json', 'w') as rttFile:
-#         print(len(tomerge))
-#         final.update(blacklisted)
-#         json.dump(final, rttFile)
-#     with open('n_merged_rtts.json', 'w') as nrttFile:
-#         json.dump(tomerge, nrttFile)
-#
-#
-# def sep_rtts(rttfile, file_proto):
-#     rtts = json.load(rttfile)
-#     for i in range(0, 8):
-#         dFile = open(file_proto.format(i), 'r')
-#         results = {}
-#         for line in dFile:
-#             domain_locations = json.loads(line)
-#             for domain in domain_locations:
-#                 if domain['ip'] in rtts.keys():
-#                     results[domain['ip']] = rtts[domain['ip']]
-#                 else:
-#                     print(domain['ip'])
-#         with open(file_proto.format(str(i) + '-ips'), 'w') as rFile:
-#             json.dump(results, rFile)
-#
-# sep_rtts(rrtsf, 'rdns_10m_find/20150902-rdns-{}_found.json')
-#
-# file_proto = '20150902-rdns-{}_found.json'
-# for i in range(0, 8):
-#     ofile = open(file_proto.format(i), 'r')
-#     nfile = open('../' + file_proto.format(str(i) + '-t'), 'w')
-#     for line in ofile:
-#         els = json.loads(line)
-#         for j in range(0, (len(els)//1000) + 1):
-#             json.dump(els[(j * 1000):((j + 1) * 1000)], nfile)
-#             nfile.write('\n')
-#     nfile.close()
-#     ofile.close()
-
-file_proto = '20150902-rdns-{}.cor'
-total = 0
-for i in range(0, 8):
-    ofile = open(file_proto.format(i), 'r')
-    for line in ofile:
-        ds = json.loads(line)
-        total = total + len(ds)
-    ofile.close()
-
-
-# def get_data(file):
-#     cor = 0
-#     wrong = 0
-#     blacklisted = 0
-#     total_len = 0
-#     type_count = {'iata': 0, 'icao': 0, 'faa': 0, 'clli': 0, 'alt': 0, 'locode': 0}
-#     for line in file:
-#         elems = json.loads(line)
-#         total_len = total_len + len(elems['not_responding']) + len(elems['correct']) + \
-#             len(elems['no_location']) + len(elems['blacklisted'])
-#         cor = cor + len(elems['correct'])
-#         for e in elems['correct']:
-#             type_count[e['correctMatch']['type']] = type_count[e['correctMatch']['type']] + 1
-#         wrong = wrong + len(elems['no_location'])
-#         blacklisted = blacklisted + len(elems['blacklisted'])
-#     return (total_len, cor, wrong, blacklisted, type_count)
-#
-#
-# def get_all_data():
-#     for i in range(0, 8):
-#         data_file = open('check_domains_output_{}.json'.format(i))
-#         print(i, get_data(data_file))
-
-
-# def get_measurements(ip_addr):
-#     max_age = int(time.time()) - 60*60*24*350
-#     params = {'status': '2,4,5',
-#               'target_ip': ip_addr,
-#               'type': 'ping',
-#               'stop_time__gte': max_age}
-#     measurements = MeasurementRequest(**params)
-#     skip = 0
-#     if measurements.total_count > 200:
-#         skip = ceil(measurements.total_count / 100) - 2
-#         measurements.next_batch()
-#         for _ in range(0, skip):
-#             measurements.next_batch()
-#     return measurements
-
-# wfile = open('net_results.txt', 'w')
+# Fix old wrong dataformat
 # for i in range(0,8):
-#     f = open('20150902-rdns-{}.cor'.format(i))
-#     for line in f:
-#         elems = json.loads(line)
-#         nets = [x for x in elems if 'net' in x['domainLabels'].values()]
-#         json.dump(nets, wfile, indent=2)
+#     o_file = open('/data2/trie-results/router.domains-{}-found.checked'.format(i))
+#     r_file = open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i), 'w')
+#     for line in o_file:
+#         domains = util.json_loads(line)
+#         for domain in domains[util.DomainType.correct.value]:
+#             domain.location_id = domain.matching_match.location_id
+#         util.json_dump(domains, r_file)
+#         r_file.write('\n')
+#     o_file.close()
+#     r_file.close()
+
+
+# for i in range(0,8):
+#     with open('/data2/trie-results/router.domains-{}-found.checked.rep'.format(i)) as file:
+#         for line in file:
+#             domains = util.json_loads(line)
+#             for domain in domains[util.DomainType.correct.value]:
+#                 if domain.location_id is None:
+#                     print(domain.ip_address)
+#                     print(domain.matching_match)
+#                     print(domain.matching_match.location_id)
+count_not_found = 0
+for i in range(0,8):
+    with open('/data2/trie-results/wip/router.domains-{}-found.json'.format(i)) as d_file:
+        for line in d_file:
+            count_not_found += len(util.json_loads(line))
+
+ips = set()
+for i in range(0,8):
+    with open('/data2/trie-results/router.domains-{}-found.checked'.format(i)) as file:
+        for line in file:
+            domains = util.json_loads(line)
+            for domain in domains[util.DomainType.no_verification.value]:
+                ips.add(domain.ip_address)
+            for domain in domains[util.DomainType.no_location.value]:
+                ips.add(domain.ip_address)
+with open('/data2/trie-results/not_verified.ips', 'w') as output_file:
+    string_to_write = ''
+    for ip in ips:
+        string_to_write += '{}\n'.format(ip)
+    _ = output_file.write(string_to_write)
+
+
+def get_number_no_probe(no_probe_locations, filename_proto):
+    c_matches = 0
+    c_u_matches = 0
+    domains_no_probe = 0
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as file:
+            for line in file:
+                domains_dict = util.json_loads(line)
+                for domain in domains_dict[util.DomainType.no_verification.value]:
+                    done = False
+                    for match in domain.possible_matches:
+                        if str(match.location_id) in no_probe_locations:
+                            done = True
+                            c_matches += 1
+                            if len(domain.possible_matches) == 1:
+                                c_u_matches += 1
+                    if done:
+                        domains_no_probe += 1
+    print(domains_no_probe)
+    print(c_matches)
+    print(c_u_matches)
+
+
+def get_number_no_probe_for_file(no_probe_locations, filename):
+    c_matches = 0
+    c_u_matches = 0
+    domains_no_probe = 0
+    with open(filename) as file:
+        for line in file:
+            domains_dict = util.json_loads(line)
+            for domain in domains_dict[util.DomainType.no_verification.value]:
+                done = False
+                for match in domain.possible_matches:
+                    if str(match.location_id) in no_probe_locations:
+                        done = True
+                        c_matches += 1
+                        if len(domain.possible_matches) == 1:
+                            c_u_matches += 1
+                if done:
+                    domains_no_probe += 1
+    print(domains_no_probe)
+    print(c_matches)
+    print(c_u_matches)
+
+
+def get_stats_for_filenameproto(filename_proto):
+    lens = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for key, value in domain_dict.items():
+                    lens[key] += len(value)
+    print(lens)
+
+def get_stat_for_file(filename):
+    lens = collections.defaultdict(int)
+    with open(filename) as d_file:
+        for line in d_file:
+            domain_dict = util.json_loads(line)
+            for key, value in domain_dict.items():
+                lens[key] += len(value)
+    print(lens)
+
+
+def get_code_stats_checked_for_file(filename):
+    stats_v = collections.defaultdict(int)
+    stats_no_v = collections.defaultdict(int)
+    stats_f = collections.defaultdict(int)
+    with open(filename) as d_file:
+        for line in d_file:
+            domain_dict = util.json_loads(line)
+            for domains in domain_dict.values():
+                for domain in domains:
+                    for match in domain.all_matches:
+                        if match == domain.matching_match:
+                            stats_v[match.code_type] += 1
+                        else:
+                            if match.possible:
+                                stats_no_v[match.code_type] += 1
+                            else:
+                                stats_f[match.code_type] += 1
+    print('verified {}'.format(stats_v))
+    print('not verified {}'.format(stats_no_v))
+    print('falsified {}'.format(stats_f))
+
+
+def get_code_stats_checked(filename_proto):
+    stats_v = collections.defaultdict(int)
+    stats_no_v = collections.defaultdict(int)
+    stats_f = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for domains in domain_dict.values():
+                    for domain in domains:
+                        if domain.matching_match:
+                            stats_v[domain.matching_match.code_type] += 1
+                            continue
+                        for match in domain.all_matches:
+                            if match.possible:
+                                stats_no_v[match.code_type] += 1
+                            else:
+                                stats_f[match.code_type] += 1
+    print('verified {}'.format(stats_v))
+    print('not verified {}'.format(stats_no_v))
+    print('falsified {}'.format(stats_f))
+
+def get_code_stats(filename_proto):
+    stats = collections.defaultdict(int)
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_list = util.json_loads(line)
+                for domain in domain_list:
+                    for match in domain.all_matches:
+                        stats[match.code_type] += 1
+    print(stats)
+
+def get_clli_falsified(filename_proto):
+    clli_domains = []
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                domain_dict = util.json_loads(line)
+                for domain in domain_dict[util.DomainType.no_location.value]:
+                    clli_matches = [match for match in domain.all_matches
+                                    if match.code_type == util.LocationCodeType.clli]
+                    if clli_matches:
+                        clli_domains.append(domain)
+    return clli_domains
+
+def count_domains(filename_proto):
+    count_d = 0
+    for i in range(0,8):
+        with open(filename_proto.format(i)) as d_file:
+            for line in d_file:
+                count_d += len(json.loads(line))
+    print(count_d)
+
+
+def collect_rtts(filename_proto):
+    cor_rtts = []
+    no_v_rtts = []
+    for i in range(0, 8):
+        with open(filename_proto.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                for domain in domains[util.DomainType.correct.value]:
+                    if not domain.matching_match.matching_rtt:
+                        print(domain.domain_name)
+                        print(domain.ip_address)
+                    else:
+                        cor_rtts.append(domain.matching_match.matching_rtt)
+                for domain in domains[util.DomainType.no_verification.value]:
+                    rtts = [match.matching_rtt for match in domain.all_matches if match.matching_rtt and match.matching_rtt > 0]
+                    if rtts:
+                        no_v_rtts.append(min(rtts))
+    print('finished collecting')
+    with open(os.path.join(os.path.dirname(filename_proto), 'corr_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in cor_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    with open(os.path.join(os.path.dirname(filename_proto), 'no_v_rtts'), 'w') as output_file:
+        wr_str = ''
+        for rtt in no_v_rtts:
+            wr_str += '{}\n'.format(rtt)
+        output_file.write(wr_str)
+    print('cor avg {}  min {}   max {}'.format((sum(cor_rtts)/len(cor_rtts)), min(cor_rtts),
+                                               max(cor_rtts)))
+    print('nov avg {}  min {}   max {}'.format((sum(no_v_rtts) / len(no_v_rtts)), min(no_v_rtts),
+                                               max(no_v_rtts)))
+
+
+collect_rtts('/data2/router-ip-filtered/wip/router.domains-{}-found.checked')
+collect_rtts('/data2/router-ipv6-cleared/ipv6_cleaned_rdns-{}-found.checked')
+
+rtts=[]
+with open('/data2/trie-results/corr_rtts') as rtt_file:
+    for line in rtt_file:
+        rtts.append(float(line.strip()))
+
+
+def count_ips_v6():
+    ips = []
+    filename = '/data2/router-ipv6-cleared/ipfiltered/ipv6_cleaned_rdns-{}-found.json'
+    for i in range(0, 8):
+        with open(filename.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                ips.extend([domain.ipv6_address for domain in domains])
+    u_ips = set(ips)
+    print(len(ips))
+    print(len(u_ips))
+    a_ips = set()
+    with open('/data/rdns-parse/ipv6-router.ips.announced') as ips_file:
+        for line in ips_file:
+            line = line.strip()
+            a_ips.add(line)
+    print('filtered {}'.format(len(u_ips) - len(u_ips.intersection(a_ips))))
+    with open('/data/ipv6-zmap.results') as zmap_file:
+        _ = zmap_file.readline()
+        line = zmap_file.readline()
+        results = util.json_loads(line)
+    reachables = set(results.keys())
+    # print(len(reachables))
+    # print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    print('timeouts {}'.format(
+        len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
+        len(u_ips) - len(u_ips.intersection(a_ips)))))
+
+
+# file_name_v4 = '/data2/trie-results/router.domains-{}-found.json'
+# file_name_v6 = '/data2/rdns-results-v6/ipv6_rdns-{}-found.json'
+def count_ips():
+    file_name = '/data2/router-ip-filtered/woip/router.domains-{}-found.json'
+    ips = []
+    for i in range(0, 8):
+        with open(file_name.format(i)) as file:
+            for line in file:
+                domains = util.json_loads(line)
+                ips.extend([domain.ip_address for domain in domains])
+    u_ips = set(ips)
+    print(len(u_ips))
+    a_ips = set()
+    with open('/data/scan-2016-07-15/dallas/router.ips.announced') as ips_file:
+        for line in ips_file:
+            line = line.strip()
+            a_ips.add(line)
+    print(len(u_ips.intersection(a_ips)))
+    print('filtered {}'.format(len(u_ips) - len(u_ips.intersection(a_ips))))
+    with open('/data/cleared-ipv4-results.zmap') as zmap_file:
+        _ = zmap_file.readline()
+        line = zmap_file.readline()
+        results = util.json_loads(line)
+    reachables = set(results.keys())
+    # print(len(reachables))
+    # print(len(u_ips.intersection(a_ips).intersection(reachables)))
+    print('timeouts {}'.format(
+        len(u_ips) - len(u_ips.intersection(a_ips).intersection(reachables)) - (
+        len(u_ips) - len(u_ips.intersection(a_ips)))))
+
+
+def count_domains(filename):
+    sum_count = 0
+    for i in range(0, 8):
+        with open(filename.format(i)) as d_file:
+            for line in d_file:
+                domains = util.json_loads(line)
+                sum_count += len(domains)
+    print(sum_count)
+
+
+def filter_code_type(filename, code_type):
+    w_domains = []
+    sum_count = 0
+    for i in range(0, 8):
+        with open(filename.format(i)) as d_file:
+            for line in d_file:
+                domains = util.json_loads(line)
+                for domain in domains:
+                    sum_count += 1
+                    matches = domain.all_matches
+                    for match in matches:
+                        if match.code_type == code_type:
+                            w_domains.append(domain)
+                            break
+    with open(filename.format('filter'), 'w') as o_file:
+        util.json_dump(w_domains, o_file)
+        o_file.write('\n')
+    print('len {} form {}'.format(len(w_domains), sum_count))
