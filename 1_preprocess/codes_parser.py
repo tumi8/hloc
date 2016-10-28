@@ -9,7 +9,7 @@
     * You can obtain a recent copy from geonames.org
 * Filters location for minimum population
 * Merges locations from various sources
-  
+
 """
 from __future__ import print_function
 import ujson as json
@@ -656,9 +656,9 @@ def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('-a', '--load-airport-codes', action='store_true',
                         dest='airport_codes',
-                        help='load airport_codes from world-airport-codes.com')
+                        help='download airport_codes from world-airport-codes.com')
     parser.add_argument('-o', '--load-offline-airport-codes', type=str,
-                        help='Do not load'
+                        help='Do not download'
                              ' the website but use the local files in the stated folder',
                         dest='offline_airportcodes')
     parser.add_argument('-l', '--locode', dest='locode', type=str,
@@ -692,16 +692,6 @@ def main():
     args = parser.parse_args()
     global THREADS_SEMA
     THREADS_SEMA = Semaphore(args.maxThreads)
-    # if args.file:
-    #     try:
-    #         locationFile = open(args.file, 'r')
-    #         global LOCATION_CODES
-    #         LOCATION_CODES = json.load(locationFile)
-    #         locationFile.close()
-    #     except Exception:
-    #         print('use a valid filepath for the -f argument!')
-    #         raise
-
     parse_codes(args)
 
 
