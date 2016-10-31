@@ -20,8 +20,8 @@ import mmap
 import configparser
 import sys
 
-from . import util
-from .util import Domain
+from .. import util
+from ..util import Domain
 
 logger = None
 

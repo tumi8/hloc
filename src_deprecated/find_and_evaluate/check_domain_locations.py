@@ -975,64 +975,6 @@ def filter_possible_matches(matches: [util.DomainLabelMatch], results: [util.Loc
     return len(matches) > 0, None
 
 
-# def test_netsec_server(ip_address: str, chair_server_locks: [str, threading.Lock]) -> \
-#         [util.LocationResult]:
-#     """Test from the network chairs server the rtts and returns them in a dict"""
-#     ret = []
-#     server_configs = {
-#         'm': {'user': 'root', 'port': 15901, 'server': 'planetlab7.net.in.tum.de'},
-#         's': {'user': 'root', 'port': None, 'server': '139.162.29.117'},
-#         'd': {'user': 'root', 'port': None, 'server': '45.33.5.55'}
-#         }
-#     chair_server_locks['m'].acquire()
-#     ret.append(util.LocationResult(MUNICH_ID,
-#                                    get_min_rtt(
-#                                        ssh_ping(server_configs['m'], ip_address)),
-#                                    COORDS[MUNICH_ID]['gps_coords']))
-#     chair_server_locks['m'].release()
-#     chair_server_locks['s'].acquire()
-#     ret.append(util.LocationResult(SINGAPORE_ID,
-#                                    get_min_rtt(
-#                                        ssh_ping(server_configs['s'], ip_address)),
-#                                    COORDS[SINGAPORE_ID]['gps_coords']))
-#     chair_server_locks['s'].release()
-#     chair_server_locks['d'].acquire()
-#     ret.append(util.LocationResult(DALLAS_ID,
-#                                    get_min_rtt(
-#                                        ssh_ping(server_configs['d'], ip_address)),
-#                                    COORDS[DALLAS_ID]['gps_coords']))
-#     chair_server_locks['d'].release()
-#     if ret[0].rtt is None and ret[1].rtt is None and ret[2].rtt is None:
-#         return None
-#     return ret
-#
-#
-# def ssh_ping(server_conf: [str, [str, object]], ip_address: str) -> str:
-#     """Perform a ping from the server with server_conf over ssh"""
-#     # build ssh arguments
-#     args = ['ssh']
-#     if server_conf['port'] is not None:
-#         args.append('-p')
-#         args.append(str(server_conf['port']))
-#     args.append('{0}@{1}'.format(server_conf['user'], server_conf['server']))
-#     args.extend(['ping', '-fnc', '4', ip_address])  # '-W 1',
-#     try:
-#         output = subprocess.check_output(args, timeout=45)
-#     except subprocess.CalledProcessError as error:
-#         if error.returncode == 1:
-#             return None
-#         elif error.returncode == 255:
-#             time.sleep(3)
-#             return ssh_ping(server_conf, ip_address)
-#         logger.error(error.output)
-#         raise error
-#     except subprocess.TimeoutExpired:
-#         return None
-#     except:
-#         raise
-#     return str(output)
-
-
 def get_min_rtt(ping_output: str) -> float:
     """
     parses the min rtt from a ping output
@@ -1455,28 +1397,6 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
                 'radius': '{},{}:{}'.format(location.lat, location.lon, distance),
                 # 'limit': '500'
                 }
-
-            # nodes = []
-            # available_probes = []
-            # next_is_available = True
-            # while next_is_available:
-            #     params['offset'] = len(nodes)
-            #     response_dict = json_request_get_wrapper('https://atlas.ripe.net/api/v1/probe/',
-            #                                              slow_down_sema, params=params)
-            #     if response_dict is not None and response_dict['meta']['total_count'] > 0:
-            #         next_is_available = response_dict['meta']['next'] is not None
-            #         nodes.extend(response_dict['objects'])
-            #         available_probes = [
-            #             node for node in response_dict['objects']
-            #             if (node['status_name'] == 'Connected' and
-            #                 'system-{}-works'.format(ip_version) in node['tags'] and
-            #                 'system-{}-capable'.format(ip_version) in node['tags'])]
-            #     else:
-            #         break
-            # if len(nodes) > 0:
-            #     location.nodes = nodes
-            #     location.available_nodes = available_probes
-            #     return
 
             slow_down_sema.acquire()
             nodes = ripe_atlas.ProbeRequest(**params)

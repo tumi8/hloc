@@ -11,7 +11,7 @@ RED_COLOR = '#FF0000'
 logger = None
 
 
-def main():
+def main_old():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', dest='drop_filename_proto', type=str,
                         help=r'The path to the files with {} instead of the filenumber'
@@ -215,6 +215,148 @@ def calc_stats(location_counts, codes, locations, output_filename):
 
     codes_cdf = np.sort([code_eval['count'] for code_eval in codes.values()])[::-1]
     np.savetxt(output_filename, codes_cdf)
+
+
+
+
+
+
+
+def main():
+    """Main"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-t', dest='trie_filename_proto', type=str,
+                        help=r'The path to the files with {} instead of the filenumber'
+                             ' in the name so it is possible to format the string')
+    parser.add_argument('-loc', '--location-file-name', required=True, type=str,
+                        dest='location_filename', help='The path to the location file.'
+                        ' The output file from the codes_parser')
+    args = parser.parse_args()
+
+    with open(args.location_filename) as location_file:
+        locations = util.json_load(location_file)
+
+    no_probe_locs = []
+    for loc in locations.values():
+        if not loc.available_nodes:
+            no_probe_locs.append(loc)
+
+    domain_locations = []
+    with open(args.trie_filename_proto) as domains_file:
+        for line in domains_file:
+            domains = util.json_loads(line)
+            for domain in domains[util.DomainType.correct.value]:
+                domain_locations.append(domain.location_id)
+
+    print(len(domain_locations))
+    domain_locations_count = {}
+    for loc_id in set(domain_locations):
+        domain_locations_count[loc_id] = domain_locations.count(loc_id)
+
+    application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
+                                                      'web_apps/static')
+    flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
+
+    matches_circles_map = create_verified_map_circles(domain_locations_count, locations)
+    matches_marker_all_map = create_verified_map_marker(domain_locations_count, locations, all=True)
+    matches_marker_map = create_verified_map_marker(domain_locations_count, locations)
+
+    no_probe_circles_map = create_no_probe_map_circles(no_probe_locs)
+    no_probe_marker_map = create_no_probe_map_marker(no_probe_locs)
+
+    @application.route('/<any(noProbe,verified):mode>/<any(circles,markers):mark_type>')
+    def matches_map(mode, mark_type):
+        if mode == 'verified':
+            if mark_type == 'circles':
+                matches_map_obj = matches_circles_map
+            else:
+                cluster = flask.request.args.get('cluster', None) is not None
+                show_all = flask.request.args.get('all', None) is not None
+                if not show_all:
+                    matches_map_obj = matches_marker_map
+                else:
+                    matches_map_obj = matches_marker_all_map
+                matches_map_obj.cluster = cluster
+        else:
+            if mark_type == 'circles':
+                matches_map_obj = no_probe_circles_map
+            else:
+                cluster = flask.request.args.get('cluster', None) is not None
+                matches_map_obj = no_probe_marker_map
+                matches_map_obj.cluster = cluster
+        return flask.render_template('matches_maps.html', matches_map=matches_map_obj)
+
+    application.run()
+
+
+def create_verified_map_circles(domain_locations_count, locations):
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN', style='height:100%;')
+    default_dict = {
+        'stroke_color': RED_COLOR,
+        'stroke_opacity': 0.8,
+        'stroke_weight': 2,
+        'fill_color': RED_COLOR,
+        'fill_opacity': 0.35
+    }
+
+    for loc_id in domain_locations_count.keys():
+        location_dct = default_dict.copy()
+        location = locations[str(loc_id)]
+        matches_map.add_circle(center_lat=location.lat,
+                               center_lng=location.lon,
+                               radius=30000, **location_dct)
+    return matches_map
+
+
+def create_verified_map_marker(domain_locations_count, locations, all=False):
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN', style='height:100%;',
+                                       cluster_imagepath='/static/images/m')
+    for loc_id, loc_count in domain_locations_count.items():
+        location = locations[str(loc_id)]
+        def get_location_html_infobox(s_location):
+            return '<strong>{}:</strong> {} <br>{} {}'.format(s_location.city_name, loc_count,
+                                                          s_location.lat, s_location.lon)
+        if all:
+            for _ in range(0, loc_count):
+                matches_map.add_marker(lat=location.lat, lng=location.lon)
+        else:
+            matches_map.add_marker(lat=location.lat, lng=location.lon,
+                                   infobox=get_location_html_infobox(location))
+    return matches_map
+
+
+def create_no_probe_map_circles(no_probe_locs):
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN', style='height:100%;')
+    default_dict = {
+        'stroke_color': RED_COLOR,
+        'stroke_opacity': 0.8,
+        'stroke_weight': 2,
+        'fill_color': RED_COLOR,
+        'fill_opacity': 0.35
+    }
+
+    for location in no_probe_locs:
+        location_dct = default_dict.copy()
+        matches_map.add_circle(center_lat=location.lat,
+                               center_lng=location.lon,
+                               radius=30000, **location_dct)
+    return matches_map
+
+
+def create_no_probe_map_marker(no_probe_locs):
+    matches_map = flask_googlemaps.Map(identifier='matches_mao', lat=0, lng=0, zoom=4,
+                                       maptype='TERRAIN', style='height:100%;',
+                                       cluster_imagepath='/static/images/m')
+    for location in no_probe_locs:
+        def get_location_html_infobox(location):
+            return '<strong>{}:</strong><br>{} {}'.format(location.city_name,
+                                                          location.lat, location.lon)
+        matches_map.add_marker(lat=location.lat, lng=location.lon,
+                               infobox=get_location_html_infobox(location))
+    return matches_map
 
 
 if __name__ == "__main__":
