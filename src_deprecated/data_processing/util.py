@@ -20,6 +20,12 @@ DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 CLASS_IDENTIFIER = '_c'
 IPV4_IDENTIFIER = 'ipv4'
 IPV6_IDENTIFIER = 'ipv6'
+PROBE_API_KEY = '66bcd4c1-fdca-46f1-b1b9-8f7c333379e9'
+PROBE_API_URL_PING = \
+    'https://kong.speedcheckerapi.com:8443/ProbeAPIService/Probes.svc/StartPingTestByBoundingBox'
+PROBE_API_URL_GET_PROBES = \
+    'https://kong.speedcheckerapi.com:8443/ProbeAPIService/Probes.svc/GetProbesByBoundingBox'
+EARTH_RADIUS = 6371
 
 
 #######################################
@@ -326,7 +332,7 @@ class GPSLocation(JSONBase):
         lat2 = math.radians(float(location.lat))
 
         return math.sqrt((((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
-            lat2 - lat1) ** 2)) * 6371
+            lat2 - lat1) ** 2)) * EARTH_RADIUS
 
     def gps_distance_haversine(self, location2):
         """
@@ -344,7 +350,30 @@ class GPSLocation(JSONBase):
         tmp = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
         ftmp = 2 * math.asin(math.sqrt(tmp))
         # Radius of earth in kilometers. Use 3956 for miles
-        return ftmp * 6371
+        return ftmp * EARTH_RADIUS
+
+    def location_with_distance_and_bearing(self, distance: float, bearing: float):
+        """
+        Calculate a new Location with the distance from this location in km and in
+        direction of bearing
+        :param distance: the distance in km
+        :param bearing: the bearing in degrees 0 is north and it goes clockwise
+        :return: a new location in direction of bearing with the distance
+        """
+        bearing_rad = math.radians(bearing)
+        angular_dist = distance/EARTH_RADIUS
+        lat_rad = math.radians(float(self.lat))
+        lon_rad = math.radians(float(self.lon))
+
+        lat_new = math.asin(math.sin(lat_rad)*math.cos(angular_dist) +
+                            math.cos(lat_rad)*math.sin(angular_dist)*math.cos(bearing_rad))
+        lon_new_temp = math.atan2(
+            math.sin(bearing_rad)*math.sin(angular_dist)*math.cos(lat_rad),
+            math.cos(angular_dist)-math.sin(lat_rad)*math.sin(lat_new))
+        lon_new = ((lon_rad - lon_new_temp + math.pi) % (2*math.pi)) - math.pi
+
+        return GPSLocation(math.degrees(lat_new), math.degrees(lon_new))
+
 
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
@@ -382,7 +411,7 @@ class Location(GPSLocation):
 
     __slots__ = ['lat', 'lon', 'city_name', 'state', 'state_code', 'population',
                  'airport_info', 'locode', 'clli', 'alternate_names', 'nodes',
-                 'available_nodes']
+                 'available_nodes', 'has_probeapi']
 
     class PropertyKey:
         city_name = '3'
@@ -395,6 +424,7 @@ class Location(GPSLocation):
         locode = 'a'
         nodes = 'b'
         available_nodes = 'c'
+        has_probeapi = 'd'
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
                  population=0):
@@ -409,6 +439,7 @@ class Location(GPSLocation):
         self.alternate_names = []
         self.nodes = None
         self.available_nodes = None
+        self.has_probeapi = False
         super().__init__(lat, lon)
 
     def add_airport_info(self):
@@ -432,7 +463,7 @@ class Location(GPSLocation):
             self.PropertyKey.state_code: self.state_code,
             self.PropertyKey.population: self.population,
             self.PropertyKey.clli: self.clli,
-            self.PropertyKey.alternate_names: self.alternate_names
+            self.PropertyKey.alternate_names: self.alternate_names,
         })
         if self.airport_info:
             ret_dict[self.PropertyKey.airport_info] = self.airport_info.dict_representation()
@@ -445,6 +476,10 @@ class Location(GPSLocation):
 
         if self.nodes:
             ret_dict[self.PropertyKey.nodes] = self.nodes
+
+        if self.has_probeapi:
+            ret_dict[self.PropertyKey.has_probeapi] = [loc.dict_representation()
+                                                       for loc in self.has_probeapi]
 
         return ret_dict
 
@@ -484,6 +519,7 @@ class Location(GPSLocation):
         obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
                        dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
                        dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
+
         if Location.PropertyKey.clli in dct:
             obj.clli = dct[Location.PropertyKey.clli]
         if Location.PropertyKey.alternate_names in dct:
@@ -498,6 +534,8 @@ class Location(GPSLocation):
             obj.available_nodes = dct[Location.PropertyKey.available_nodes]
         if Location.PropertyKey.nodes in dct:
             obj.nodes = dct[Location.PropertyKey.nodes]
+        if Location.PropertyKey.has_probeapi in dct:
+            obj.has_probeapi = dct[Location.PropertyKey.has_probeapi]
         return obj
 
     def copy(self):

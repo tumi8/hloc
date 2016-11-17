@@ -1074,6 +1074,51 @@ def create_and_check_measurement(ip_addr: [str, str],
 USE_WRAPPER = True
 
 
+def create_probe_api_measurement(ip_addr: [str, str], location: util.Location,
+                                 slow_down_sema: mp.Semaphore):
+    """Creates a new Probe API measurement"""
+
+    url = util.PROBE_API_URL_PING
+    params = {
+        'probesLimit': 5,
+        'destination': ip_addr[0],
+        'minLatitude': location.lat - 4,
+        'minLongitude': location.lon - 4,
+        'maxLatitude': location.lat + 4,
+        'maxLongitude': location.lon + 4
+    }
+    headers = {
+        'apikey': util.PROBE_API_KEY, 'Accept': 'application/json'
+    }
+    slow_down_sema.acquire()
+    response = requests.get(url, params=params, headers=headers, timeout=10)
+    print(response.url)
+    response_dct = response.json()
+
+    print(response_dct)
+    if 'Message' in response_dct:
+        return None
+
+    results = response_dct['StartPingTestByBoundingBoxResult']
+    min_rtt = None
+    min_location = None
+    for result in results:
+        ping_arr = result['Ping']
+        for ping in ping_arr:
+            if ping['Status'] == 'OK':
+                times = [float(time) for time in ping['PingTimeArray']]
+                min_time = min(times)
+                if min_rtt:
+                    if min_time < min_rtt:
+                        min_rtt = min_time
+                        min_location = result['Location']
+                else:
+                    min_rtt = min_time
+                    min_location = result['Location']
+
+    return min_rtt, min_location
+
+
 def create_ripe_measurement(ip_addr: [str, str], location: util.Location, near_node: [str, object],
                             ripe_slow_down_sema: mp.Semaphore, bill_to_address: str=None) -> int:
     """Creates a new ripe measurement to the first near node and returns the measurement id"""
