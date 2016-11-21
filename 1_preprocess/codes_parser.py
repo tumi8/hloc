@@ -604,8 +604,8 @@ def parse_metropolitan_codes(metropolitan_filepath: str) -> [Location]:
 
 def parse_codes(args):
     """start real parsing"""
-    startTime = time.clock()
-    startRTime = time.time()
+    start_time = time.clock()
+    start_rtime = time.time()
     if args.airport_codes:
         parse_airport_codes(args)
         if args.metropolitan_file:
@@ -631,13 +631,13 @@ def parse_codes(args):
     location_codes = merge_location_codes(args.merge_radius)
 
     locations = idfy_codes(location_codes)
-    characterCodesFile = open(args.filename, 'w')
-    util.json_dump(locations, characterCodesFile)
-    characterCodesFile.close()
-    endTime = time.clock()
-    endRTime = time.time()
-    print('finished and needed ', (endTime - startTime), ' seconds of the'
-          'processor computation time\nAnd ', int(endRTime - startRTime),
+    with open(args.filename, 'w') as character_codes_file:
+        util.json_dump(locations, character_codes_file)
+        
+    end_time = time.clock()
+    end_rtime = time.time()
+    print('finished and needed ', (end_time - start_time), ' seconds of the'
+          'processor computation time\nAnd ', int(end_rtime - start_rtime),
           ' seconds of the real world time.\nCollected data on ', len(location_codes),
           ' locations.')
 
