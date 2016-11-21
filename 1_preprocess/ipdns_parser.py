@@ -10,7 +10,7 @@ import time
 import os
 import collections
 import multiprocessing as mp
-import ujson as json
+import json
 import configargparse
 import marisa_trie
 

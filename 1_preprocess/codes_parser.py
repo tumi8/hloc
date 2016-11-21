@@ -11,8 +11,7 @@
 * Merges locations from various sources
 
 """
-from __future__ import print_function
-import ujson as json
+import json
 import re
 import argparse
 from string import ascii_lowercase
