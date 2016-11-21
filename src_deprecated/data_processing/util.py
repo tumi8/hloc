@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Some utility functions"""
-from __future__ import print_function
 import math
 import subprocess
 import string
