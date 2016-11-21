@@ -23,8 +23,7 @@ from threading import Thread
 from threading import Semaphore
 import requests
 
-from .. import util
-from ..util import Location
+import rdns_parse.util as util
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -44,7 +43,7 @@ class WorldAirportCodesParser(HTMLParser):
     A Parser which extends the standard Python HTMLParser
     to parse the airport detailed information side
     """
-    airportInfo = Location(None, None)
+    airportInfo = util.Location(None, None)
     __currentKey = None
     __th = False
 
@@ -108,7 +107,7 @@ class WorldAirportCodesParser(HTMLParser):
     def reset(self):
         self.__currentKey = None
         self.__th = False
-        self.airportInfo = Location(None, None)
+        self.airportInfo = util.Location(None, None)
         return HTMLParser.reset(self)
 
 
@@ -262,7 +261,7 @@ def get_locode_locations(locode_filename):
                 continue
 
             # create a new entry
-            airport_info = Location(**location_dict)
+            airport_info = util.Location(**location_dict)
             airport_info.add_locode_info()
             airport_info.state_code = current_state['state_code'].lower()
             airport_info.locode.place_codes.append(normalize_locode_info(
@@ -334,7 +333,7 @@ def get_clli_codes(file_path):
             # [0:-1] remove last character \n and extract the information
             line = line.strip()
             clli, lat, lon = line.split('\t')
-            new_clli_info = Location(lat=float(lat), lon=float(lon))
+            new_clli_info = util.Location(lat=float(lat), lon=float(lon))
             new_clli_info.clli.append(clli[0:6])
             CLLI_LOCATION_CODES.append(new_clli_info)
 
@@ -364,7 +363,7 @@ def get_geo_names(file_path, min_population):
 
             # name = columns[1]
             alternatenames = columns[3].split(',')
-            new_geo_names_info = Location(lat=float(columns[4]), lon=float(columns[5]))
+            new_geo_names_info = util.Location(lat=float(columns[4]), lon=float(columns[5]))
             new_geo_names_info.city_name = columns[2].lower()
             if NORMAL_CHARS_REGEX.search(new_geo_names_info.city_name) is None:
                 continue
@@ -588,13 +587,13 @@ def print_stats(location_codes):
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
 
 
-def parse_metropolitan_codes(metropolitan_filepath: str) -> [Location]:
+def parse_metropolitan_codes(metropolitan_filepath: str) -> [util.Location]:
     """Parses the Iata metropolitan codes"""
     metropolitan_locations = []
     with open(metropolitan_filepath) as metropolitan_file:
         for line in metropolitan_file:
             code, lat, lon = line.strip().split(',')
-            location = Location(lat=float(lat), lon=float(lon))
+            location = util.Location(lat=float(lat), lon=float(lon))
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
