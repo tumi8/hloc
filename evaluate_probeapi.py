@@ -46,8 +46,8 @@ def main():
     logger = util.setup_logger(args.log_file, 'eval_ProbeAPI', loglevel=args.log_level)
     logger.debug('starting')
 
-    with open(args.locationFile) as locationFile:
-        locations = util.json_load(locationFile)
+    with open(args.location_file_name) as location_file:
+        locations = util.json_load(location_file)
 
     for location in locations.values():
         location.nodes = None
