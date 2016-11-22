@@ -23,7 +23,7 @@ from threading import Thread
 from threading import Semaphore
 import requests
 
-import rdns_parse.util as util
+from .. import util
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
