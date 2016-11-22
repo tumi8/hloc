@@ -10,7 +10,7 @@ import threading
 import math
 import time
 
-import util
+from . import util
 
 logger = None
 
