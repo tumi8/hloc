@@ -778,6 +778,11 @@ class DomainLabel(JSONBase):
         self.label = label
         self.matches = []
 
+    @property
+    def sub_labels(self):
+        """Returns a list of strings with the label separated by dash"""
+        return self.label.split('-')
+
     def dict_representation(self):
         """Returns a dictionary with the information of the object"""
         return {
