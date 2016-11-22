@@ -79,9 +79,10 @@ class WorldAirportCodesParser(HTMLParser):
         elif self.__currentKey is None:
             return
         elif self.__currentKey == 'cityName':
-            city_name, state_string = data.split(',')
-            state_string = state_string.strip()
-            self.airportInfo.city_name = city_name.lower()
+            splitIndex = data.find(',') # use split
+            cityName = data[:splitIndex]
+            stateString = data[splitIndex + 2:]
+            self.airportInfo.city_name = cityName.lower()
             if NORMAL_CHARS_REGEX.search(self.airportInfo.city_name) is None:
                 self.airportInfo.city_name = None
             state_code_index_s = state_string.find('(') + 1
