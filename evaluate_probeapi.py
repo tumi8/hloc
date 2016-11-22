@@ -10,7 +10,7 @@ import threading
 import math
 import time
 
-import src.data_processing.util as util
+import util
 
 logger = None
 
@@ -21,13 +21,13 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='The path to the location file.'
                              ' The output file from the codes_parser')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
-                            dest='ripeRequestLimit',
-                            help='How many request should normally be allowed per second '
-                                 'to the ripe server', default=25)
+                        dest='ripeRequestLimit',
+                        help='How many request should normally be allowed per second '
+                             'to the ripe server', default=25)
     parser.add_argument('-b', '--ripe-request-burst-limit', type=int,
-                            dest='ripeRequestBurstLimit',
-                            help='How many request should at maximum be allowed per second'
-                                 ' to the ripe server', default=40)
+                        dest='ripeRequestBurstLimit',
+                        help='How many request should at maximum be allowed per second'
+                             ' to the ripe server', default=40)
     parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
