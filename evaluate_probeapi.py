@@ -72,7 +72,7 @@ def main():
                     rm_thread_ids.append(id)
 
             for id in rm_thread_ids:
-                threads.remove(threads[id])
+                del threads[id]
 
         thread_sema.acquire()
         thread = threading.Thread(target=get_nearest_ripe_nodes,
