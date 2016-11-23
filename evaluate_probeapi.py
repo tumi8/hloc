@@ -74,7 +74,7 @@ def main():
 
         thread_sema.acquire()
         thread = threading.Thread(target=get_nearest_ripe_nodes,
-                                  args=(location, 1000, args.ip_version, probe_slow_down_sema,
+                                  args=(location, 1000, 'ipv4', probe_slow_down_sema,
                                         thread_sema))
         thread.start()
         threads.append(thread)
