@@ -230,8 +230,6 @@ def get_nearest_probeapi_probes(location: util.Location, max_distance: int,
                 location.has_probeapi = (min_location, max_location)
                 return
 
-            logger.warning('did not work: {}'.format(response_dct))
-
     finally:
         if thread_sema:
             thread_sema.release()
