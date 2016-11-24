@@ -206,8 +206,8 @@ def get_nearest_probeapi_probes(location: util.Location, max_distance: int,
                 break
 
             distance_gc = math.sqrt(2 * distance**2)
-            min_location = location.location_with_distance_and_bearing(distance_gc, 315)
-            max_location = location.location_with_distance_and_bearing(distance_gc, 135)
+            min_location = location.location_with_distance_and_bearing(distance_gc, 135)
+            max_location = location.location_with_distance_and_bearing(distance_gc, 315)
             params = {
                 'minLatitude': min_location.lat,
                 'minLongitude': min_location.lon,
@@ -226,7 +226,7 @@ def get_nearest_probeapi_probes(location: util.Location, max_distance: int,
                 logger.warning('Error in probes request:\n{}'.format(response_dct))
                 continue
 
-            if len(response_dct['GetProbesByBoundingBoxResult']):
+            if response_dct['GetProbesByBoundingBoxResult']:
                 location.has_probeapi = (min_location, max_location)
                 return
 

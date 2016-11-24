@@ -356,7 +356,7 @@ class GPSLocation(JSONBase):
         Calculate a new Location with the distance from this location in km and in
         direction of bearing
         :param distance: the distance in km
-        :param bearing: the bearing in degrees 0 is north and it goes clockwise
+        :param bearing: the bearing in degrees 0 is north and it goes counter clockwise
         :return: a new location in direction of bearing with the distance
         """
         bearing_rad = math.radians(bearing)
