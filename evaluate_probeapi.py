@@ -71,7 +71,7 @@ def main():
                     thread.join()
                     rm_thread_ids.append(id)
 
-            for id in rm_thread_ids:
+            for id in rm_thread_ids[::-1]:
                 del threads[id]
 
         thread_sema.acquire()
