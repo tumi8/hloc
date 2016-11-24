@@ -106,9 +106,9 @@ def main():
         else:
             count_dict['has_none'] += 1
 
-    print(count_dict)
-    with open(args.locationFile, 'w') as locationFile:
-        util.json_dump(locations, locationFile)
+    logger.info(count_dict)
+    with open(args.location_file_name, 'w') as location_file:
+        util.json_dump(locations, location_file)
 
 
 def generate_request_tokens(sema: threading.Semaphore, limit: int, finish_event: threading.Event):
