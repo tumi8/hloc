@@ -541,7 +541,7 @@ class Location(GPSLocation):
         obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
                        self.population)
         obj.id = self.id
-        obj.clli = clli
+        obj.clli = self.clli
         obj.airport_info = self.airport_info.copy()
         obj.locode = self.locode.copy()
         obj.available_nodes = self.available_nodes.copy()

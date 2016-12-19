@@ -66,13 +66,13 @@ def main():
     for location in locations.values():
         if len(threads) > 10:
             rm_thread_ids = []
-            for id, thread in enumerate(threads):
+            for index, thread in enumerate(threads):
                 if not thread.is_alive():
                     thread.join()
-                    rm_thread_ids.append(id)
+                    rm_thread_ids.append(index)
 
-            for id in rm_thread_ids[::-1]:
-                del threads[id]
+            for index in rm_thread_ids[::-1]:
+                del threads[index]
 
         thread_sema.acquire()
         thread = threading.Thread(target=get_nearest_ripe_nodes,
