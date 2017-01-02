@@ -13,6 +13,7 @@ import os
 import json
 import socket
 import binascii
+import inspect
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
@@ -152,6 +153,11 @@ def int_to_alphanumeric(num: int):
         return rest_ret
     else:
         return int_to_alphanumeric(div) + rest_ret
+
+
+def get_class_properties(subj_class) -> [str]:
+    properties = inspect.getmembers(subj_class, lambda a: not (inspect.isroutine(a)))
+    return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
 
 
 ###################################################################################################
