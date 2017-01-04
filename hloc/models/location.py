@@ -5,7 +5,6 @@ import math
 import sys
 
 from hloc import constants
-from .codes import AirportInfo, LocodeInfo
 
 
 @enum.unique
