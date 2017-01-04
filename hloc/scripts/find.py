@@ -5,16 +5,16 @@
  * Can use 3 types of blacklist to exclude unlikely matches
 """
 
-import marisa_trie
-import configargparse
-import json
-import multiprocessing as mp
-import time
 import cProfile
 import collections
+import json
 import mmap
+import multiprocessing as mp
+import time
 
-from .. import util
+import configargparse
+
+from hloc import util
 
 logger = None
 
