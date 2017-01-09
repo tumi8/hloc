@@ -13,13 +13,29 @@ import time
 import typing
 
 import ripe.atlas.cousteau as ripe_atlas
+import sqlalchemy as sqla
+import sqlalchemy.orm as sqlorm
 
-from .location import GPSLocation
-from .measurement_result import MeasurementResult
 from hloc import util, constants
+from .location import Location
+from .measurement_result import MeasurementResult
+from .sql_alchemy_base import Base
 
-class Probe(metaclass=abc.ABCMeta):
+
+class Probe(Base, metaclass=abc.ABCMeta):
     """The abstract base class for a Probe used by the HLOC library"""
+
+    __tablename__ = 'probes'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    probe_id = sqla.Column(sqla.String(30))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location.id'))
+    location = sqlorm.relationship('Location', back_populates='probes')
+    last_seen = sqla.Column(sqla.DateTime)
+
+    measurements = sqlorm.relationship('MeasurementResult', back_populates='probe')
+
+    __mapper_args__ = {'polymorphic_on': type}
 
     @abc.abstractmethod
     def measure_rtt(self, dest_address, **kwargs) -> typing.Optional[MeasurementResult]:
@@ -28,7 +44,7 @@ class Probe(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def location(self) -> typing.Optional[GPSLocation]:
+    def location(self) -> typing.Optional[Location]:
         pass
 
     @property
@@ -64,8 +80,12 @@ class AvailableType(enum.Enum):
     unknown = '4'
 
 
-class RipeAtlasProbe(object):
+class RipeAtlasProbe(Base):
     """a representation of the ripe atlas probe"""
+
+    is_ripe_atlas = sqla.Column(sqla.Boolean, default=True)
+
+    __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
 
     __slots__ = ['_id', '_location', '_last_update', '_probe_obj']
 
@@ -99,8 +119,8 @@ class RipeAtlasProbe(object):
 
         if RipeAtlasProbe.JsonKeys.Lat_key in json_dict and \
                 RipeAtlasProbe.JsonKeys.Lon_key in json_dict:
-            self._location = GPSLocation(json_dict[RipeAtlasProbe.JsonKeys.Lat_key],
-                                         json_dict[RipeAtlasProbe.JsonKeys.Lon_key])
+            self._location = Location(json_dict[RipeAtlasProbe.JsonKeys.Lat_key],
+                                      json_dict[RipeAtlasProbe.JsonKeys.Lon_key])
         else:
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
@@ -165,7 +185,7 @@ class RipeAtlasProbe(object):
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
 
     @property
-    def location(self) -> typing.Optional[GPSLocation]:
+    def location(self) -> typing.Optional[Location]:
         return self._location
 
     @property
@@ -177,7 +197,7 @@ class RipeAtlasProbe(object):
     def available(self, max_age=datetime.timedelta(hours=12)) -> AvailableType:
         """
         Should return if the probe is available for measurements
-        :param max_age datetime.timedelta: the maximum age of the info
+        :param max_age: :datetime.timedelta: the maximum age of the info
         """
         if datetime.datetime.now() - max_age >= self._last_update:
             self._update()
@@ -187,13 +207,13 @@ class RipeAtlasProbe(object):
 
         available = AvailableType.not_available
         if self._probe_obj.status == 'Connected' and \
-                        'system-ipv4-works' in [tag['slug'] for tag in self._probe_obj.tags] and \
-                        'system-ipv4-capable' in [tag['slug'] for tag in self._probe_obj.tags]:
+                'system-ipv4-works' in [tag['slug'] for tag in self._probe_obj.tags] and \
+                'system-ipv4-capable' in [tag['slug'] for tag in self._probe_obj.tags]:
             available = AvailableType.ipv4_available
 
         if self._probe_obj.status == 'Connected' and \
-                        'system-ipv6-works' in [tag['slug'] for tag in self._probe_obj.tags] and \
-                        'system-ipv6-capable' in [tag['slug'] for tag in self._probe_obj.tags]:
+                'system-ipv6-works' in [tag['slug'] for tag in self._probe_obj.tags] and \
+                'system-ipv6-capable' in [tag['slug'] for tag in self._probe_obj.tags]:
             if available == AvailableType.ipv4_available:
                 available = AvailableType.both_available
             else:

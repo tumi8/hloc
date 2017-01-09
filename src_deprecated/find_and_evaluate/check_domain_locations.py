@@ -718,7 +718,7 @@ def check_domain_location_ripe(domain: util.Domain,
     def get_next_match():
         """
 
-        :rtype: DomainLabelMatch
+        :rtype: CodeMatch
         """
         nonlocal matches, matched
         logger.debug('{} matches before filter'.format(len(matches)))

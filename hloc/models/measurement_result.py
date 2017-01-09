@@ -1,24 +1,49 @@
 #!/usr/bin/env python3
-
 """
  * All measurement result classes used by the HLOC framework
 """
 
 import abc
+import enum
+
+import sqlalchemy as sqla
+import sqlalchemy.orm as sqlorm
+from sqlalchemy.dialects import postgresql
 
 from hloc import constants
+
+
+class MeasurementError(enum.Enum):
+    not_reachable = 'not_reachable'
+    probe_not_available = 'probe_not_available'
+    probe_error = 'probe_error'
 
 
 class MeasurementResult(metaclass=abc.ABCMeta):
     """the abstract base class for a measurement result"""
 
+    __tablename__ = 'measurement_results'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    platform_id = sqla.Column(sqla.Integer)
+    probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probe.id'))
+    probe = sqlorm.relationship('Probe', back_populates='measurements')
+    execution_time = sqla.Column(sqla.DateTime)
+    destination_address = sqla.Column(postgresql.INET)
+    source_address = sqla.Column(postgresql.INET)
+    error_msg = sqla.Column(postgresql.ENUM(MeasurementError))
+    rtts = sqla.Column(postgresql.ARRAY(sqla.Float))
+    # eventually save ttl if there?
+
+    __mapper_args__ = {'polymorphic_on': type}
 
 
-
-
-"""Old Results object with json en/decoding"""
 class LocationResult(object):
-    """Stores the result for a location"""
+    """
+    Old Results object with json en/decoding
+
+    Stores the result for a location
+    """
 
     class_name_identifier = 'lr'
 

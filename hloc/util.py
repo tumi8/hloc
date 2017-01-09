@@ -140,6 +140,7 @@ def get_class_properties(subj_class) -> [str]:
     properties = inspect.getmembers(subj_class, lambda a: not (inspect.isroutine(a)))
     return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
 
+
 __all__ = ['count_lines',
            'seek_lines',
            'hex_for_ip',

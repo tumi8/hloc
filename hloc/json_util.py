@@ -3,8 +3,9 @@ This module collects all functions related to file saving in json
 """
 
 import json
-from .models import *
+
 from . import constants
+from .models import *
 
 
 def json_object_encoding(obj):
@@ -18,22 +19,22 @@ def json_object_encoding(obj):
 def json_object_decoding(dct):
     """Decodes the dictionary to an object if it is one"""
     if constants.JSON_CLASS_IDENTIFIER in dct:
-        if dct[constants.JSON_CLASS_IDENTIFIER] == Location.class_name_identifier:
-            return Location.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == AirportInfo.class_name_identifier:
-            return AirportInfo.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == LocodeInfo.class_name_identifier:
-            return LocodeInfo.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == LocationResult.class_name_identifier:
-            return LocationResult.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == Domain.class_name_identifier:
-            return Domain.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == DomainLabel.class_name_identifier:
-            return DomainLabel.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == DomainLabelMatch.class_name_identifier:
-            return DomainLabelMatch.create_object_from_dict(dct)
-        if dct[constants.JSON_CLASS_IDENTIFIER] == GPSLocation.class_name_identifier:
-            return GPSLocation.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == LocationInfo.class_name_identifier:
+        #     return LocationInfo.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == AirportInfo.class_name_identifier:
+        #     return AirportInfo.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == LocodeInfo.class_name_identifier:
+        #     return LocodeInfo.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == LocationResult.class_name_identifier:
+        #     return LocationResult.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == Domain.class_name_identifier:
+        #     return Domain.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == DomainLabel.class_name_identifier:
+        #     return DomainLabel.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == CodeMatch.class_name_identifier:
+        #     return CodeMatch.create_object_from_dict(dct)
+        # if dct[constants.JSON_CLASS_IDENTIFIER] == Location.class_name_identifier:
+        #     return Location.create_object_from_dict(dct)
         if dct[constants.JSON_CLASS_IDENTIFIER] == DRoPRule.class_name_identifier:
             return DRoPRule.create_object_from_dict(dct)
     return dct

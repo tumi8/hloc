@@ -1,7 +1,7 @@
 
 import abc
-from .location import GPSLocation, Location, AirportInfo, LocodeInfo
-from .domain import Domain, DomainLabel, DomainLabelMatch
+from .location import Location, LocationInfo, AirportInfo, LocodeInfo
+from .domain import Domain, DomainLabel, CodeMatch
 from .measurement_result import LocationResult
 from .drop_rule import DRoPRule
 
@@ -30,14 +30,14 @@ class JSONBase(metaclass=abc.ABCMeta):
         pass
 
 
-JSONBase.register(GPSLocation)
-JSONBase.register(Location)
-JSONBase.register(AirportInfo)
-JSONBase.register(LocodeInfo)
-JSONBase.register(Domain)
-JSONBase.register(DomainLabel)
-JSONBase.register(DomainLabelMatch)
-JSONBase.register(LocationResult)
+# JSONBase.register(Location)
+# JSONBase.register(LocationInfo)
+# JSONBase.register(AirportInfo)
+# JSONBase.register(LocodeInfo)
+# JSONBase.register(Domain)
+# JSONBase.register(DomainLabel)
+# JSONBase.register(CodeMatch)
+# JSONBase.register(LocationResult)
 JSONBase.register(DRoPRule)
 
 __all__ = ['JSONBase']

@@ -1,10 +1,16 @@
+#!/usr/bin/env python3
+"""The basic location object and all related inherited objects"""
 
 import enum
 import logging
 import math
-import sys
+
+import sqlalchemy as sqla
+import sqlalchemy.orm as sqlorm
+from sqlalchemy.dialects import postgresql
 
 from hloc import constants
+from .sql_alchemy_base import Base
 
 
 @enum.unique
@@ -40,40 +46,26 @@ class LocationCodeType(enum.Enum):
         return r'(?P<type>' + pattern + r')'
 
 
-class GPSLocation(object):
-    """holds the coordinates"""
+class Location(Base):
+    """
+    Basic class
+    just contains the coordinates
+    """
 
-    class_name_identifier = 'gl'
+    __tablename__ = 'locations'
 
-    __slots__ = ['_id', 'lat', 'lon']
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    lat = sqla.Column(sqla.Float)
+    lon = sqla.Column(sqla.Float)
+
+    probes = sqlorm.relationship('Probes', back_populates='location')
+
+    __mapper_args__ = {'polymorphic_on': type}
 
     class PropertyKey:
         id = '0'
         lat = '1'
         lon = '2'
-
-    def __init__(self, lat, lon):
-        """init"""
-        self._id = None
-        self.lat = lat
-        self.lon = lon
-
-    @property
-    def id(self):
-        """Getter for id"""
-        return self._id
-
-    @id.setter
-    def id(self, new_id):
-        """Setter for id"""
-        if new_id is None:
-            self._id = None
-            return
-        try:
-            self._id = int(new_id)
-        except (ValueError, TypeError):
-            logging.critical('Error: GPSLocation.id must be an Integer!', file=sys.stderr)
-            raise
 
     def is_in_radius(self, location, radius):
         """Returns a True if the location is within the radius with the haversine method"""
@@ -116,69 +108,40 @@ class GPSLocation(object):
         :return: a new location in direction of bearing with the distance
         """
         bearing_rad = math.radians(bearing)
-        angular_dist = distance/constants.EARTH_RADIUS
+        angular_dist = distance / constants.EARTH_RADIUS
         lat_rad = math.radians(float(self.lat))
         lon_rad = math.radians(float(self.lon))
 
-        lat_new = math.asin(math.sin(lat_rad)*math.cos(angular_dist) +
-                            math.cos(lat_rad)*math.sin(angular_dist)*math.cos(bearing_rad))
+        lat_new = math.asin(math.sin(lat_rad) * math.cos(angular_dist) +
+                            math.cos(lat_rad) * math.sin(angular_dist) * math.cos(bearing_rad))
         lon_new_temp = math.atan2(
-            math.sin(bearing_rad)*math.sin(angular_dist)*math.cos(lat_rad),
-            math.cos(angular_dist)-math.sin(lat_rad)*math.sin(lat_new))
-        lon_new = ((lon_rad - lon_new_temp + math.pi) % (2*math.pi)) - math.pi
+            math.sin(bearing_rad) * math.sin(angular_dist) * math.cos(lat_rad),
+            math.cos(angular_dist) - math.sin(lat_rad) * math.sin(lat_new))
+        lon_new = ((lon_rad - lon_new_temp + math.pi) % (2 * math.pi)) - math.pi
 
-        return GPSLocation(math.degrees(lat_new), math.degrees(lon_new))
-
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        ret_dict = {
-            constants.JSON_CLASS_IDENTIFIER: self.class_name_identifier,
-            GPSLocation.PropertyKey.lat: self.lat,
-            GPSLocation.PropertyKey.lon: self.lon
-        }
-        if self.id is not None:
-            ret_dict[GPSLocation.PropertyKey.id] = self.id
-
-        return ret_dict
-
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a Location object from a dictionary"""
-        obj = GPSLocation(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon])
-        if GPSLocation.PropertyKey.id in dct:
-            obj.id = dct[GPSLocation.PropertyKey.id]
-        return obj
-
-    def copy(self):
-        obj = GPSLocation(self.lat, self.lon)
-        obj.id = self.id
-        return obj
+        return Location(math.degrees(lat_new), math.degrees(lon_new))
 
 
-class Location(GPSLocation):
+class LocationInfo(Location):
     """
     A location object with the location name, coordinates and location codes
     Additionally information like the population can be saved
     """
 
-    class_name_identifier = 'loc'
+    __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
 
-    __slots__ = ['lat', 'lon', 'city_name', 'state', 'state_code', 'population',
-                 'airport_info', 'locode', 'clli', 'alternate_names', 'nodes',
-                 'available_nodes', 'has_probeapi']
+    name = sqla.Column(sqla.String(50))
+    state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('state.id'))
+    population = sqla.Column(sqla.Integer)
+    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('airport_info.id'))
+    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locode_info.id'))
+    clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+    alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
-    class PropertyKey:
-        city_name = '3'
-        state = '4'
-        state_code = '5'
-        population = '6'
-        clli = '7'
-        alternate_names = '8'
-        airport_info = '9'
-        locode = 'a'
-        nodes = 'b'
-        available_nodes = 'c'
-        has_probeapi = 'd'
+    state = sqlorm.relationship('State', back_populates='location_infos')
+    airport_info = sqlorm.relationship('AirportInfo')
+    locode_info = sqlorm.relationship('LocodeInfo')
+    matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
 
     def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
                  population=0):
@@ -206,37 +169,6 @@ class Location(GPSLocation):
         if self.locode is None:
             self.locode = LocodeInfo()
 
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        ret_dict = super().dict_representation()
-        del ret_dict[constants.JSON_CLASS_IDENTIFIER]
-        ret_dict.update({
-            constants.JSON_CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.city_name: self.city_name,
-            self.PropertyKey.state: self.state,
-            self.PropertyKey.state_code: self.state_code,
-            self.PropertyKey.population: self.population,
-            self.PropertyKey.clli: self.clli,
-            self.PropertyKey.alternate_names: self.alternate_names,
-        })
-        if self.airport_info:
-            ret_dict[self.PropertyKey.airport_info] = self.airport_info.dict_representation()
-
-        if self.locode:
-            ret_dict[self.PropertyKey.locode] = self.locode.dict_representation()
-
-        if self.available_nodes:
-            ret_dict[self.PropertyKey.available_nodes] = self.available_nodes
-
-        if self.nodes:
-            ret_dict[self.PropertyKey.nodes] = self.nodes
-
-        if self.has_probeapi:
-            ret_dict[self.PropertyKey.has_probeapi] = [loc.dict_representation()
-                                                       for loc in self.has_probeapi]
-
-        return ret_dict
-
     def code_id_type_tuples(self):
         """
         Creates a list with all codes in a tuple with the location id
@@ -247,15 +179,15 @@ class Location(GPSLocation):
         #     print(self.dict_representation(), 'has no id')
         #     raise ValueError('id is not int')
         ret_list = []
-        if self.city_name:
-            ret_list.append((self.city_name.lower(), (self.id, LocationCodeType.geonames.value)))
+        if self.name:
+            ret_list.append((self.name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
             ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
             if name:
                 ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
         if self.locode and self.state_code:
-            for code in self.locode.place_codes:
+            for code in self.locode_info.place_codes:
                 ret_list.append(('{}{}'.format(self.state_code.lower(), code.lower()),
                                  (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
@@ -267,54 +199,15 @@ class Location(GPSLocation):
                 ret_list.append((code.lower(), (self.id, LocationCodeType.faa.value)))
         return ret_list
 
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a Location object from a dictionary"""
-        obj = Location(dct[GPSLocation.PropertyKey.lat], dct[GPSLocation.PropertyKey.lon],
-                       dct[Location.PropertyKey.city_name], dct[Location.PropertyKey.state],
-                       dct[Location.PropertyKey.state_code], dct[Location.PropertyKey.population])
-
-        if Location.PropertyKey.clli in dct:
-            obj.clli = dct[Location.PropertyKey.clli]
-        if Location.PropertyKey.alternate_names in dct:
-            obj.alternate_names = dct[Location.PropertyKey.alternate_names]
-        if GPSLocation.PropertyKey.id in dct:
-            obj.id = dct[GPSLocation.PropertyKey.id]
-        if Location.PropertyKey.airport_info in dct:
-            obj.airport_info = dct[Location.PropertyKey.airport_info]
-        if Location.PropertyKey.locode in dct:
-            obj.locode = dct[Location.PropertyKey.locode]
-        if Location.PropertyKey.available_nodes in dct:
-            obj.available_nodes = dct[Location.PropertyKey.available_nodes]
-        if Location.PropertyKey.nodes in dct:
-            obj.nodes = dct[Location.PropertyKey.nodes]
-        if Location.PropertyKey.has_probeapi in dct:
-            obj.has_probeapi = dct[Location.PropertyKey.has_probeapi]
-        return obj
-
-    def copy(self):
-        obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
-                       self.population)
-        obj.id = self.id
-        obj.clli = self.clli
-        obj.airport_info = self.airport_info.copy()
-        obj.locode = self.locode.copy()
-        obj.available_nodes = self.available_nodes.copy()
-        obj.nodes = self.nodes.copy()
-        return obj
-
 
 class AirportInfo(object):
     """Holds a list of the different airport codes"""
 
-    class_name_identifier = 'ai'
+    __tablename__ = 'airport_infos'
 
-    __slots__ = ['iata_codes', 'icao_codes', 'faa_codes']
-
-    class PropertyKey:
-        iata_codes = '0'
-        icao_codes = '1'
-        faa_codes = '2'
+    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
+    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
+    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
 
     def __init__(self):
         """init"""
@@ -322,73 +215,34 @@ class AirportInfo(object):
         self.icao_codes = []
         self.faa_codes = []
 
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        return {
-            constants.JSON_CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.iata_codes: self.iata_codes,
-            self.PropertyKey.icao_codes: self.icao_codes,
-            self.PropertyKey.faa_codes: self.faa_codes
-        }
-
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a AirportInfo object from a dictionary"""
-        obj = AirportInfo()
-        obj.faa_codes = dct[AirportInfo.PropertyKey.faa_codes]
-        obj.iata_codes = dct[AirportInfo.PropertyKey.iata_codes]
-        obj.icao_codes = dct[AirportInfo.PropertyKey.icao_codes]
-        return obj
-
-    def copy(self):
-        obj = AirportInfo()
-        obj.faa_codes = self.faa_codes[:]
-        obj.icao_codes = self.icao_codes[:]
-        obj.iata_codes = self.iata_codes[:]
-        return obj
-
 
 class LocodeInfo(object):
     """Holds a list of locode codes"""
 
-    class_name_identifier = 'li'
-
-    __slots__ = ['place_codes', 'subdivision_codes']
-
-    class PropertyKey:
-        place_codes = '0'
-        subdivision_codes = '1'
+    __tablename__ = 'locode_infos'
+    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
 
     def __init__(self):
         """init"""
         self.place_codes = []
         self.subdivision_codes = []
 
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        return {
-            constants.JSON_CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.place_codes: self.place_codes,
-            self.PropertyKey.subdivision_codes: self.subdivision_codes
-        }
 
-    @staticmethod
-    def create_object_from_dict(dct):
-        """Creates a LocodeInfo object from a dictionary"""
-        obj = LocodeInfo()
-        obj.place_codes = dct[LocodeInfo.PropertyKey.place_codes]
-        obj.subdivision_codes = dct[LocodeInfo.PropertyKey.subdivision_codes]
-        return obj
+class State(Base):
+    __tablename__ = 'states'
 
-    def copy(self):
-        obj = LocodeInfo()
-        obj.place_codes = self.place_codes[:]
-        obj.subdivision_codes = self.subdivision_codes[:]
-        return obj
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    name = sqla.Column(sqla.String(50))
+    code = sqla.Column(sqla.String(5))
 
-__all__ = ['Location',
-           'GPSLocation',
+    location_infos = sqlorm.relationship('LocationInfo', back_populates='states')
+
+
+__all__ = ['LocationInfo',
+           'Location',
            'LocationCodeType',
            'AirportInfo',
-           'LocodeInfo'
+           'LocodeInfo',
+           'State',
            ]
