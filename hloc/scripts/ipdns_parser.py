@@ -1,27 +1,22 @@
 #!/usr/bin/env python3
 """
 sanitizing and classification of the domain names
-saves results in the folder ./rdns_results
 
-40975774 + 46280879 + 53388841 + 57895044 + 67621408 + 76631142 + 88503028 + 67609127
-= 498.905.243 ohne fuehrende 0en
-
-Further filtering ideas: www pages and pages with only 2 levels
+ Merge into ipdns_parser -- important: give alarm if target IP not found in IP2DNS file
 """
-import argparse
-import re
 import cProfile
-import time
-import os
 import collections
+import json
 import multiprocessing as mp
-import ujson as json
-import mmap
-import configparser
-import sys
+import os
+import re
+import time
 
-from .. import util
-from ..util import Domain
+import configargparse
+import marisa_trie
+
+from hloc import util
+from hloc.util import Domain
 
 logger = None
 
@@ -29,133 +24,55 @@ logger = None
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('filename', help='filename to sanitize', type=str)
-    parser.add_argument('-n', '--num-processes', type=int, dest='numProcesses',
+
+    parser.add_argument('-n', '--num-processes', type=int,
                         help='Specify the maximal amount of processes')
+
     parser.add_argument('-t', '--tlds-file', type=str, required=True,
-                        dest='tlds_file', help='Set the path to the tlds file')
-    parser.add_argument('-s', '--strategy', type=str, dest='regexStrategy',
-                        choices=['strict', 'abstract', 'moderate'],
-                        default='abstract', help='Specify a regex Strategy')
-    parser.add_argument('-p', '--profile', action='store_true', dest='cProfiling',
+                        help='Set the path to the tlds file')
+
+    parser.add_argument('-p', '--c-profiling', action='store_true',
                         help='if set the cProfile will profile the script for one process')
-    parser.add_argument('-d', '--destination', type=str, dest='destination',
-                        help='Set the desination directory (must not exist)')
-    parser.add_argument('-i', '--isp-ip-filter', action='store_true', dest='isp_ip_filter',
+
+    parser.add_argument('-d', '--destination', type=str,
+                         help='Set the desination directory (must not exist)')
+
+    parser.add_argument('-i', '--isp-ip-filter', action='store_true',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
+
+    parser.add_argument('-v', '--ip-version', type=str,
                         choices=[util.IPV4_IDENTIFIER, util.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
-    parser.add_argument('-f', '--white-list-file', type=str, dest='white_list_file_path',
+
+    parser.add_argument('-f', '--white-list-file-path', type=str,
                         help='path to a file with a white list of IPs')
-    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log', dest='log_file',
+
+    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log',
                         help='Specify a logging file where the log should be saved')
+
     parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
-                        help='The path to a config file')
-
-
-class Config(object):
-    """The Config object"""
-    filename = None
-    amount_processes = None
-    destination = None
-    isp_ip_filter = False
-    ip_version = None
-    white_list = None
-
-
-class ConfigPropertyKey(object):
-    """Propertykeys"""
-    default_section_key = 'DEFAULT'
-    amount_processes_key = 'amount processes'
-    destination_key = 'destination'
-    isp_ip_filter_key = 'isp ip filter'
-    ip_version_key = 'ip version'
-    white_list_key = 'white list file'
-
-
-def create_default_config(config_parser: configparser.ConfigParser):
-    """Adds all default values to the config_parser"""
-    config_parser[ConfigPropertyKey.default_section_key] = {}
-    default_section = config_parser[ConfigPropertyKey.default_section_key]
-    default_section[ConfigPropertyKey.amount_processes_key] = str(8)
-    default_section[ConfigPropertyKey.destination_key] = 'rdns-results'
-    default_section[ConfigPropertyKey.isp_ip_filter_key] = str(False)
-    default_section[ConfigPropertyKey.ip_version_key] = 'ipv4'
+                        is_config_file=True, help='The path to a config file')
 
 
 def main():
     """Main function"""
-    start = time.time()
-    parser = argparse.ArgumentParser()
+    parser = configargparse.ArgParser(default_config_files=['ipdns_default.ini'])
+
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    global logger
-    logger = util.setup_logger(args.log_file, 'process')
+    start = time.time()
 
-    config = Config()
-    if args.config_filepath:
-        config_parser = configparser.ConfigParser()
-        if os.path.isfile(args.config_filepath):
-            config_parser.read(args.config_filepath)
-            if ConfigPropertyKey.default_section_key not in config_parser:
-                print('{} section missing in config file! Tip: if you specify a non existent file '
-                      'in config a default one will be created')
-            else:
-                default_section = config_parser[ConfigPropertyKey.default_section_key]
-                if ConfigPropertyKey.amount_processes_key in default_section and \
-                        default_section.get(ConfigPropertyKey.amount_processes_key):
-                    config.amount_processes = int(default_section.get(
-                        ConfigPropertyKey.amount_processes_key))
-                else:
-                    print('{} key is required to have a value (Default: 8)'.format(
-                        ConfigPropertyKey.amount_processes_key), file=sys.stderr)
-                    return
-                if ConfigPropertyKey.destination_key in default_section and \
-                        default_section.get(ConfigPropertyKey.destination_key):
-                    config.destination = default_section.get(ConfigPropertyKey.destination_key)
-                else:
-                    print('{} key is required to have a value (Default: rdns-results)'.format(
-                        ConfigPropertyKey.destination_key), file=sys.stderr)
-                    return
-                if ConfigPropertyKey.isp_ip_filter_key in default_section:
-                    config.isp_ip_filter = default_section.getboolean(
-                        ConfigPropertyKey.isp_ip_filter_key)
-                else:
-                    print('{} key is required to have a value (Default: False)'.format(
-                        ConfigPropertyKey.isp_ip_filter_key), file=sys.stderr)
-                    return
-                if ConfigPropertyKey.ip_version_key in default_section and \
-                        default_section.get(ConfigPropertyKey.ip_version_key) in ['ipv4', 'ipv6']:
-                    config.ip_version = default_section.get('ip version')
-                else:
-                    print('{} key is required to have a value (choices: ipv4, ipv6)(Default: ipv4)'
-                          .format(ConfigPropertyKey.destination_key), file=sys.stderr)
-                    return
-                if ConfigPropertyKey.white_list_key in default_section:
-                    if os.path.isfile(default_section.get(ConfigPropertyKey.white_list_key)):
-                        with open(default_section.get(ConfigPropertyKey.white_list_key)) as f_file:
-                            config.white_list = []
-                            for line in f_file:
-                                config.white_list.append(line.strip())
-                    else:
-                        print('{} key has to be a valid file if specified!'
-                              .format(ConfigPropertyKey.white_list_key), file=sys.stderr)
-                        return
-        else:
-            logger.info('Creating new default config file')
-            create_default_config(config_parser)
-            with open(args.config_filepath, 'w') as config_file:
-                config_parser.write(config_file)
+    global logger
+    logger = util.setup_logger(args.logging_file, 'process')
 
     ipregex_text = select_ip_regex(args.regexStrategy)
-    if not args.isp_ip_filter:
-        logger.info('processing without ip filtering')
 
     if args.isp_ip_filter:
         logger.info('using strategy: {}'.format(args.regexStrategy))
     else:
-        logger.info('not filtering ip domain names')
+        logger.info('processing without ip filtering')
+
     ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
 
     tlds = set()
@@ -165,43 +82,41 @@ def main():
             if line[0] != '#':
                 tlds.add(line.lower())
 
-    config.filename = args.filename
-    if args.numProcesses:
-        config.amount_processes = args.numProcesses
-    elif not config.amount_processes:
-        logger.critical('Amount of processes not defined! Aborting')
+    if not args.amount_processes:
+        logger.critical('Amount of processes not defined or 0! Aborting')
         return 1
-    if args.destination:
-        config.destination = args.destination
-    elif not config.destination:
+    if not args.destination:
         logger.critical('Destination path not defined! Aborting')
         return 1
-    if args.isp_ip_filter:
-        config.isp_ip_filter = args.isp_ip_filter
-    if args.ip_version:
-        config.ip_version = args.ip_version
-    elif not config.ip_version:
+    if not args.ip_version:
         logger.critical('IP version not defined! Aborting')
         return 1
+    whitelist_trie = None
+    whitelist = []
     if args.white_list_file_path:
-        del config.white_list
-        config.white_list = []
         with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
-                config.white_list.append(line.strip())
+                whitelist.append(line.strip())
 
-    os.mkdir(config.destination)
+        whitelist_trie = marisa_trie.Trie(whitelist)
+
+    # TODO: throw error when directory exists
+    os.mkdir(args.destination)
 
     processes = []
+    parsed_ips = set()
+    parsed_ips_lock = mp.Lock()
 
-    for i in range(0, config.amount_processes):
-        if i == (config.amount_processes - 1):
+    for i in range(0, args.amount_processes):
+        if i == (args.amount_processes - 1):
             processes.append(mp.Process(target=preprocess_file_part_profile,
-                                        args=(config, i, ipregex, tlds, args.cProfiling),
+                                        args=(args, i, tlds, ipregex, whitelist_trie, parsed_ips,
+                                              parsed_ips_lock, args.cProfiling),
                                         name='preprocessing_{}'.format(i)))
         else:
             processes.append(mp.Process(target=preprocess_file_part_profile,
-                                        args=(config, i, ipregex, tlds, False),
+                                        args=(args, i, tlds, ipregex, whitelist_trie, parsed_ips,
+                                              parsed_ips_lock, False),
                                         name='preprocessing_{}'.format(i)))
         processes[i].start()
 
@@ -216,6 +131,12 @@ def main():
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
+
+    whitelisted_not_parsed_as_correct = set(parsed_ips) - parsed_ips
+
+    if whitelisted_not_parsed_as_correct:
+        ips_missing = ',\n'.join(whitelisted_not_parsed_as_correct)
+        logger.warning('IP addresses in whitelist but not parsed: \n{}'.format(ips_missing))
 
     end = time.time()
     logger.info('Running time: {0}'.format((end - start)))
@@ -238,7 +159,9 @@ def select_ip_regex(regex_strategy):
                r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
 
 
-def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {str}, profile: bool):
+def preprocess_file_part_profile(args, pnr: int, ipregex: re, tlds: {str},
+                                 whitelist_trie: marisa_trie.Trie, parsed_ips: set(str),
+                                 parsed_ips_lock: mp.Lock, profile: bool):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -248,10 +171,12 @@ def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {s
     start_time = time.monotonic()
     if profile:
         profiler = cProfile.Profile()
-        profiler.runctx('preprocess_file_part(config, pnr, ipregex, tlds)', globals(), locals())
+        profiler.runctx('preprocess_file_part(args, pnr, ipregex, tlds, whitelist_trie, '
+                        'parsed_ips, parsed_ips_lock)', globals(), locals())
         profiler.dump_stats('preprocess.profile')
     else:
-        preprocess_file_part(config, pnr, ipregex, tlds)
+        preprocess_file_part(args, pnr, ipregex, tlds, whitelist_trie, parsed_ips,
+                             parsed_ips_lock)
 
     end_time = time.monotonic()
     logger.info('preprocess_file_part running time: {} profiled: {}'
@@ -261,30 +186,31 @@ def preprocess_file_part_profile(config: Config, pnr: int, ipregex: re, tlds: {s
 BLOCK_SIZE = 10
 
 
-def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
+def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
+                         whitelist_trie: marisa_trie.Trie, parsed_ips: set(str),
+                         parsed_ips_lock: mp.Lock):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
     ipregex should be a regex with 4 integers to filter the Isp client domain names
     """
     logger.info('starting')
-    filename = util.get_path_filename(config.filename)
+    filename = util.get_path_filename(args.filename)
     label_stats = collections.defaultdict(int)
-    is_ipv6 = config.ip_version == 'ipv6'
+    is_ipv6 = args.ip_version == 'ipv6'
 
-    with open(os.path.join(config.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
+    with open(os.path.join(args.destination, '{0}-{1}.cor'.format(filename, pnr)), 'w',
               encoding='utf-8') as correct_file, \
-            open(os.path.join(config.destination,
+            open(os.path.join(args.destination,
                               '{0}-{1}.ipencoded'.format(filename, pnr)),
                  'w', encoding='utf-8') as ip_encoded_file, \
-            open(os.path.join(config.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
+            open(os.path.join(args.destination, '{0}-{1}.bad'.format(filename, pnr)), 'w',
                  encoding='utf-8') as bad_file, \
-            open(os.path.join(config.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
+            open(os.path.join(args.destination, '{0}-{1}-dns.bad'.format(filename, pnr)), 'w',
                  encoding='utf-8') as bad_dns_file,  \
-            open(os.path.join(config.destination, '{0}-{1}-custom-filterd'.format(filename, pnr)),
+            open(os.path.join(args.destination, '{0}-{1}-custom-filterd'.format(filename, pnr)),
                  'w', encoding='utf-8') as custom_filter_file, \
-            open(config.filename, encoding='ISO-8859-1') as rdns_file_handle, \
-            mmap.mmap(rdns_file_handle.fileno(), 0, access=mmap.ACCESS_READ) as rdns_file_mmap:
+            open(args.filename, encoding='ISO-8859-1') as rdns_file_handle:
 
         def is_standart_isp_domain(domain_line):
             """Basic check if the domain is a isp client domain address"""
@@ -297,23 +223,6 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 write_bad_lines(util.ACCEPTED_CHARACTER)
                 del bad_lines[:]
 
-        def line_blocks_mmap():
-            def seek_mmap(amount):
-                for _ in range(0, amount):
-                    rdns_file_mmap.readline()
-
-            while True:
-                lines = []
-                seek_mmap(BLOCK_SIZE*pnr)
-                for _ in range(0, BLOCK_SIZE):
-                    seek_line = rdns_file_mmap.readline().decode('ISO-8859-1')
-                    if seek_line:
-                        lines.append(seek_line)
-                if not lines:
-                    break
-                seek_mmap(BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1))
-                yield lines
-
         def line_blocks():
             lines = []
             seek_before = 0
@@ -324,7 +233,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 nonlocal seek_after
                 nonlocal lines
                 seek_before = BLOCK_SIZE*pnr
-                seek_after = BLOCK_SIZE*config.amount_processes-BLOCK_SIZE*(pnr+1)
+                seek_after = BLOCK_SIZE*args.amount_processes-BLOCK_SIZE*(pnr+1)
                 del lines[:]
 
             prepare()
@@ -365,6 +274,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             nonlocal isp_ip_lines, count_isp_lines
             isp_ip_lines.append(isp_line)
             count_isp_lines += 1
+
             if len(isp_ip_lines) >= 10 ** 3:
                 util.json_dump(isp_ip_lines, ip_encoded_file)
                 ip_encoded_file.write('\n')
@@ -373,6 +283,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         def append_custom_filter_line(custom_filter_line: str):
             nonlocal custom_filter_lines
             custom_filter_lines.append(custom_filter_line)
+
             if len(custom_filter_lines) >= 10 ** 3:
                 custom_filter_file.write('\n'.join(custom_filter_lines))
                 custom_filter_file.write('\n')
@@ -382,6 +293,10 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
             nonlocal good_records
             good_records.append(record)
             add_labels(record)
+
+            with parsed_ips_lock:
+                parsed_ips.add(record.ip_for_version(args.ip_version))
+
             if len(good_records) >= 10 ** 3:
                 util.json_dump(good_records, correct_file)
                 correct_file.write('\n')
@@ -390,6 +305,7 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         def append_bad_dns_record(record: util.Domain):
             nonlocal bad_dns_records
             bad_dns_records.append(record)
+
             if len(bad_dns_records) >= 10 ** 3:
                 util.json_dump(bad_dns_records, bad_dns_file)
                 bad_dns_file.write('\n')
@@ -410,27 +326,27 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
                 if len(line) == 0:
                     continue
                 line = line.strip()
-                index = line.find(',')
-                if set(line[(index + 1):]).difference(util.ACCEPTED_CHARACTER):
+                ip_address, domain = line.split(',', 1)
+                if set(domain).difference(util.ACCEPTED_CHARACTER):
                     add_bad_line(line)
+                if whitelist_trie and ip_address not in whitelist_trie:
+                    append_custom_filter_line(line)
                 else:
-                    ip_address, domain = line.split(',', 1)
-                    # is not None is correct because it could also be an empty list and that is
-                    # allowed
-
                     if is_ipv6:
                         rdns_record = Domain(domain, ipv6_address=ip_address)
                     else:
                         rdns_record = Domain(domain, ip_address=ip_address)
-                    if config.white_list is not None and ip_address not in config.white_list:
+                    # is not None is correct because it could also be an empty list and that is
+                    # allowed
+                    if args.white_list is not None and ip_address not in args.white_list:
                         append_custom_filter_line(line)
-                    elif not is_ipv6 and config.isp_ip_filter and is_standart_isp_domain(line):
+                    elif not is_ipv6 and args.isp_ip_filter and is_standart_isp_domain(line):
                         append_isp_ip_record(rdns_record)
-                    elif not is_ipv6 and config.isp_ip_filter and \
+                    elif not is_ipv6 and args.isp_ip_filter and \
                             util.is_ip_hex_encoded_simple(ip_address, domain):
                         append_isp_ip_record(rdns_record)
-                    elif config.isp_ip_filter and util.int_to_alphanumeric(
-                            util.ip_to_int(ip_address, config.ip_version)) in domain:
+                    elif args.isp_ip_filter and util.int_to_alphanumeric(
+                            util.ip_to_int(ip_address, args.ip_version)) in domain:
                         append_isp_ip_record(rdns_record)
                     else:
                         if rdns_record.domain_labels[0].label.lower() in tlds:
@@ -449,18 +365,14 @@ def preprocess_file_part(config: Config, pnr: int, ipregex: re, tlds: {str}):
         write_bad_lines(util.ACCEPTED_CHARACTER)
 
         logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
-        with open(os.path.join(config.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
+        with open(os.path.join(args.destination, '{0}-{1}-character.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as characterStatsFile:
             json.dump(bad_characters, characterStatsFile)
 
-        with open(os.path.join(config.destination,
+        with open(os.path.join(args.destination,
                                '{0}-{1}-domain-label.stats'.format(filename, pnr)),
                   'w', encoding='utf-8') as labelStatFile:
             json.dump(label_stats, labelStatFile)
-
-        # for character, count in bad_characters.items():
-        #     print('pnr {0}: Character {1} (unicode: {2}) has {3} occurences'.format(pnr, \
-        #         character, ord(character), count))
 
 
 if __name__ == '__main__':

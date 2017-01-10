@@ -11,19 +11,20 @@
 * Merges locations from various sources
 
 """
+import argparse
 import json
 import re
-import argparse
+import time
 from string import ascii_lowercase
 from string import printable
-import time
-from time import sleep
-from html.parser import HTMLParser
-from threading import Thread
 from threading import Semaphore
-import requests
+from threading import Thread
+from time import sleep
 
-from .. import util
+import requests
+from html.parser import HTMLParser
+
+from hloc import util
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100

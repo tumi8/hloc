@@ -3,14 +3,13 @@
 This module evaluate probeAPI against Ripe Atlas coverage
 """
 import argparse
-import requests
 import collections
-import ripe.atlas.cousteau as ripe_atlas
 import threading
-import math
 import time
 
-from . import util
+import ripe.atlas.cousteau as ripe_atlas
+
+from hloc import util
 
 logger = None
 
@@ -66,13 +65,13 @@ def main():
     for location in locations.values():
         if len(threads) > 10:
             rm_thread_ids = []
-            for id, thread in enumerate(threads):
+            for index, thread in enumerate(threads):
                 if not thread.is_alive():
                     thread.join()
-                    rm_thread_ids.append(id)
+                    rm_thread_ids.append(index)
 
-            for id in rm_thread_ids[::-1]:
-                del threads[id]
+            for index in rm_thread_ids[::-1]:
+                del threads[index]
 
         thread_sema.acquire()
         thread = threading.Thread(target=get_nearest_ripe_nodes,
@@ -127,7 +126,7 @@ def generate_request_tokens(sema: threading.Semaphore, limit: int, finish_event:
 
 
 def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_version: str,
-                           slow_down_sema: threading.Semaphore = None,
+                                                                                   slow_down_sema: threading.Semaphore = None,
                            thread_sema: threading.Semaphore = None) -> \
         ([[str, object]], [[str, object]]):
     """
@@ -175,7 +174,7 @@ def get_nearest_ripe_nodes(location: util.Location, max_distance: int, ip_versio
 
 
 def get_nearest_probeapi_probes(location: util.Location, max_distance: int,
-                                slow_down_sema: threading.Semaphore = None,
+                                                                       slow_down_sema: threading.Semaphore = None,
                                 thread_sema: threading.Semaphore = None):
     """
     Search for probes near the location using probeapi

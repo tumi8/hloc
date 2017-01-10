@@ -13,10 +13,11 @@ import os
 import json
 import socket
 import binascii
+import inspect
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
-CLASS_IDENTIFIER = '_c'
+JSON_CLASS_IDENTIFIER = '_c'
 IPV4_IDENTIFIER = 'ipv4'
 IPV6_IDENTIFIER = 'ipv6'
 PROBE_API_KEY = '66bcd4c1-fdca-46f1-b1b9-8f7c333379e9'
@@ -25,7 +26,6 @@ PROBE_API_URL_PING = \
 PROBE_API_URL_GET_PROBES = \
     'https://kong.speedcheckerapi.com:8443/ProbeAPIService/Probes.svc/GetProbesByBoundingBox'
 EARTH_RADIUS = 6371
-
 
 #######################################
 #    Different utility functions      #
@@ -152,6 +152,11 @@ def int_to_alphanumeric(num: int):
         return rest_ret
     else:
         return int_to_alphanumeric(div) + rest_ret
+
+
+def get_class_properties(subj_class) -> [str]:
+    properties = inspect.getmembers(subj_class, lambda a: not (inspect.isroutine(a)))
+    return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
 
 
 ###################################################################################################
@@ -541,7 +546,7 @@ class Location(GPSLocation):
         obj = Location(self.lat, self.lon, self.city_name, self.state, self.state_code,
                        self.population)
         obj.id = self.id
-        obj.clli = clli
+        obj.clli = self.clli
         obj.airport_info = self.airport_info.copy()
         obj.locode = self.locode.copy()
         obj.available_nodes = self.available_nodes.copy()
