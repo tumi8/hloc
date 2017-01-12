@@ -80,7 +80,7 @@ class AvailableType(enum.Enum):
     unknown = '4'
 
 
-class RipeAtlasProbe(Base):
+class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
 
     is_ripe_atlas = sqla.Column(sqla.Boolean, default=True)
