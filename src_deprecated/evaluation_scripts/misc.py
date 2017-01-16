@@ -323,3 +323,46 @@ def filter_code_type(filename, code_type):
         util.json_dump(w_domains, o_file)
         o_file.write('\n')
     print('len {} form {}'.format(len(w_domains), sum_count))
+
+
+drop_domains = collections.defaultdict(list)
+for i in range(0,8):
+    with open('/data/old-vm/data2/cogentco/cogentco.domains-{}.checked'.format(i)) as d_file:
+        ds = util.json_loads(d_file.readline())
+        for key, value in ds.items():
+            drop_domains[key].extend(value)
+
+trie_domains = collections.defaultdict(list)
+for i in range(0,8):
+    with open('/data/old-vm/data2/cogentco/trie/cogentco.domains-{}-found.checked'.format(i)) as d_file:
+        ds = util.json_loads(d_file.readline())
+        for key, value in ds.items():
+            trie_domains[key].extend(value)
+
+ver_trie_dict = {}
+for domain in trie_domains[util.DomainType.correct.value]:
+    ver_trie_dict[domain.domain_name] = domain
+
+
+not_verf_drop_dict = {}
+for domain in drop_domains[util.DomainType.no_verification.value]:
+    not_verf_drop_dict[domain.domain_name] = domain
+
+
+not_loc_drop_dict = {}
+for domain in drop_domains[util.DomainType.no_location.value]:
+    not_loc_drop_dict[domain.domain_name] = domain
+
+
+verf_keys = set(ver_trie_dict.keys())
+not_verf_keys = set(not_verf_drop_dict.keys())
+no_loc_keys = set(not_loc_drop_dict.keys())
+
+t_verf_d_no_v_keys = verf_keys.intersection(not_verf_drop_dict)
+t_verf_d_no_l_keys = verf_keys.intersection(no_loc_keys)
+
+t_verf_d_no_v = [(ver_trie_dict[key], not_verf_drop_dict[key]) for key in t_verf_d_no_v_keys]
+t_verf_d_no_l = [(ver_trie_dict[key], not_loc_drop_dict[key]) for key in t_verf_d_no_l_keys]
+
+# t_verf_d_no_v[10][0].domain_name
+# locations[str(t_verf_d_no_v[10][0].matching_match.location_id)].city_name

@@ -96,6 +96,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     ripe_group.add_argument('-a', '--append-to-existing', action='store_true', dest='append',
                             help='Tun on if there are matches already existing and you do not want '
                                  'to overwrite them')
+    ripe_group.add_argument('-o', '--without-new-measurements', action='store_true', dest='wo_measurements')
     parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
@@ -241,7 +242,8 @@ def main():
                                        args.ip_version,
                                        args.dry_run,
                                        args.append,
-                                       args.bill_to),
+                                       args.bill_to,
+                                       args.wo_measurements),
                                  name='domain_checking_{}'.format(pid))
         elif args.verifingMethod == 'geoip':
             process = mp.Process(target=geoip_check_for_list,
@@ -447,7 +449,7 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                         zmap_locations: [str, util.GPSLocation], zmap_results: [str, [str, float]],
                         distances: [str, [str, float]], ripe_create_sema: mp.Semaphore,
                         ripe_slow_down_sema: mp.Semaphore, ip_version: str, dry_run: bool,
-                        append: bool, bill_to_address: str=None):
+                        append: bool, bill_to_address: str, wo_measurements: bool):
     """Checks for all domains if the suspected locations are correct"""
     count_lock = threading.Lock()
     correct_type_count = collections.defaultdict(int)
@@ -617,7 +619,8 @@ def ripe_check_for_list(filename_proto: str, pid: int, locations: [str, util.Loc
                                                     ip_version,
                                                     dry_run,
                                                     add_dry_run_matches,
-                                                    bill_to_address))
+                                                    bill_to_address,
+                                                    wo_measurements))
 
                     threads.append(thread)
                     thread.start()
@@ -660,7 +663,8 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
                                   ip_version: str,
                                   dry_run: bool,
                                   add_dry_run_matches: [[int], ],
-                                  bill_to_address: str=None):
+                                  bill_to_address: str,
+                                  wo_measurements: bool):
     """The method called to create a thread and manage the domain checks"""
     next_domain_tuple = nextdomain()
     while next_domain_tuple:
@@ -669,7 +673,8 @@ def domain_check_threading_manage(nextdomain: [[], (util.Domain, [str, float])],
             check_domain_location_ripe(next_domain_tuple[0], update_domains, update_count_for_type,
                                        locations, zmap_locations, next_domain_tuple[1], distances,
                                        ripe_create_sema, ripe_slow_down_sema, ip_version, dry_run,
-                                       add_dry_run_matches, bill_to_address=bill_to_address)
+                                       add_dry_run_matches, bill_to_address,
+                                       wo_measurements)
         except Exception:
             logger.exception('Check Domain Error')
 
@@ -690,7 +695,8 @@ def check_domain_location_ripe(domain: util.Domain,
                                ip_version: str,
                                dry_run: bool,
                                add_dry_run_matches: [[int], ],
-                               bill_to_address: str=None):
+                               bill_to_address: str,
+                               wo_measurements: bool):
     """checks if ip is at location"""
     matched = False
     results = []
@@ -799,54 +805,56 @@ def check_domain_location_ripe(domain: util.Domain,
             results.append(new_result)
 
         if chk_m is None:
-            # only if no old measurement exists
-            logger.debug('creating measurement')
-            available_nodes = location.available_nodes
-            if not available_nodes:
-                matches.remove(next_match)
-                no_verification_matches.append(next_match)
-                next_match = get_next_match()
-                continue
-            m_results, near_node = create_and_check_measurement(
-                (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
-                ripe_create_sema, ripe_slow_down_sema, bill_to_address=bill_to_address)
-            if m_results is None:
-                matches.remove(next_match)
-                next_match = get_next_match()
-                continue
+            if not wo_measurements:
+                # only if no old measurement exists
+                logger.debug('creating measurement')
+                available_nodes = location.available_nodes
+                if not available_nodes:
+                    matches.remove(next_match)
+                    no_verification_matches.append(next_match)
+                    next_match = get_next_match()
+                    continue
+                m_results, near_node = create_and_check_measurement(
+                    (domain.ip_for_version(ip_version), ip_version), location, available_nodes,
+                    ripe_create_sema, ripe_slow_down_sema, bill_to_address=bill_to_address)
+                if m_results is None:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
 
-            node_location_dist = location.gps_distance_haversine(
-                util.GPSLocation(near_node['geometry']['coordinates'][1],
-                                 near_node['geometry']['coordinates'][0]))
-            logger.debug('finished measurement')
-            try:
-                result = next(iter(m_results))
-            except StopIteration:
-                matches.remove(next_match)
-                next_match = get_next_match()
-                continue
+                node_location_dist = location.gps_distance_haversine(
+                    util.GPSLocation(near_node['geometry']['coordinates'][1],
+                                     near_node['geometry']['coordinates'][0]))
+                logger.debug('finished measurement')
+                try:
+                    result = next(iter(m_results))
+                except StopIteration:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
 
-            chk_res = get_rtt_from_result(result)
-            logger.debug('got result {}'.format(chk_res))
-            if chk_res is None:
-                matches.remove(next_match)
-                next_match = get_next_match()
-                continue
-            elif chk_res == -1:
-                update_domains(domain, util.DomainType.not_responding)
-                return
-            elif chk_res < (MAX_RTT + node_location_dist / 100):
-                update_count_for_type(next_match.code_type)
-                matched = True
-                next_match.matching = True
-                next_match.matching_distance = node_location_dist
-                next_match.matching_rtt = chk_res
-                domain.location = location
-                update_domains(domain, util.DomainType.correct)
-                break
-            else:
-                n_res = util.LocationResult(location.id, chk_res, location)
-                add_new_result(n_res)
+                chk_res = get_rtt_from_result(result)
+                logger.debug('got result {}'.format(chk_res))
+                if chk_res is None:
+                    matches.remove(next_match)
+                    next_match = get_next_match()
+                    continue
+                elif chk_res == -1:
+                    update_domains(domain, util.DomainType.not_responding)
+                    return
+                elif chk_res < (MAX_RTT + node_location_dist / 100):
+                    update_count_for_type(next_match.code_type)
+                    matched = True
+                    next_match.matching = True
+                    next_match.matching_distance = node_location_dist
+                    next_match.matching_rtt = chk_res
+                    domain.location = location
+                    update_domains(domain, util.DomainType.correct)
+                    break
+                else:
+                    n_res = util.LocationResult(location.id, chk_res, location)
+                    add_new_result(n_res)
+
         elif chk_m == -1:
             update_domains(domain, util.DomainType.not_responding)
             return
