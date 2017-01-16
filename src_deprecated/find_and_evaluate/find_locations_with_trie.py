@@ -11,12 +11,12 @@ import cProfile
 import time
 import os
 import mmap
-import ujson as json
+import json
 import collections
 from multiprocessing import Process
 import marisa_trie
 
-import src.data_processing.util as util
+import src_deprecated.data_processing.util as util
 
 logger = None
 
@@ -61,6 +61,7 @@ def main():
         special_filter = json.load(special_filter_file)
 
     popular_labels = {}
+    """
     if args.popular_labels_l is not None:
         with open(args.popular_labels_l) as pop_label_dict:
             popular_labels = json.load(pop_label_dict)
@@ -72,7 +73,7 @@ def main():
         for label in popular_labels_list:
             if label not in popular_labels.keys():
                 popular_labels[label] = {'matches': None}
-
+    """
     processes = []
     for index in range(0, args.fileCount):
         # start process for filename.format(0)
@@ -89,6 +90,7 @@ def main():
         process.join()
 
     popular_labels = {}
+    """
     for index in range(0, args.fileCount):
         with open('popular_labels_found_{}.pickle'.format(index),
                   'rb') as popular_file:
@@ -101,7 +103,7 @@ def main():
 
     with open('popular_labels_found.pickle', 'w') as popular_file:
         json.dump(popular_labels, popular_file)
-
+    """
 
 def start_search_in_file(filename_proto, index, trie, popular_labels, special_filter, exclude_sld,
                          profile, amount=1000):

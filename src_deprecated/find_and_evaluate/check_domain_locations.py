@@ -17,10 +17,10 @@ import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions
 import threading
 import math
-import pympler.asizeof
+# import pympler.asizeof
 import gc
 
-import src.data_processing.util as util
+import src_deprecated.data_processing.util as util
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
@@ -218,8 +218,8 @@ def main():
 
         distances = init_coords_distances(zmap_locations, locations)
 
-        logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
-        logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+        # logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
+        # logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
         logger.debug('finished ripe')
 
     processes = []
@@ -299,7 +299,7 @@ def init_coords_distances(zmap_locations: [str, util.GPSLocation],
         for zmap_id, zmap_location in zmap_locations.items():
             distances[zmap_id][location_id] = DISTANCE_METHOD(location, zmap_location)
 
-    logger.debug('Size of distances: {}'.format(pympler.asizeof.asizeof(distances)))
+    # logger.debug('Size of distances: {}'.format(pympler.asizeof.asizeof(distances)))
 
     return distances
 

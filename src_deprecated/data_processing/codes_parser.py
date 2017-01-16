@@ -12,7 +12,7 @@
   
 """
 from __future__ import print_function
-import ujson as json
+import json
 import re
 import argparse
 from string import ascii_lowercase
@@ -360,7 +360,7 @@ def get_clli_codes(file_path):
 def get_geo_names(file_path, min_population):
     """Get the geo names from file ./collectedData/cities1000.txt"""
 
-    with open(file_path) as geoname_file:
+    with open(file_path, encoding='utf8') as geoname_file:
         for line in geoname_file:
             # [0:-1] remove last character \n and extract the information
             columns = line[0:-1].split('\t')

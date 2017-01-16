@@ -8,7 +8,7 @@ import pickle
 import argparse
 
 import marisa_trie
-import src.data_processing.util as util
+import src_deprecated.data_processing.util as util
 
 
 def main():
