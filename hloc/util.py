@@ -7,8 +7,13 @@ import logging
 import os
 import socket
 import subprocess
+from sqlalchemy import create_engine
 
 from hloc import constants
+
+
+# echo writes sql to log
+engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=True)
 
 
 def count_lines(filename):
