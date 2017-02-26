@@ -10,7 +10,6 @@ import enum
 import logging
 import random
 import time
-import typing
 
 import ripe.atlas.cousteau as ripe_atlas
 import sqlalchemy as sqla
@@ -18,7 +17,6 @@ import sqlalchemy.orm as sqlorm
 
 from hloc import util, constants
 from .location import Location
-from .measurement_result import MeasurementResult
 from .sql_alchemy_base import Base
 
 
@@ -38,18 +36,19 @@ class Probe(Base, metaclass=abc.ABCMeta):
     __mapper_args__ = {'polymorphic_on': type}
 
     @abc.abstractmethod
-    def measure_rtt(self, dest_address, **kwargs) -> typing.Optional[MeasurementResult]:
+    def measure_rtt(self, dest_address, **kwargs):
         """Creates a method for the Probe"""
         pass
 
     @property
     @abc.abstractmethod
-    def location(self) -> typing.Optional[Location]:
+    def location(self):
+        """should return either None or location object"""
         pass
 
     @property
     @abc.abstractmethod
-    def last_update(self) -> typing.Optional[datetime.datetime]:
+    def last_update(self):
         """return timestamp when the probe was last updated"""
         pass
 
@@ -112,6 +111,7 @@ class RipeAtlasProbe(Probe):
             raise ValueError('Property ' + property_key + ' has no default value')
 
     def __init__(self, json_dict):
+        super().__init__()
         if RipeAtlasProbe.JsonKeys.Id_key in json_dict:
             self._id = json_dict[RipeAtlasProbe.JsonKeys.Id_key]
         else:
@@ -127,7 +127,7 @@ class RipeAtlasProbe(Probe):
         self._last_update = None
         self._update()
 
-    def measure_rtt(self, dest_address, **kwargs) -> typing.Optional[MeasurementResult]:
+    def measure_rtt(self, dest_address, **kwargs):
         if not self.available:
             raise ValueError('Probe currently not available')
         for prop_key in util.get_class_properties(RipeAtlasProbe.MeasurementKeys):
@@ -185,11 +185,11 @@ class RipeAtlasProbe(Probe):
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
 
     @property
-    def location(self) -> typing.Optional[Location]:
+    def location(self):
         return self._location
 
     @property
-    def last_update(self) -> typing.Optional[datetime.datetime]:
+    def last_update(self):
         """return timestamp when the probe was last updated"""
         return self._last_update
 
