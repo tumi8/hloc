@@ -15,8 +15,10 @@ import time
 import configargparse
 import marisa_trie
 
+import hloc.constants as constants
+import hloc.json_util as json_util
 from hloc import util
-from hloc.util import Domain
+from hloc.models import Domain
 
 logger = None
 
@@ -35,13 +37,13 @@ def __create_parser_arguments(parser):
                         help='if set the cProfile will profile the script for one process')
 
     parser.add_argument('-d', '--destination', type=str,
-                         help='Set the desination directory (must not exist)')
+                        help='Set the desination directory (must not exist)')
 
     parser.add_argument('-i', '--isp-ip-filter', action='store_true',
                         help='set if you want to filter isp ip domain names')
 
     parser.add_argument('-v', '--ip-version', type=str,
-                        choices=[util.IPV4_IDENTIFIER, util.IPV6_IDENTIFIER],
+                        choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
 
     parser.add_argument('-f', '--white-list-file-path', type=str,
@@ -220,7 +222,7 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
             nonlocal bad_lines
             bad_lines.append(domain_line)
             if len(bad_lines) > 10 ** 3:
-                write_bad_lines(util.ACCEPTED_CHARACTER)
+                write_bad_lines(constants.ACCEPTED_CHARACTER)
                 del bad_lines[:]
 
         def line_blocks():
@@ -270,13 +272,13 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                     bad_characters[character] += 1
                 bad_file.write('{0}\n'.format(bad_line))
 
-        def append_isp_ip_record(isp_line: util.Domain):
+        def append_isp_ip_record(isp_line: Domain):
             nonlocal isp_ip_lines, count_isp_lines
             isp_ip_lines.append(isp_line)
             count_isp_lines += 1
 
             if len(isp_ip_lines) >= 10 ** 3:
-                util.json_dump(isp_ip_lines, ip_encoded_file)
+                json_util.json_dump(isp_ip_lines, ip_encoded_file)
                 ip_encoded_file.write('\n')
                 del isp_ip_lines[:]
 
@@ -289,7 +291,7 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                 custom_filter_file.write('\n')
                 del custom_filter_lines[:]
 
-        def append_good_record(record: util.Domain):
+        def append_good_record(record: Domain):
             nonlocal good_records
             good_records.append(record)
             add_labels(record)
@@ -298,16 +300,16 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                 parsed_ips.add(record.ip_for_version(args.ip_version))
 
             if len(good_records) >= 10 ** 3:
-                util.json_dump(good_records, correct_file)
+                json_util.json_dump(good_records, correct_file)
                 correct_file.write('\n')
                 del good_records[:]
 
-        def append_bad_dns_record(record: util.Domain):
+        def append_bad_dns_record(record: Domain):
             nonlocal bad_dns_records
             bad_dns_records.append(record)
 
             if len(bad_dns_records) >= 10 ** 3:
-                util.json_dump(bad_dns_records, bad_dns_file)
+                json_util.json_dump(bad_dns_records, bad_dns_file)
                 bad_dns_file.write('\n')
                 del bad_dns_records[:]
 
@@ -327,7 +329,7 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                     continue
                 line = line.strip()
                 ip_address, domain = line.split(',', 1)
-                if set(domain).difference(util.ACCEPTED_CHARACTER):
+                if set(domain).difference(constants.ACCEPTED_CHARACTER):
                     add_bad_line(line)
                 if whitelist_trie and ip_address not in whitelist_trie:
                     append_custom_filter_line(line)
@@ -335,7 +337,7 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                     if is_ipv6:
                         rdns_record = Domain(domain, ipv6_address=ip_address)
                     else:
-                        rdns_record = Domain(domain, ip_address=ip_address)
+                        rdns_record = Domain(domain, ipv4_address=ip_address)
                     # is not None is correct because it could also be an empty list and that is
                     # allowed
                     if args.white_list is not None and ip_address not in args.white_list:
@@ -355,14 +357,14 @@ def preprocess_file_part(args, pnr: int, ipregex: re, tlds: {str},
                         else:
                             append_bad_dns_record(rdns_record)
 
-        util.json_dump(good_records, correct_file)
+        json_util.json_dump(good_records, correct_file)
         correct_file.write('\n')
-        util.json_dump(bad_dns_records, bad_dns_file)
+        json_util.json_dump(bad_dns_records, bad_dns_file)
         bad_dns_file.write('\n')
-        util.json_dump(isp_ip_lines, ip_encoded_file)
+        json_util.json_dump(isp_ip_lines, ip_encoded_file)
         ip_encoded_file.write('\n')
 
-        write_bad_lines(util.ACCEPTED_CHARACTER)
+        write_bad_lines(constants.ACCEPTED_CHARACTER)
 
         logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
         with open(os.path.join(args.destination, '{0}-{1}-character.stats'.format(filename, pnr)),

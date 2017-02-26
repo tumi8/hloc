@@ -11,10 +11,13 @@ import json
 import mmap
 import multiprocessing as mp
 import time
+import marisa_trie
 
 import configargparse
 
+import hloc.json_util as json_util
 from hloc import util
+from hloc.models import CodeMatch, Location, LocationCodeType
 
 logger = None
 
@@ -86,7 +89,7 @@ def create_trie(location_filepath: str, code_blacklist_filepath: str, word_black
     :rtype: marisa_trie.RecordTrie
     """
     with open(location_filepath) as location_file:
-        locations = util.json_load(location_file)
+        locations = json_util.json_load(location_file)
 
     code_blacklist_set = set()
     if code_blacklist_filepath:
@@ -103,7 +106,7 @@ def create_trie(location_filepath: str, code_blacklist_filepath: str, word_black
     return create_trie_obj(locations.values(), code_blacklist_set, word_blacklist_set)
 
 
-def create_trie_obj(location_list: [util.Location], code_blacklist: [str], word_blacklist: [str]):
+def create_trie_obj(location_list: [Location], code_blacklist: [str], word_blacklist: [str]):
     """
     Creates a RecordTrie with the marisa library
     :param location_list: a list with all locations
@@ -156,7 +159,7 @@ def search_in_file(filename_proto, index, trie, code_to_location_blacklist, excl
     def save_entrie(entrie, entries, entrie_file, new_line=True):
         entries.append(entrie)
         if len(entries) >= 10 ** 3:
-            util.json_dump(entries, entrie_file)
+            json_util.json_dump(entries, entrie_file)
             if new_line:
                 entrie_file.write('\n')
             entries[:] = []
@@ -177,7 +180,7 @@ def search_in_file(filename_proto, index, trie, code_to_location_blacklist, excl
         location_found = []
 
         for line in lines(dns_file):
-            dns_entries = util.json_loads(line)
+            dns_entries = json_util.json_loads(line)
 
             for domain in dns_entries:
                 loc_found = False
@@ -227,8 +230,8 @@ def search_in_file(filename_proto, index, trie, code_to_location_blacklist, excl
             if entries_count == amount:
                 break
 
-        util.json_dump(location_found, loc_found_file)
-        util.json_dump(no_location_found, locn_found_file)
+        json_util.json_dump(location_found, loc_found_file)
+        json_util.json_dump(no_location_found, locn_found_file)
         loc_found_file.write('\n')
         locn_found_file.write('\n')
 
@@ -274,10 +277,10 @@ def search_in_label(o_label: str, trie: marisa_trie.RecordTrie, special_filter):
                 blacklisted.append(key)
                 continue
             for location_id, code_type in matching_locations:
-                real_code_type = util.LocationCodeType(code_type)
+                real_code_type = LocationCodeType(code_type)
                 if location_id in ids:
                     continue
-                matches.append(util.DomainLabelMatch(location_id, real_code_type, code=key))
+                matches.append(CodeMatch(location_id, real_code_type, code=key))
                 type_count[real_code_type] += 1
 
         label = label[1:]

@@ -24,7 +24,8 @@ from time import sleep
 import requests
 from html.parser import HTMLParser
 
-from hloc import util
+import hloc.json_util as json_util
+from hloc.models import Location
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -44,7 +45,7 @@ class WorldAirportCodesParser(HTMLParser):
     A Parser which extends the standard Python HTMLParser
     to parse the airport detailed information side
     """
-    airportInfo = util.Location(None, None)
+    airportInfo = Location(None, None)
     __currentKey = None
     __th = False
 
@@ -80,7 +81,7 @@ class WorldAirportCodesParser(HTMLParser):
         elif self.__currentKey is None:
             return
         elif self.__currentKey == 'cityName':
-            split_index = data.find(',') # use split
+            split_index = data.find(',')
             city_name = data[:split_index]
             state_string = data[split_index + 2:]
             self.airportInfo.city_name = city_name.lower()
@@ -109,7 +110,7 @@ class WorldAirportCodesParser(HTMLParser):
     def reset(self):
         self.__currentKey = None
         self.__th = False
-        self.airportInfo = util.Location(None, None)
+        self.airportInfo = Location(None, None)
         return HTMLParser.reset(self)
 
 
@@ -263,7 +264,7 @@ def get_locode_locations(locode_filename):
                 continue
 
             # create a new entry
-            airport_info = util.Location(**location_dict)
+            airport_info = Location(**location_dict)
             airport_info.add_locode_info()
             airport_info.state_code = current_state['state_code'].lower()
             airport_info.locode.place_codes.append(normalize_locode_info(
@@ -335,7 +336,7 @@ def get_clli_codes(file_path):
             # [0:-1] remove last character \n and extract the information
             line = line.strip()
             clli, lat, lon = line.split('\t')
-            new_clli_info = util.Location(lat=float(lat), lon=float(lon))
+            new_clli_info = Location(lat=float(lat), lon=float(lon))
             new_clli_info.clli.append(clli[0:6])
             CLLI_LOCATION_CODES.append(new_clli_info)
 
@@ -365,7 +366,7 @@ def get_geo_names(file_path, min_population):
 
             # name = columns[1]
             alternatenames = columns[3].split(',')
-            new_geo_names_info = util.Location(lat=float(columns[4]), lon=float(columns[5]))
+            new_geo_names_info = Location(lat=float(columns[4]), lon=float(columns[5]))
             new_geo_names_info.city_name = columns[2].lower()
             if NORMAL_CHARS_REGEX.search(new_geo_names_info.city_name) is None:
                 continue
@@ -460,7 +461,7 @@ def add_locations(locations, add_locations, radius, create_new_locations=True):
 def merge_locations_by_gps(locations, radius):
     """
     this method starts at the beginning and matches all locations which are in a
-    range of 30 kilometers
+    range of `radius` kilometers
     """
     i = 0
     while i < len(locations):
@@ -476,6 +477,7 @@ def merge_locations_by_gps(locations, radius):
 
 def idfy_codes(codes):
     """Assign a unique id to every location in the array and return a dict with id to location"""
+    # TODO: change from simple enumeration to hash of some properties -> deterministic behaviour
     ret_dict = {}
     for index, code in enumerate(codes):
         code.id = index
@@ -589,13 +591,13 @@ def print_stats(location_codes):
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
 
 
-def parse_metropolitan_codes(metropolitan_filepath: str) -> [util.Location]:
+def parse_metropolitan_codes(metropolitan_filepath: str) -> [Location]:
     """Parses the Iata metropolitan codes"""
     metropolitan_locations = []
     with open(metropolitan_filepath) as metropolitan_file:
         for line in metropolitan_file:
             code, lat, lon = line.strip().split(',')
-            location = util.Location(lat=float(lat), lon=float(lon))
+            location = Location(lat=float(lat), lon=float(lon))
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
@@ -633,7 +635,7 @@ def parse_codes(args):
 
     locations = idfy_codes(location_codes)
     with open(args.filename, 'w') as character_codes_file:
-        util.json_dump(locations, character_codes_file)
+        json_util.json_dump(locations, character_codes_file)
         
     end_time = time.clock()
     end_rtime = time.time()
