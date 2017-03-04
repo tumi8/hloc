@@ -35,7 +35,9 @@ class MeasurementResult(metaclass=abc.ABCMeta):
     rtts = sqla.Column(postgresql.ARRAY(sqla.Float))
     # eventually save ttl if there?
 
-    __mapper_args__ = {'polymorphic_on': type}
+    measurement_result_type = sqla.Column(sqla.String)
+
+    __mapper_args__ = {'polymorphic_on': measurement_result_type}
 
 
 class LocationResult(object):

@@ -33,7 +33,9 @@ class Probe(Base, metaclass=abc.ABCMeta):
 
     measurements = sqlorm.relationship('MeasurementResult', back_populates='probe')
 
-    __mapper_args__ = {'polymorphic_on': type}
+    measurement_type = sqla.Column(sqla.String)
+
+    __mapper_args__ = {'polymorphic_on': measurement_type}
 
     @abc.abstractmethod
     def measure_rtt(self, dest_address, **kwargs):

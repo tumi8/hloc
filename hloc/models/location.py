@@ -58,9 +58,14 @@ class Location(Base):
     lat = sqla.Column(sqla.Float)
     lon = sqla.Column(sqla.Float)
 
+    location_type = sqla.Column(sqla.String)
+
     probes = sqlorm.relationship('Probes', back_populates='location')
 
-    __mapper_args__ = {'polymorphic_on': type}
+    __mapper_args__ = {
+        'polymorphic_identity': 'location',
+        'polymorphic_on': location_type
+    }
 
     class PropertyKey:
         id = '0'
