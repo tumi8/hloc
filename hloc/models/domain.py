@@ -18,7 +18,7 @@ class CodeMatch(Base):
     __tablename__ = 'code_matches'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locations.id'))
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
     code = sqla.Column(sqla.String(50))
 
