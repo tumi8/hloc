@@ -133,7 +133,7 @@ class LocationInfo(Location):
     Additionally information like the population can be saved
     """
 
-    __mapper_args__ = {'polymorphic_identity': 'loc_info'}
+    __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('state.id'))

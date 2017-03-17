@@ -101,7 +101,7 @@ class DomainLabel(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     name = sqla.Column(sqla.String(100))
-    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domain.id'))
+    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
     matches = sqlorm.relationship('CodeMatches', back_populates='label')
@@ -129,7 +129,7 @@ class CodeMatch(Base):
     __tablename__ = 'code_matches'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_info.id'))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
     code = sqla.Column(sqla.String(50))
 
