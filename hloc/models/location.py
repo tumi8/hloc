@@ -124,7 +124,7 @@ class Location(Base):
             math.cos(angular_dist) - math.sin(lat_rad) * math.sin(lat_new))
         lon_new = ((lon_rad - lon_new_temp + math.pi) % (2 * math.pi)) - math.pi
 
-        return Location(math.degrees(lat_new), math.degrees(lon_new))
+        return (math.degrees(lat_new), math.degrees(lon_new))
 
 
 class LocationInfo(Location):
@@ -133,7 +133,7 @@ class LocationInfo(Location):
     Additionally information like the population can be saved
     """
 
-    __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
+    __mapper_args__ = {'polymorphic_identity': 'loc_info'}
 
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('state.id'))
@@ -147,22 +147,6 @@ class LocationInfo(Location):
     airport_info = sqlorm.relationship('AirportInfo')
     locode_info = sqlorm.relationship('LocodeInfo')
     matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
-
-    def __init__(self, lat, lon, city_name=None, state=None, state_code=None,
-                 population=0):
-        """init"""
-        self.city_name = city_name
-        self.state = state
-        self.state_code = state_code
-        self.population = population
-        self.airport_info = None
-        self.locode = None
-        self.clli = []
-        self.alternate_names = []
-        self.nodes = None
-        self.available_nodes = None
-        self.has_probeapi = []
-        super().__init__(lat, lon)
 
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
@@ -214,12 +198,6 @@ class AirportInfo(object):
     icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
     faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
 
-    def __init__(self):
-        """init"""
-        self.iata_codes = []
-        self.icao_codes = []
-        self.faa_codes = []
-
 
 class LocodeInfo(object):
     """Holds a list of locode codes"""
@@ -227,11 +205,6 @@ class LocodeInfo(object):
     __tablename__ = 'locode_infos'
     place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-
-    def __init__(self):
-        """init"""
-        self.place_codes = []
-        self.subdivision_codes = []
 
 
 class State(Base):
