@@ -12,10 +12,6 @@ from sqlalchemy import create_engine
 from hloc import constants
 
 
-# echo writes sql to log
-engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=True)
-
-
 def count_lines(filename):
     """"Opens the file at filename than counts and returns the number of lines"""
     count = subprocess.check_output(['wc', '-l', filename])
@@ -144,6 +140,11 @@ def int_to_alphanumeric(num: int):
 def get_class_properties(subj_class) -> [str]:
     properties = inspect.getmembers(subj_class, lambda a: not (inspect.isroutine(a)))
     return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
+
+
+## sqlAlchemy setup
+# echo writes sql to log
+engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=True)
 
 
 __all__ = ['count_lines',

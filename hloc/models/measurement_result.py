@@ -9,6 +9,7 @@ import enum
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 from sqlalchemy.dialects import postgresql
+from hloc.models.sql_alchemy_base import Base
 
 from hloc import constants
 
@@ -19,7 +20,7 @@ class MeasurementError(enum.Enum):
     probe_error = 'probe_error'
 
 
-class MeasurementResult(metaclass=abc.ABCMeta):
+class MeasurementResult(Base):
     """the abstract base class for a measurement result"""
 
     __tablename__ = 'measurement_results'
@@ -38,6 +39,11 @@ class MeasurementResult(metaclass=abc.ABCMeta):
     measurement_result_type = sqla.Column(sqla.String)
 
     __mapper_args__ = {'polymorphic_on': measurement_result_type}
+
+    @staticmethod
+    def parse_from_json(dict):
+        NotImplementedError('This method ust be implemented in subclass!\n'
+                            'MeasurementResult is an custom abstract base class!')
 
 
 class LocationResult(object):

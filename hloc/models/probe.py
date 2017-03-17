@@ -4,7 +4,6 @@
  * All Probe classes used by the HLOC framework
 """
 
-import abc
 import datetime
 import enum
 import logging
@@ -20,8 +19,11 @@ from .location import Location
 from .sql_alchemy_base import Base
 
 
-class Probe(Base, metaclass=abc.ABCMeta):
-    """The abstract base class for a Probe used by the HLOC library"""
+class Probe(Base):
+    """
+    The abstract base class for a Probe used by the HLOC library
+    Cannot use metaclass = abc.MetaClass because of sqlAlchemy
+    """
 
     __tablename__ = 'probes'
 
@@ -37,39 +39,43 @@ class Probe(Base, metaclass=abc.ABCMeta):
 
     __mapper_args__ = {'polymorphic_on': measurement_type}
 
-    @abc.abstractmethod
     def measure_rtt(self, dest_address, **kwargs):
         """Creates a method for the Probe"""
-        pass
+        raise NotImplementedError("subclass must implement this")
 
     @property
-    @abc.abstractmethod
     def location(self):
         """should return either None or location object"""
-        pass
+        raise NotImplementedError("subclass must implement this")
 
     @property
-    @abc.abstractmethod
     def last_update(self):
         """return timestamp when the probe was last updated"""
-        pass
+        raise NotImplementedError("subclass must implement this")
 
     @property
-    @abc.abstractmethod
     def available(self, max_age: datetime.timedelta) -> AvailableType:
         """Should return if the probe is available for measurements"""
-        pass
+        raise NotImplementedError("subclass must implement this")
 
     @property
-    @abc.abstractmethod
     def ipv6_capable(self) -> bool:
         """Should return if the probe is capable of performing ipv6 measurements"""
-        pass
+        raise NotImplementedError("subclass must implement this")
 
-    @abc.abstractmethod
-    def __init__(self, json_dict):
-        """creates a new object out of the json dictionary retrieved from the service"""
-        pass
+    @staticmethod
+    def parse_from_json(json_dict):
+        """
+        creates a new object out of the json dictionary retrieved from the service
+        :returns The according probe object or None if it could not be parsed
+        """
+        raise NotImplementedError("subclass must implement this")
+
+    def __repr__(self):
+        return "<Probe(id: " + str(self.id) + ", probe_id: " + str(self.probe_id) + \
+               ", location_id: " + str(self.location_id) + ", last_seen: " + str(self.last_seen) + \
+               ", last_seen: " + str(self.last_seen) + ", measurement_type: " + \
+               self.measurement_type + ")>"
 
 
 @enum.unique
@@ -83,8 +89,6 @@ class AvailableType(enum.Enum):
 
 class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
-
-    is_ripe_atlas = sqla.Column(sqla.Boolean, default=True)
 
     __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
 
@@ -112,22 +116,26 @@ class RipeAtlasProbe(Probe):
                 return 1
             raise ValueError('Property ' + property_key + ' has no default value')
 
-    def __init__(self, json_dict):
-        super().__init__()
+    @staticmethod
+    def parse_from_json(json_dict):
+        _id = None
+        _location = None
         if RipeAtlasProbe.JsonKeys.Id_key in json_dict:
-            self._id = json_dict[RipeAtlasProbe.JsonKeys.Id_key]
+            _id = json_dict[RipeAtlasProbe.JsonKeys.Id_key]
         else:
             ValueError('id not in json to create Ripe Atlas Probe object')
 
         if RipeAtlasProbe.JsonKeys.Lat_key in json_dict and \
                 RipeAtlasProbe.JsonKeys.Lon_key in json_dict:
-            self._location = Location(json_dict[RipeAtlasProbe.JsonKeys.Lat_key],
+            _location = Location(json_dict[RipeAtlasProbe.JsonKeys.Lat_key],
                                       json_dict[RipeAtlasProbe.JsonKeys.Lon_key])
         else:
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
-        self._last_update = None
-        self._update()
+        probe = RipeAtlasProbe()
+        probe._id = _id
+        probe._location = _location
+        probe._update()
 
     def measure_rtt(self, dest_address, **kwargs):
         if not self.available:
