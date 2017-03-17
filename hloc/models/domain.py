@@ -12,6 +12,54 @@ from .sql_alchemy_base import Base
 from .location import *
 
 
+class CodeMatch(Base):
+    """The model for a Match between a domain name label and a location code"""
+
+    __tablename__ = 'code_matches'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
+    code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
+    code = sqla.Column(sqla.String(50))
+
+    location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
+
+    def __init__(self, location_info, code_type: LocationCodeType, code=None):
+        """init"""
+        self.location_info = location_info
+        self.code_type = code_type
+        self.code = code
+
+
+class DomainLabel(Base):
+    """The model for a domain name label"""
+
+    __tablename__ = 'domain_labels'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    name = sqla.Column(sqla.String(100))
+    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
+
+    domain = sqlorm.relationship('Domain', back_populates='labels')
+    matches = sqlorm.relationship('CodeMatches', back_populates='label')
+
+    __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
+
+
+    def __init__(self, name: str):
+        """
+        init
+        :param name: the domain label string
+        """
+        self.name = name
+        self.matches = []
+
+    @property
+    def sub_labels(self):
+        """Returns a list of strings with the label separated by dash"""
+        return self.label.split('-')
+
+
 class Domain(Base):
     """
     Holds the information for one domain
@@ -92,54 +140,6 @@ class Domain(Base):
             return self.ipv6_address
         else:
             raise ValueError('{} is not a valid IP version'.format(version))
-
-
-class DomainLabel(Base):
-    """The model for a domain name label"""
-
-    __tablename__ = 'domain_labels'
-
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(100))
-    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
-
-    domain = sqlorm.relationship('Domain', back_populates='labels')
-    matches = sqlorm.relationship('CodeMatches', back_populates='label')
-
-    __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
-
-
-    def __init__(self, name: str):
-        """
-        init
-        :param name: the domain label string
-        """
-        self.name = name
-        self.matches = []
-
-    @property
-    def sub_labels(self):
-        """Returns a list of strings with the label separated by dash"""
-        return self.label.split('-')
-
-
-class CodeMatch(Base):
-    """The model for a Match between a domain name label and a location code"""
-
-    __tablename__ = 'code_matches'
-
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
-    code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
-    code = sqla.Column(sqla.String(50))
-
-    location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
-
-    def __init__(self, location_info, code_type: LocationCodeType, code=None):
-        """init"""
-        self.location_info = location_info
-        self.code_type = code_type
-        self.code = code
 
 
 __all__ = ['Domain',
