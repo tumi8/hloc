@@ -27,7 +27,7 @@ class MeasurementResult(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     platform_id = sqla.Column(sqla.Integer)
-    probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probe.id'))
+    probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probes.id'))
     probe = sqlorm.relationship('Probe', back_populates='measurements')
     execution_time = sqla.Column(sqla.DateTime)
     destination_address = sqla.Column(postgresql.INET)

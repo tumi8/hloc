@@ -136,10 +136,10 @@ class LocationInfo(Location):
     __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
     name = sqla.Column(sqla.String(50))
-    state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('state.id'))
+    state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('states.id'))
     population = sqla.Column(sqla.Integer)
-    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('airport_info.id'))
-    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locode_info.id'))
+    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('airport_infos.id'))
+    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locode_infos.id'))
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
