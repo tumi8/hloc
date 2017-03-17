@@ -127,6 +127,34 @@ class Location(Base):
         return (math.degrees(lat_new), math.degrees(lon_new))
 
 
+class AirportInfo(object):
+    """Holds a list of the different airport codes"""
+
+    __tablename__ = 'airport_infos'
+
+    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
+    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
+    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
+
+
+class LocodeInfo(object):
+    """Holds a list of locode codes"""
+
+    __tablename__ = 'locode_infos'
+    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+
+
+class State(Base):
+    __tablename__ = 'states'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    name = sqla.Column(sqla.String(50))
+    code = sqla.Column(sqla.String(5))
+
+    location_infos = sqlorm.relationship('LocationInfo', back_populates='states')
+
+
 class LocationInfo(Location):
     """
     A location object with the location name, coordinates and location codes
@@ -187,34 +215,6 @@ class LocationInfo(Location):
             for code in self.airport_info.faa_codes:
                 ret_list.append((code.lower(), (self.id, LocationCodeType.faa.value)))
         return ret_list
-
-
-class AirportInfo(object):
-    """Holds a list of the different airport codes"""
-
-    __tablename__ = 'airport_infos'
-
-    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
-    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
-    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
-
-
-class LocodeInfo(object):
-    """Holds a list of locode codes"""
-
-    __tablename__ = 'locode_infos'
-    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-
-
-class State(Base):
-    __tablename__ = 'states'
-
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(50))
-    code = sqla.Column(sqla.String(5))
-
-    location_infos = sqlorm.relationship('LocationInfo', back_populates='states')
 
 
 __all__ = ['LocationInfo',
