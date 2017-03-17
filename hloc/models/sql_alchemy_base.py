@@ -2,6 +2,7 @@
 """The Base of SQLAlchemy imported by all model using it"""
 
 import sqlalchemy.ext.declarative
+from hloc.util import engine
 
 
-Base = sqlalchemy.ext.declarative.declarative_base()
+Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
