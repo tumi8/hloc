@@ -172,7 +172,7 @@ class LocationInfo(Location):
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
     state = sqlorm.relationship('State', back_populates='location_infos')
-    # airport_info = sqlorm.relationship('AirportInfo')
+    airport_info = sqlorm.relationship('AirportInfo')
     locode_info = sqlorm.relationship('LocodeInfo')
     matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
 
@@ -217,7 +217,7 @@ class LocationInfo(Location):
         return ret_list
 
 
-LocationInfo.airport_info = sqlorm.relationship('AirportInfo')
+# LocationInfo.airport_info = sqlorm.relationship('AirportInfo')
 
 
 __all__ = ['LocationInfo',
