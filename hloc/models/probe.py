@@ -19,6 +19,15 @@ from .location import Location
 from .sql_alchemy_base import Base
 
 
+@enum.unique
+class AvailableType(enum.Enum):
+    ipv4_available = '0'
+    ipv6_available = '1'
+    both_available = '2'
+    not_available = '3'
+    unknown = '4'
+
+
 class Probe(Base):
     """
     The abstract base class for a Probe used by the HLOC library
@@ -76,15 +85,6 @@ class Probe(Base):
                ", location_id: " + str(self.location_id) + ", last_seen: " + str(self.last_seen) + \
                ", last_seen: " + str(self.last_seen) + ", measurement_type: " + \
                self.measurement_type + ")>"
-
-
-@enum.unique
-class AvailableType(enum.Enum):
-    ipv4_available = '0'
-    ipv6_available = '1'
-    both_available = '2'
-    not_available = '3'
-    unknown = '4'
 
 
 class RipeAtlasProbe(Probe):
@@ -242,6 +242,3 @@ class RipeAtlasProbe(Probe):
         """Updates the probes status"""
         self._probe_obj = ripe_atlas.Probe(id=self._id)
         self._last_update = datetime.datetime.now()
-
-
-Probe.register(RipeAtlasProbe)
