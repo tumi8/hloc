@@ -85,6 +85,9 @@ class Probe(Base):
                ", location_id: " + str(self.location_id) + ", last_seen: " + str(self.last_seen) + \
                ", last_seen: " + str(self.last_seen) + ", measurement_type: " + \
                self.measurement_type + ")>"
+    
+
+Location.probe = sqlorm.relationship('Probes', back_populates='location')
 
 
 class RipeAtlasProbe(Probe):

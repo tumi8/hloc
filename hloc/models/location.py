@@ -60,8 +60,6 @@ class Location(Base):
 
     location_type = sqla.Column(sqla.String)
 
-    probes = sqlorm.relationship('Probes', back_populates='location')
-
     __mapper_args__ = {
         'polymorphic_identity': 'location',
         'polymorphic_on': location_type
