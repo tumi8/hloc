@@ -221,10 +221,10 @@ class LocationInfo(Location):
 # LocationInfo.airport_info = sqlorm.relationship('AirportInfo')
 
 
-__all__ = ['LocationInfo',
-           'Location',
-           'LocationCodeType',
+__all__ = ['LocationCodeType',
            'AirportInfo',
            'LocodeInfo',
            'State',
+           'Location',
+           'LocationInfo',
            ]
