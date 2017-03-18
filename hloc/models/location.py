@@ -46,6 +46,34 @@ class LocationCodeType(enum.Enum):
         return r'(?P<type>' + pattern + r')'
 
 
+class AirportInfo(object):
+    """Holds a list of the different airport codes"""
+
+    __tablename__ = 'airport_infos'
+
+    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
+    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
+    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
+
+
+class LocodeInfo(object):
+    """Holds a list of locode codes"""
+
+    __tablename__ = 'locode_infos'
+    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+
+
+class State(Base):
+    __tablename__ = 'states'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    name = sqla.Column(sqla.String(50))
+    code = sqla.Column(sqla.String(5))
+
+    location_infos = sqlorm.relationship('LocationInfo', back_populates='state')
+
+
 class Location(Base):
     """
     Basic class
@@ -123,34 +151,6 @@ class Location(Base):
         lon_new = ((lon_rad - lon_new_temp + math.pi) % (2 * math.pi)) - math.pi
 
         return (math.degrees(lat_new), math.degrees(lon_new))
-
-
-class AirportInfo(object):
-    """Holds a list of the different airport codes"""
-
-    __tablename__ = 'airport_infos'
-
-    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
-    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
-    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
-
-
-class LocodeInfo(object):
-    """Holds a list of locode codes"""
-
-    __tablename__ = 'locode_infos'
-    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-
-
-class State(Base):
-    __tablename__ = 'states'
-
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(50))
-    code = sqla.Column(sqla.String(5))
-
-    location_infos = sqlorm.relationship('LocationInfo', back_populates='state')
 
 
 class LocationInfo(Location):
