@@ -51,6 +51,7 @@ class AirportInfo(object):
 
     __tablename__ = 'airport_infos'
 
+    id = sqla.Column(sqla.Integer, primary_key=True)
     iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
     icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
     faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
@@ -60,6 +61,8 @@ class LocodeInfo(object):
     """Holds a list of locode codes"""
 
     __tablename__ = 'locode_infos'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
     place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
 
