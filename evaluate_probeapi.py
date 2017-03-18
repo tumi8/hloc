@@ -6,10 +6,12 @@ import argparse
 import collections
 import threading
 import time
+import math
+import requests
 
 import ripe.atlas.cousteau as ripe_atlas
 
-from hloc import util
+from src_deprecated.data_processing import util
 
 logger = None
 
@@ -208,10 +210,10 @@ def get_nearest_probeapi_probes(location: util.Location, max_distance: int,
             min_location = location.location_with_distance_and_bearing(distance_gc, 135)
             max_location = location.location_with_distance_and_bearing(distance_gc, 315)
             params = {
-                'minLatitude': min_location.lat,
-                'minLongitude': min_location.lon,
-                'maxLatitude': max_location.lat,
-                'maxLongitude': max_location.lon
+                'minLatitude': min_location[0],
+                'minLongitude': min_location[1],
+                'maxLatitude': max_location[0],
+                'maxLongitude': max_location[1]
             }
 
             if slow_down_sema:
