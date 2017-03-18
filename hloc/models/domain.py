@@ -41,7 +41,7 @@ class DomainLabel(Base):
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
-    matches = sqlorm.relationship('CodeMatches', back_populates='label')
+    matches = sqlorm.relationship('CodeMatch', back_populates='label')
 
     __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
 
