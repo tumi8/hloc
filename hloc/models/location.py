@@ -173,9 +173,6 @@ class LocationInfo(Location):
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
     state = sqlorm.relationship('State', back_populates='location_infos')
-    airport_info = sqlorm.relationship('AirportInfo')
-    locode_info = sqlorm.relationship('LocodeInfo')
-    matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
 
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
@@ -218,7 +215,8 @@ class LocationInfo(Location):
         return ret_list
 
 
-# LocationInfo.airport_info = sqlorm.relationship('AirportInfo')
+LocationInfo.airport_info = sqlorm.relationship('AirportInfo')
+LocationInfo.locode_info = sqlorm.relationship('LocodeInfo')
 
 
 __all__ = ['LocationCodeType',

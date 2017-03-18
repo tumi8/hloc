@@ -31,6 +31,9 @@ class CodeMatch(Base):
         self.code = code
 
 
+Location.matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
+
+
 class DomainLabel(Base):
     """The model for a domain name label"""
 
