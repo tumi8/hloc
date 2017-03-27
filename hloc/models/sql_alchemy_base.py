@@ -6,3 +6,4 @@ from hloc.util import engine
 
 
 Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
+Base.metadata.create_all(engine)

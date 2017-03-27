@@ -12,6 +12,11 @@ from .sql_alchemy_base import Base
 from .location import *
 
 
+label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
+                                 sqla.Column('left_id', sqla.Integer, sqla.ForeignKey('left.id')),
+                                 sqla.Column('right_id', sqla.Integer, sqla.ForeignKey('right.id')))
+
+
 class CodeMatch(Base):
     """The model for a Match between a domain name label and a location code"""
 
@@ -23,6 +28,9 @@ class CodeMatch(Base):
     code = sqla.Column(sqla.String(50))
 
     location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
+    labels = sqlorm.relationship("DomainLabel",
+                                 secondary=label_matches_table,
+                                 back_populates="matches")
 
     def __init__(self, location_info, code_type: LocationCodeType, code=None):
         """init"""
@@ -44,7 +52,9 @@ class DomainLabel(Base):
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
-    matches = sqlorm.relationship('CodeMatch', back_populates='label')
+    matches = sqlorm.relationship('CodeMatch',
+                                  secondary=label_matches_table,
+                                  back_populates='label')
 
     __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
 
