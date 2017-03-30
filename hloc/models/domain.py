@@ -54,7 +54,7 @@ class DomainLabel(Base):
     domain = sqlorm.relationship('Domain', back_populates='labels')
     matches = sqlorm.relationship('CodeMatch',
                                   secondary=label_matches_table,
-                                  back_populates='label')
+                                  back_populates='labels')
 
     __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
 
