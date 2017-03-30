@@ -146,7 +146,8 @@ def get_class_properties(subj_class) -> [str]:
 ## sqlAlchemy setup
 # echo writes sql to log
 engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=True)
-db_session = sessionmaker(bind=engine)
+Session = sessionmaker(bind=engine)
+db_session = Session()
 
 __all__ = ['count_lines',
            'seek_lines',
