@@ -89,6 +89,8 @@ class Location(Base):
     lat = sqla.Column(sqla.Float)
     lon = sqla.Column(sqla.Float)
 
+    probes = sqlorm.relationship('Probe', back_populates='location')
+
     location_type = sqla.Column(sqla.String)
 
     __mapper_args__ = {

@@ -82,9 +82,6 @@ class Probe(Base):
                self.measurement_type + ")>"
 
 
-Location.probe = sqlorm.relationship('Probe', back_populates='location')
-
-
 class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
 
