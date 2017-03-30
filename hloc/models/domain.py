@@ -13,8 +13,8 @@ from .location import *
 
 
 label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
-                                 sqla.Column('left_id', sqla.Integer, sqla.ForeignKey('left.id')),
-                                 sqla.Column('right_id', sqla.Integer, sqla.ForeignKey('right.id')))
+                                 sqla.Column('code_matches_id', sqla.Integer, sqla.ForeignKey('code_matches.id')),
+                                 sqla.Column('domain_labels_id', sqla.Integer, sqla.ForeignKey('domain_labels.id')))
 
 
 class CodeMatch(Base):
