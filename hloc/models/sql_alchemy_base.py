@@ -4,6 +4,8 @@
 import sqlalchemy.ext.declarative
 from hloc.util import engine
 
+from hloc import models
+
 
 Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
 Base.metadata.create_all(engine)
