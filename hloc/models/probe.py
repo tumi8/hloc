@@ -53,11 +53,6 @@ class Probe(Base):
         raise NotImplementedError("subclass must implement this")
 
     @property
-    def location(self):
-        """should return either None or location object"""
-        raise NotImplementedError("subclass must implement this")
-
-    @property
     def last_update(self):
         """return timestamp when the probe was last updated"""
         raise NotImplementedError("subclass must implement this")
@@ -95,7 +90,7 @@ class RipeAtlasProbe(Probe):
 
     __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
 
-    __slots__ = ['_id', '_location', '_last_update', '_probe_obj']
+    __slots__ = ['_last_update', '_probe_obj']
 
     class JsonKeys:
         Id_key = 'id'
@@ -136,8 +131,8 @@ class RipeAtlasProbe(Probe):
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
         probe = RipeAtlasProbe()
-        probe._id = _id
-        probe._location = _location
+        probe.id = _id
+        probe.location = _location
         probe._update()
 
     def measure_rtt(self, dest_address, **kwargs):
@@ -196,10 +191,6 @@ class RipeAtlasProbe(Probe):
             atlas_request_args['bill_to'] = kwargs[RipeAtlasProbe.MeasurementKeys.Bill_to_address]
 
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
-
-    @property
-    def location(self):
-        return self._location
 
     @property
     def last_update(self):
