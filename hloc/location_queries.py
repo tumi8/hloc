@@ -4,7 +4,7 @@ A collection of queries connected to the location object
 
 import sqlalchemy as sqla
 
-from models.location import State
+from hloc.models.location import State
 
 
 def state_for_code(state_code, state_name, db_session):
