@@ -18,9 +18,9 @@ class AirportInfo(Base):
     __tablename__ = 'airport_infos'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)))
-    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)))
-    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
+    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)), default=[])
+    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)), default=[])
+    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)), default=[])
 
 
 class LocodeInfo(Base):
@@ -29,15 +29,15 @@ class LocodeInfo(Base):
     __tablename__ = 'locode_infos'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)))
+    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
+    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
 
 
 class State(Base):
     __tablename__ = 'states'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(50))
+    name = sqla.Column(sqla.String(50), nullable=False)
     code = sqla.Column(sqla.String(5))
 
     location_infos = sqlorm.relationship("LocationInfo", back_populates="state")
@@ -52,8 +52,8 @@ class Location(Base):
     __tablename__ = 'locations'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    lat = sqla.Column(sqla.Float)
-    lon = sqla.Column(sqla.Float)
+    lat = sqla.Column(sqla.Float, nullable=False)
+    lon = sqla.Column(sqla.Float, nullable=False)
 
     probes = sqlorm.relationship('Probe', back_populates='location')
 
@@ -140,8 +140,8 @@ class LocationInfo(Location):
     population = sqla.Column(sqla.Integer)
     airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(AirportInfo.id))
     locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(LocodeInfo.id))
-    clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
-    alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
+    clli = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
+    alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
 
     state = sqlorm.relationship(State, back_populates='location_infos')
     matches = sqlorm.relationship('code_matches', back_populates='location_info')

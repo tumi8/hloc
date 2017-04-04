@@ -18,15 +18,15 @@ class MeasurementResult(Base):
     __tablename__ = 'measurement_results'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    platform_id = sqla.Column(sqla.Integer)
-    probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probes.id'))
-    probe = sqlorm.relationship('probes', back_populates='measurements')
-    execution_time = sqla.Column(sqla.DateTime)
-    destination_address = sqla.Column(postgresql.INET)
+    probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probes.id'), nullable=False)
+    execution_time = sqla.Column(sqla.DateTime, nullable=False)
+    destination_address = sqla.Column(postgresql.INET, nullable=False)
     source_address = sqla.Column(postgresql.INET)
     error_msg = sqla.Column(postgresql.ENUM(MeasurementError))
-    rtts = sqla.Column(postgresql.ARRAY(sqla.Float))
+    rtts = sqla.Column(postgresql.ARRAY(sqla.Float), nullable=False)
     # eventually save ttl if there?
+
+    probe = sqlorm.relationship('probes', back_populates='measurements')
 
     measurement_result_type = sqla.Column(sqla.String)
 

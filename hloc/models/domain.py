@@ -22,9 +22,9 @@ class CodeMatch(Base):
     __tablename__ = 'code_matches'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
-    code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
-    code = sqla.Column(sqla.String(50))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'), nullable=False)
+    code_type = sqla.Column(postgresql.ENUM(LocationCodeType), nullable=False)
+    code = sqla.Column(sqla.String(50), nullable=False)
 
     location_info = sqlorm.relationship('location_infos', back_populates='matches')
     labels = sqlorm.relationship("DomainLabel",
@@ -44,15 +44,13 @@ class DomainLabel(Base):
     __tablename__ = 'domain_labels'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(100))
-    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
+    name = sqla.Column(sqla.String(100), unique=True, index=True, nullable=False)
+    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'), nullable=False)
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
     matches = sqlorm.relationship(CodeMatch,
                                   secondary=label_matches_table,
                                   back_populates='labels')
-
-    __table_args__ = (sqla.UniqueConstraint('name'), sqla.Index('name'))
 
 
     def __init__(self, name: str):
@@ -78,9 +76,10 @@ class Domain(Base):
     __tablename__ = 'domains'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(200))
+    name = sqla.Column(sqla.String(200), nullable=False)
     ipv4_address = sqla.Column(postgresql.INET)
     ipv6_address = sqla.Column(postgresql.INET)
+
     labels = sqlorm.relationship(DomainLabel, back_populates='domain')
 
     # TODO create function to check for a validated location
