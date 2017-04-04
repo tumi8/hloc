@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
+from hloc.util import db_session
 
 
 @enum.unique
@@ -75,6 +76,25 @@ class State(Base):
     code = sqla.Column(sqla.String(5))
 
     location_infos = sqlorm.relationship("LocationInfo", back_populates="state")
+
+    @staticmethod
+    def state_for_code(state_code, state_name):
+        """
+        
+        :param state_code: A state code 
+        :param state_name: the name of the state
+        :return: the state object for the state code
+        """
+        state = db_session.query(State).filter(sqla.or_(State.code == state_code, State.name == state_name)).first()
+
+        if state:
+            if state_name and not state.name:
+                state.name = state_name
+            return state
+
+        state = State(name=state_name, code=state_code)
+        db_session.add(state)
+        return State(name=state_name, code=state_code)
 
 
 class Location(Base):

@@ -26,7 +26,8 @@ import requests
 from html.parser import HTMLParser
 
 import hloc.json_util as json_util
-from hloc.models import LocationInfo
+from hloc.models import LocationInfo, State
+from hloc.util import db_session
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -90,12 +91,15 @@ class WorldAirportCodesParser(HTMLParser):
                 self.airportInfo.city_name = None
             state_code_index_s = state_string.find('(') + 1
             state_code_index_e = state_string.find(')')
+
+            state_code = None
             if state_code_index_s > 0 and state_code_index_e > 0:
-                self.airportInfo.state = state_string[:(state_code_index_s - 1)].strip().lower()
-                self.airportInfo.state_code = state_string[
-                                              state_code_index_s:state_code_index_e].lower()
+                state_name = state_string[:(state_code_index_s - 1)].strip().lower()
+                state_code = state_string[state_code_index_s:state_code_index_e].lower()
             else:
-                self.airportInfo.state = state_string.strip().lower()
+                state_name = state_string.strip().lower()
+
+            self.airportInfo.state = State.state_for_code(state_code, state_name)
         elif self.__currentKey == 'iataCode':
             self.airportInfo.airport_info.iata_codes.append(data.lower())
         elif self.__currentKey == 'icaoCode':
@@ -267,14 +271,14 @@ def get_locode_locations(locode_filename):
             # create a new entry
             airport_info = LocationInfo(**location_dict)
             airport_info.add_locode_info()
-            airport_info.state_code = current_state['state_code'].lower()
             airport_info.locode.place_codes.append(normalize_locode_info(
                 line_elements[2]).lower())
             locode_name = get_locode_name(normalize_locode_info(line_elements[4]))
             if locode_name is None:
                 continue
             airport_info.city_name = locode_name.lower()
-            airport_info.state = current_state['state'].lower()
+
+            airport_info.state = State.state_for_code(current_state['state_code'].lower(), current_state['state'].lower())
 
             if airport_info.lat == 'NaN' or airport_info.lon == 'NaN':
                 continue
@@ -375,7 +379,7 @@ def get_geo_names(file_path, min_population):
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
                     columns[9] = columns[9].split(',')[0]
-                new_geo_names_info.state_code = columns[9].lower()
+                new_geo_names_info.state = State.state_for_code(columns[9].lower(), None)
 
             if len(columns[14]) > 0 and int(columns[14]) >= min_population:
                 new_geo_names_info.population = int(columns[14])
@@ -398,13 +402,9 @@ def location_merge(location1, location2):
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
     """
+    # TODO: check how to merge locations in the database
     if location1.city_name is None:
         location1.city_name = location2.city_name
-    if location2.state_code is None:
-        location2.state_code = location1.state_code
-
-    if location1.state_code is None:
-        location1.state_code = location2.state_code
 
     # if location['stateCode'] is not None and loc['stateCode'] != location['stateCode']:
     #     # print('This locations states do not match:\n', location, '\n', loc)
@@ -425,9 +425,13 @@ def location_merge(location1, location2):
             location1.airport_info.iata_codes.extend(location2.airport_info.iata_codes)
             location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
             location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
+
     location1.alternate_names.extend(location2.alternate_names)
+
     if location2.city_name != location1.city_name:
         location1.alternate_names.append(location2.city_name)
+
+    db_session.delete(location2)
 
 
 def merge_locations_to_location(location, locations, radius, start=0):
@@ -476,15 +480,15 @@ def merge_locations_by_gps(locations, radius):
         merge_locations_to_location(location, locations, radius, start=i)
 
 
-def idfy_codes(codes):
-    """Assign a unique id to every location in the array and return a dict with id to location"""
-    # TODO: change from simple enumeration to hash of some properties -> deterministic behaviour
-    ret_dict = {}
-    for index, code in enumerate(codes):
-        code.id = index
-        ret_dict[index] = code
-
-    return ret_dict
+def idfy_locations(locations):
+    """
+    Assign a unique id to every location in the array by computing the hash over all codes sorted alphabetically
+    This should guarantee a unique and 
+    """
+    for location in locations:
+        codes = [tup[0] for tup in location.code_id_tuples()]
+        codes.sort()
+        location.id = int(hashlib.md5(''.join(codes).encode()).hexdigest(), 16)
 
 
 def parse_airport_codes(args):
