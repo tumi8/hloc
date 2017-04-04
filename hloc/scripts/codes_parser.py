@@ -25,10 +25,11 @@ from time import sleep
 import requests
 from html.parser import HTMLParser
 
-from hloc.models import sql_alchemy_base
 import hloc.json_util as json_util
-from hloc.models import LocationInfo, State
-from hloc.util import db_session
+from hloc.models import LocationInfo, State, Session
+
+
+db_session = Session()
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -483,13 +484,12 @@ def merge_locations_by_gps(locations, radius):
 
 def idfy_locations(locations):
     """
-    Assign a unique id to every location in the array by computing the hash over all codes sorted alphabetically
-    This should guarantee a unique and 
+    Assign a unique id to every location in the array by computing the hash over all codes 
+    sorted alphabetically. That should guarantee a unique and 
     """
     for location in locations:
-        codes = [tup[0] for tup in location.code_id_tuples()]
-        codes.sort()
-        location.id = int(hashlib.md5(''.join(codes).encode()).hexdigest(), 16)
+        location.id = int(
+            hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest(), 16)
 
 
 def parse_airport_codes(args):
@@ -639,7 +639,7 @@ def parse_codes(args):
 
     location_codes = merge_location_codes(args.merge_radius)
 
-    locations = idfy_codes(location_codes)
+    locations = idfy_locations(location_codes)
     with open(args.filename, 'w') as character_codes_file:
         json_util.json_dump(locations, character_codes_file)
         

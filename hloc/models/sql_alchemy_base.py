@@ -2,18 +2,8 @@
 """The Base of SQLAlchemy imported by all model using it"""
 
 import sqlalchemy.ext.declarative
-import sqlalchemy.orm as sqlorm
-from hloc.util import engine
+from sqlalchemy import create_engine
 
-
+# echo writes sql to output
+engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=False)
 Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
-
-from .location import *
-from .probe import *
-from .measurement_result import *
-from .domain import *
-
-Location.matches = sqlorm.relationship(CodeMatch, back_populates='location_info')
-
-
-Base.metadata.create_all(engine)

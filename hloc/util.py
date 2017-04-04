@@ -7,8 +7,6 @@ import logging
 import os
 import socket
 import subprocess
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from hloc import constants
 
@@ -143,12 +141,6 @@ def get_class_properties(subj_class) -> [str]:
     return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
 
 
-## sqlAlchemy setup
-# echo writes sql to log
-engine = create_engine('postgresql://hloc:hloc2017@localhost/hloc-debugdb', echo=True)
-Session = sessionmaker(bind=engine)
-db_session = Session()
-
 __all__ = ['count_lines',
            'seek_lines',
            'hex_for_ip',
@@ -160,5 +152,4 @@ __all__ = ['count_lines',
            'parse_zmap_line',
            'ip_to_int',
            'int_to_alphanumeric',
-           'get_class_properties',
-           'db_session']
+           'get_class_properties']
