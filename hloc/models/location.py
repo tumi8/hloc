@@ -177,7 +177,7 @@ class LocationInfo(Location):
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
-    state = sqlorm.relationship(State, back_populates="states.location_infos")
+    state = sqlorm.relationship("states", back_populates="states.location_infos")
     airport_info = sqlorm.relationship(AirportInfo)
     locode_info = sqlorm.relationship(LocodeInfo)
 
