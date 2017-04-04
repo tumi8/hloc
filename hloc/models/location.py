@@ -168,6 +168,7 @@ class LocationInfo(Location):
 
     __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
+    id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id), primary_key=True)
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
