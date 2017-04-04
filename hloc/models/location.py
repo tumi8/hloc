@@ -46,7 +46,7 @@ class LocationCodeType(enum.Enum):
         return r'(?P<type>' + pattern + r')'
 
 
-class AirportInfo(object):
+class AirportInfo(Base):
     """Holds a list of the different airport codes"""
 
     __tablename__ = 'airport_infos'
@@ -57,7 +57,7 @@ class AirportInfo(object):
     faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)))
 
 
-class LocodeInfo(object):
+class LocodeInfo(Base):
     """Holds a list of locode codes"""
 
     __tablename__ = 'locode_infos'
