@@ -26,7 +26,7 @@ class CodeMatch(Base):
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType), nullable=False)
     code = sqla.Column(sqla.String(50), nullable=False)
 
-    location_info = sqlorm.relationship('location_infos', back_populates='matches')
+    location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
     labels = sqlorm.relationship("DomainLabel",
                                  secondary=label_matches_table,
                                  back_populates="matches")

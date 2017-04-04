@@ -26,7 +26,7 @@ class MeasurementResult(Base):
     rtts = sqla.Column(postgresql.ARRAY(sqla.Float), nullable=False)
     # eventually save ttl if there?
 
-    probe = sqlorm.relationship('probes', back_populates='measurements')
+    probe = sqlorm.relationship('Probe', back_populates='measurements')
 
     measurement_result_type = sqla.Column(sqla.String)
 
