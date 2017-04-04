@@ -74,7 +74,7 @@ class State(Base):
     name = sqla.Column(sqla.String(50))
     code = sqla.Column(sqla.String(5))
 
-    location_infos = sqlorm.relationship("LocationInfo", back_populates="location_infos.state")
+    location_infos = sqlorm.relationship("LocationInfo", back_populates="state")
 
 
 class Location(Base):
@@ -177,7 +177,7 @@ class LocationInfo(Location):
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
-    state = sqlorm.relationship("states", back_populates="states.location_infos")
+    state = sqlorm.relationship(State, back_populates="location_infos")
     airport_info = sqlorm.relationship(AirportInfo)
     locode_info = sqlorm.relationship(LocodeInfo)
 
