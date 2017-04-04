@@ -75,3 +75,7 @@ class LocationResult(object):
 
     def copy(self):
         return LocationResult(self.location_id, self.rtt, location=self.location)
+
+
+__all__ = ['MeasurementResult'
+           ]

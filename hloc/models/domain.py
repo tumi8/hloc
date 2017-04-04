@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
-from .location import LocationCodeType
+from .enums import LocationCodeType
 
 label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
                                  sqla.Column('code_matches_id', sqla.Integer, sqla.ForeignKey('code_matches.id')),

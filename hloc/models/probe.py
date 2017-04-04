@@ -224,3 +224,8 @@ class RipeAtlasProbe(Probe):
         """Updates the probes status"""
         self._probe_obj = ripe_atlas.Probe(id=self._id)
         self._last_update = datetime.datetime.now()
+
+
+__all__ = ['Probe',
+           'RipeAtlasProbe',
+           ]

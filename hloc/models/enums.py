@@ -53,3 +53,8 @@ class AvailableType(enum.Enum):
     both_available = '2'
     not_available = '3'
     unknown = '4'
+
+__all__ = ['LocationCodeType',
+           'MeasurementError',
+           'AvailableType',
+           ]
