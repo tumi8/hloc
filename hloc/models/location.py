@@ -164,19 +164,21 @@ class LocationInfo(Location):
     Additionally information like the population can be saved
     """
 
+    __tablename__ = 'location_infos'
+
     __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
     name = sqla.Column(sqla.String(50))
-    state_id = sqla.Column(sqla.Integer, sqla.ForeignKey('states.id'))
+    state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
-    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('airport_infos.id'))
-    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locode_infos.id'))
+    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(AirportInfo.id))
+    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(LocodeInfo.id))
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)))
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)))
 
-    state = sqlorm.relationship('State', back_populates='location_infos')
-    airport_info = sqlorm.relationship('AirportInfo')
-    locode_info = sqlorm.relationship('LocodeInfo')
+    state = sqlorm.relationship(State, back_populates=State.location_infos)
+    airport_info = sqlorm.relationship(AirportInfo)
+    locode_info = sqlorm.relationship(LocodeInfo)
 
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
