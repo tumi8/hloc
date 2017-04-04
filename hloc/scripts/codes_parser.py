@@ -27,6 +27,7 @@ from html.parser import HTMLParser
 
 import hloc.json_util as json_util
 from hloc.models import LocationInfo, State, Session
+import hloc.location_queries as queries
 
 
 db_session = Session()
@@ -101,7 +102,7 @@ class WorldAirportCodesParser(HTMLParser):
             else:
                 state_name = state_string.strip().lower()
 
-            self.airportInfo.state = State.state_for_code(state_code, state_name)
+            self.airportInfo.state = queries.state_for_code(state_code, state_name, db_session)
         elif self.__currentKey == 'iataCode':
             self.airportInfo.airport_info.iata_codes.append(data.lower())
         elif self.__currentKey == 'icaoCode':
@@ -280,7 +281,9 @@ def get_locode_locations(locode_filename):
                 continue
             airport_info.city_name = locode_name.lower()
 
-            airport_info.state = State.state_for_code(current_state['state_code'].lower(), current_state['state'].lower())
+            airport_info.state = queries.state_for_code(current_state['state_code'].lower(),
+                                                        current_state['state'].lower(),
+                                                        db_session)
 
             if airport_info.lat == 'NaN' or airport_info.lon == 'NaN':
                 continue
@@ -381,7 +384,8 @@ def get_geo_names(file_path, min_population):
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
                     columns[9] = columns[9].split(',')[0]
-                new_geo_names_info.state = State.state_for_code(columns[9].lower(), None)
+                new_geo_names_info.state = queries.state_for_code(columns[9].lower(), None,
+                                                                  db_session)
 
             if len(columns[14]) > 0 and int(columns[14]) >= min_population:
                 new_geo_names_info.population = int(columns[14])
@@ -637,9 +641,9 @@ def parse_codes(args):
         get_geo_names(args.geonames, args.min_population)
         print('Finished geonames parsing')
 
-    location_codes = merge_location_codes(args.merge_radius)
+    locations = merge_location_codes(args.merge_radius)
 
-    locations = idfy_locations(location_codes)
+    idfy_locations(locations)
     with open(args.filename, 'w') as character_codes_file:
         json_util.json_dump(locations, character_codes_file)
         
@@ -647,10 +651,10 @@ def parse_codes(args):
     end_rtime = time.time()
     print('finished and needed ', (end_time - start_time), ' seconds of the'
           'processor computation time\nAnd ', int(end_rtime - start_rtime),
-          ' seconds of the real world time.\nCollected data on ', len(location_codes),
+          ' seconds of the real world time.\nCollected data on ', len(locations),
           ' locations.')
 
-    print_stats(location_codes)
+    print_stats(locations)
 
 
 def __create_parser_arguments(parser):
