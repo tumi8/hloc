@@ -25,6 +25,7 @@ from time import sleep
 import requests
 from html.parser import HTMLParser
 
+from hloc.models import sql_alchemy_base
 import hloc.json_util as json_util
 from hloc.models import LocationInfo, State
 from hloc.util import db_session
