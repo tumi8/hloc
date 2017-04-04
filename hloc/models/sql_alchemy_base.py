@@ -2,6 +2,7 @@
 """The Base of SQLAlchemy imported by all model using it"""
 
 import sqlalchemy.ext.declarative
+import sqlalchemy.orm as sqlorm
 from hloc.util import engine
 
 
@@ -13,11 +14,6 @@ from .measurement_result import *
 from .domain import *
 
 Location.matches = sqlorm.relationship(CodeMatch, back_populates='location_info')
-
-
-# from hloc.models import MeasurementResult, Probe, RipeAtlasProbe, AvailableType, JSONBase, \
-#     LocationCodeType, AirportInfo, LocodeInfo, State, Location, LocationInfo, Domain, DomainLabel, \
-#     CodeMatch, DRoPRule
 
 
 Base.metadata.create_all(engine)
