@@ -9,8 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
-from .location import Location, LocationInfo, LocationCodeType
-
+from .location import LocationCodeType
 
 label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
                                  sqla.Column('code_matches_id', sqla.Integer, sqla.ForeignKey('code_matches.id')),
@@ -23,11 +22,11 @@ class CodeMatch(Base):
     __tablename__ = 'code_matches'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'))
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
     code = sqla.Column(sqla.String(50))
 
-    location_info = sqlorm.relationship(LocationInfo, back_populates='matches')
+    location_info = sqlorm.relationship('location_infos', back_populates='matches')
     labels = sqlorm.relationship("DomainLabel",
                                  secondary=label_matches_table,
                                  back_populates="matches")
@@ -37,9 +36,6 @@ class CodeMatch(Base):
         self.location_info = location_info
         self.code_type = code_type
         self.code = code
-
-
-Location.matches = sqlorm.relationship(CodeMatch, back_populates='location_info')
 
 
 class DomainLabel(Base):

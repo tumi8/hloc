@@ -12,6 +12,7 @@ from .probe import *
 from .measurement_result import *
 from .domain import *
 
+Location.matches = sqlorm.relationship(CodeMatch, back_populates='location_info')
 
 
 # from hloc.models import MeasurementResult, Probe, RipeAtlasProbe, AvailableType, JSONBase, \
