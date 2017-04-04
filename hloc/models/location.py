@@ -74,7 +74,7 @@ class State(Base):
     name = sqla.Column(sqla.String(50))
     code = sqla.Column(sqla.String(5))
 
-    location_infos = sqlorm.relationship('LocationInfo', back_populates='state')
+    location_infos = sqlorm.relationship(LocationInfo, back_populates=LocationInfo.state)
 
 
 class Location(Base):
