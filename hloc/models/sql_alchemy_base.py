@@ -7,10 +7,14 @@ from hloc.util import engine
 
 Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
 
+from .measurement_result import *
+from .domain import *
+from .probe import *
+from .location import *
 
-from hloc.models import MeasurementResult, Probe, RipeAtlasProbe, AvailableType, JSONBase, \
-    LocationCodeType, AirportInfo, LocodeInfo, State, Location, LocationInfo, Domain, DomainLabel, \
-    CodeMatch, DRoPRule
+# from hloc.models import MeasurementResult, Probe, RipeAtlasProbe, AvailableType, JSONBase, \
+#     LocationCodeType, AirportInfo, LocodeInfo, State, Location, LocationInfo, Domain, DomainLabel, \
+#     CodeMatch, DRoPRule
 
 
 Base.metadata.create_all(engine)

@@ -3,7 +3,6 @@
  * All measurement result classes used by the HLOC framework
 """
 
-import abc
 import enum
 
 import sqlalchemy as sqla
