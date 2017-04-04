@@ -3,20 +3,13 @@
  * All measurement result classes used by the HLOC framework
 """
 
-import enum
-
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 from sqlalchemy.dialects import postgresql
 from hloc.models.sql_alchemy_base import Base
 
 from hloc import constants
-
-
-class MeasurementError(enum.Enum):
-    not_reachable = 'not_reachable'
-    probe_not_available = 'probe_not_available'
-    probe_error = 'probe_error'
+from .enums import MeasurementError
 
 
 class MeasurementResult(Base):

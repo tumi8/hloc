@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """The basic location object and all related inherited objects"""
 
-import enum
-import logging
 import math
 
 import sqlalchemy as sqla
@@ -12,39 +10,7 @@ from sqlalchemy.dialects import postgresql
 from hloc import constants
 from .sql_alchemy_base import Base
 from hloc.util import db_session
-
-
-@enum.unique
-class LocationCodeType(enum.Enum):
-    iata = 0
-    icao = 1
-    faa = 2
-    clli = 3
-    locode = 4
-    geonames = 5
-
-    @property
-    def regex(self):
-        """
-        :returns the pattern for regex matching a code of the type
-        :return: str
-        """
-        base = r'[a-zA-Z]'
-        if self == LocationCodeType.iata:
-            pattern = base + r'{3}'
-        elif self == LocationCodeType.icao:
-            pattern = base + r'{4}'
-        elif self == LocationCodeType.clli:
-            pattern = base + r'{6}'
-        elif self == LocationCodeType.locode:
-            pattern = base + r'{5}'
-        elif self == LocationCodeType.geonames:
-            pattern = r'[a-zA-Z]+'
-        else:
-            logging.error('WTF? should not be possible')
-            return
-
-        return r'(?P<type>' + pattern + r')'
+from .enums import LocationCodeType
 
 
 class AirportInfo(Base):
@@ -175,7 +141,7 @@ class Location(Base):
             math.cos(angular_dist) - math.sin(lat_rad) * math.sin(lat_new))
         lon_new = ((lon_rad - lon_new_temp + math.pi) % (2 * math.pi)) - math.pi
 
-        return (math.degrees(lat_new), math.degrees(lon_new))
+        return math.degrees(lat_new), math.degrees(lon_new)
 
 
 class LocationInfo(Location):
@@ -208,8 +174,8 @@ class LocationInfo(Location):
 
     def add_locode_info(self):
         """Creates and sets a new empty """
-        if self.locode is None:
-            self.locode = LocodeInfo()
+        if self.locode_info is None:
+            self.locode_info = LocodeInfo()
 
     def code_id_type_tuples(self):
         """
@@ -242,8 +208,7 @@ class LocationInfo(Location):
         return ret_list
 
 
-__all__ = ['LocationCodeType',
-           'AirportInfo',
+__all__ = ['AirportInfo',
            'LocodeInfo',
            'State',
            'Location',
