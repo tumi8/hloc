@@ -38,8 +38,8 @@ class Probe(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     probe_id = sqla.Column(sqla.String(30))
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locations.id'))
-    location = sqlorm.relationship('Location', back_populates='probes')
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id))
+    location = sqlorm.relationship(Location, back_populates='probes')
     last_seen = sqla.Column(sqla.DateTime)
 
     measurements = sqlorm.relationship('MeasurementResult', back_populates='probe')

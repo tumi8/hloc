@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
-from .location import *
+from .location import Location, LocationInfo, LocationCodeType
 
 
 label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
@@ -23,11 +23,11 @@ class CodeMatch(Base):
     __tablename__ = 'code_matches'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('locations.id'))
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id))
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType))
     code = sqla.Column(sqla.String(50))
 
-    location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
+    location_info = sqlorm.relationship(LocationInfo, back_populates='matches')
     labels = sqlorm.relationship("DomainLabel",
                                  secondary=label_matches_table,
                                  back_populates="matches")
@@ -39,7 +39,7 @@ class CodeMatch(Base):
         self.code = code
 
 
-Location.matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
+Location.matches = sqlorm.relationship(CodeMatch, back_populates='location_info')
 
 
 class DomainLabel(Base):
@@ -52,7 +52,7 @@ class DomainLabel(Base):
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
-    matches = sqlorm.relationship('CodeMatch',
+    matches = sqlorm.relationship(CodeMatch,
                                   secondary=label_matches_table,
                                   back_populates='labels')
 
@@ -85,7 +85,7 @@ class Domain(Base):
     name = sqla.Column(sqla.String(200))
     ipv4_address = sqla.Column(postgresql.INET)
     ipv6_address = sqla.Column(postgresql.INET)
-    labels = sqlorm.relationship('DomainLabel', back_populates='domain')
+    labels = sqlorm.relationship(DomainLabel, back_populates='domain')
 
     # TODO create function to check for a validated location
 
