@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 A collection of queries connected to the location object
 """

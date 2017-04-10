@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 In this module all enums are collected
 """
