@@ -93,7 +93,10 @@ class WorldAirportCodesParser(HTMLParser):
             if NORMAL_CHARS_REGEX.search(self.airportInfo.city_name) is None:
                 self.airportInfo.city_name = None
             state_code_index_s = state_string.find('(') + 1
-            state_code_index_e = state_string.find(')')
+            if state_string[state_code_index_s:].find('(') != -1:
+                state_code_index_s = state_string[state_code_index_s:].find('(')
+
+            state_code_index_e = state_string[state_code_index_s].find(')')
 
             state_code = None
             if state_code_index_s > 0 and state_code_index_e > 0:
