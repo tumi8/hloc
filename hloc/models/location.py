@@ -18,9 +18,9 @@ class AirportInfo(Base):
     __tablename__ = 'airport_infos'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)), default=[])
-    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)), default=[])
-    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)), default=[])
+    iata_codes = sqla.Column(postgresql.ARRAY(sqla.String(3)), default=[], nullable=False)
+    icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)), default=[], nullable=False)
+    faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)), default=[], nullable=False)
 
 
 class LocodeInfo(Base):
@@ -29,8 +29,8 @@ class LocodeInfo(Base):
     __tablename__ = 'locode_infos'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
-    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
+    place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[], nullable=False)
+    subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[], nullable=False)
 
 
 class State(Base):
@@ -151,12 +151,12 @@ class LocationInfo(Location):
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
         if self.airport_info is None:
-            self.airport_info = AirportInfo()
+            self.airport_info = AirportInfo(iata_codes=[], icao_codes=[], faa_codes=[])
 
     def add_locode_info(self):
         """Creates and sets a new empty """
         if self.locode_info is None:
-            self.locode_info = LocodeInfo()
+            self.locode_info = LocodeInfo(place_codes=[], subdivision_codes=[])
 
     def code_id_type_tuples(self):
         """
