@@ -120,7 +120,6 @@ class WorldAirportCodesParser(HTMLParser):
         self.__currentKey = None
         self.__th = False
         self.airportInfo = LocationInfo()
-        db_session.add(self.airportInfo)
         return HTMLParser.reset(self)
 
 
@@ -225,9 +224,9 @@ def parse_airport_specific_page(page_text: str):
     parser = WorldAirportCodesParser()
     parser.feed(code_to_parse)
     if parser.airportInfo.city_name is not None:
+        db_session.add(parser.airportInfo)
+        db_session.flush()
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
-    else:
-        db_session.delete(parser.airportInfo)
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
         print('saved {0} locations'.format(len(AIRPORT_LOCATION_CODES)))
@@ -282,8 +281,6 @@ def get_locode_locations(locode_filename: str):
             if airport_info.lat == 'NaN' or airport_info.lon == 'NaN':
                 continue
 
-            db_session.add(airport_info)
-
             airport_info.add_locode_info()
             airport_info.locode.place_codes.append(normalize_locode_info(
                 line_elements[2]).lower())
@@ -294,7 +291,10 @@ def get_locode_locations(locode_filename: str):
                                                         current_state['state'].lower(),
                                                         db_session)
 
+            db_session.add(airport_info)
             LOCODE_LOCATION_CODES.append(airport_info)
+
+            db_session.flush()
 
         THREADS_SEMA.release()
 
@@ -352,8 +352,8 @@ def get_clli_codes(file_path: str):
             line = line.strip()
             clli, lat, lon = line.split('\t')
             new_clli_info = LocationInfo(lat=float(lat), lon=float(lon))
-            db_session.add(new_clli_info)
             new_clli_info.clli.append(clli[0:6])
+            db_session.add(new_clli_info)
             CLLI_LOCATION_CODES.append(new_clli_info)
 
 
@@ -388,8 +388,6 @@ def get_geo_names(file_path: str, min_population: int):
                     or len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
 
-            db_session.add(new_geo_names_info)
-
             new_geo_names_info.city_name = columns[2].lower()
 
             if len(columns[9]) > 0:
@@ -408,7 +406,10 @@ def get_geo_names(file_path: str, min_population: int):
                 if len(maxname) > 0:
                     new_geo_names_info.alternate_names.append(maxname.lower())
 
+            db_session.add(new_geo_names_info)
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
+
+            db_session.flush()
 
 
 def location_merge(location1: LocationInfo, location2: LocationInfo):
@@ -620,10 +621,11 @@ def parse_metropolitan_codes(metropolitan_filepath: str) -> [LocationInfo]:
         for line in metropolitan_file:
             code, lat, lon = line.strip().split(',')
             location = LocationInfo(lat=float(lat), lon=float(lon))
-            db_session.add(location)
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
+            db_session.add(location)
+            db_session.flush()
 
     return metropolitan_locations
 
@@ -632,7 +634,7 @@ def parse_codes(args):
     """start real parsing"""
     start_time = time.clock()
     start_rtime = time.time()
-    
+
     with db_session.no_autoflush:
         if args.airport_codes:
             parse_airport_codes(args)
@@ -659,6 +661,8 @@ def parse_codes(args):
         locations = merge_location_codes(args.merge_radius)
 
         idfy_locations(locations)
+
+    db_session.flush()
 
     with open(args.filename, 'w') as character_codes_file:
         json_util.json_dump(locations, character_codes_file)
