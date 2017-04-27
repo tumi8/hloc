@@ -22,6 +22,11 @@ class AirportInfo(Base):
     icao_codes = sqla.Column(postgresql.ARRAY(sqla.String(4)), default=[], nullable=False)
     faa_codes = sqla.Column(postgresql.ARRAY(sqla.String(5)), default=[], nullable=False)
 
+    def __init__(self):
+        self.iata_codes = []
+        self.icao_codes = []
+        self.faa_codes = []
+
 
 class LocodeInfo(Base):
     """Holds a list of locode codes"""
@@ -32,6 +37,9 @@ class LocodeInfo(Base):
     place_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[], nullable=False)
     subdivision_codes = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[], nullable=False)
 
+    def __init__(self):
+        self.place_codes = []
+        self.subdivision_codes = []
 
 class State(Base):
     __tablename__ = 'states'
@@ -148,15 +156,22 @@ class LocationInfo(Location):
     airport_info = sqlorm.relationship(AirportInfo)
     locode_info = sqlorm.relationship(LocodeInfo)
 
+    def __init__(self, **kwargs):
+        self.clli = []
+        self.alternate_names = []
+
+        for name, value in kwargs:
+            setattr(self, name, value)
+
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
         if self.airport_info is None:
-            self.airport_info = AirportInfo(iata_codes=[], icao_codes=[], faa_codes=[])
+            self.airport_info = AirportInfo()
 
     def add_locode_info(self):
         """Creates and sets a new empty """
         if self.locode_info is None:
-            self.locode_info = LocodeInfo(place_codes=[], subdivision_codes=[])
+            self.locode_info = LocodeInfo()
 
     def code_id_type_tuples(self):
         """
