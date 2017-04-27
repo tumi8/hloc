@@ -18,8 +18,7 @@ import time
 import hashlib
 from string import ascii_lowercase
 from string import printable
-from threading import Semaphore
-from threading import Thread
+from threading import Thread, Semaphore
 from time import sleep
 
 import requests
@@ -35,7 +34,6 @@ db_session = Session()
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
 THREADS_SEMA = None
-LOCATION_CODES_SEMA = Semaphore()
 AIRPORT_LOCATION_CODES = []
 LOCODE_LOCATION_CODES = []
 CLLI_LOCATION_CODES = []
@@ -227,9 +225,7 @@ def parse_airport_specific_page(page_text: str):
     parser = WorldAirportCodesParser()
     parser.feed(code_to_parse)
     if parser.airportInfo.city_name is not None:
-        LOCATION_CODES_SEMA.acquire()
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
-        LOCATION_CODES_SEMA.release()
     else:
         db_session.delete(parser.airportInfo)
 
@@ -298,9 +294,7 @@ def get_locode_locations(locode_filename: str):
                                                         current_state['state'].lower(),
                                                         db_session)
 
-            LOCATION_CODES_SEMA.acquire()
             LOCODE_LOCATION_CODES.append(airport_info)
-            LOCATION_CODES_SEMA.release()
 
         THREADS_SEMA.release()
 
@@ -454,7 +448,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo):
     db_session.delete(location2)
 
 
-def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo], radius: int, start: int=0):
+def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo], radius: int,
+                                start: int=0):
     """Merge all locations from the locations list to the location if they are near enough"""
     near_locations = []
 
@@ -467,7 +462,8 @@ def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo
         locations.remove(mloc)
 
 
-def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radius: int, create_new_locations: bool=True):
+def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radius: int,
+                  create_new_locations: bool=True):
     """
     The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in add_locations
@@ -604,7 +600,7 @@ def print_stats(locations: [LocationInfo]):
 
         geonames += len(location.alternate_names)
         clli_codes += len(location.clli)
-        
+
         if location.airport_info is not None:
             if len(location.airport_info.iata_codes) > 0:
                 iata_codes += len(location.airport_info.iata_codes)
