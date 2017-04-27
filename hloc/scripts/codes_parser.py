@@ -25,11 +25,13 @@ import requests
 from html.parser import HTMLParser
 
 import hloc.json_util as json_util
-from hloc.models import LocationInfo, State, Session
+from hloc.models import LocationInfo, Session
 import hloc.location_queries as queries
+from hloc.util import setup_logger
 
 
 db_session = Session()
+logger = None
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -41,6 +43,60 @@ GEONAMES_LOCATION_CODES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
 NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9/.-_\s]+$', flags=re.MULTILINE)  # TODO use set
+
+
+def __create_parser_arguments(parser: argparse.ArgumentParser):
+    """Creates the arguments for the parser"""
+    parser.add_argument('-a', '--load-airport-codes', action='store_true',
+                        dest='airport_codes',
+                        help='download airport_codes from world-airport-codes.com')
+    parser.add_argument('-o', '--load-offline-airport-codes', type=str,
+                        help='Do not download'
+                             ' the website but use the local files in the stated folder',
+                        dest='offline_airportcodes')
+    parser.add_argument('-l', '--locode', dest='locode', type=str,
+                        help='Load locode codes from the 3 files: for example '
+                             'collectedData/locodePart{}.csv {} is replaced with 1, 2, and 3')
+    parser.add_argument('-c', '--clli', dest='clli', type=str,
+                        help='Load clli codes from the path')
+    parser.add_argument('-g', '--geo-names', type=str, dest='geonames',
+                        help='Load geonames from the given path')
+    parser.add_argument('-m', '--merge-locations', type=int,
+                        dest='merge_radius',
+                        help='Try to merge locations in the given radius by gps')
+    parser.add_argument('-t', '--max-threads', default=16, type=int,
+                        dest='maxThreads',
+                        help='Specify the maximal amount of threads')
+    parser.add_argument('-p', '--min-population', default=10000, type=int,
+                        dest='min_population',
+                        help='Specify the allowed minimum population for locations')
+    parser.add_argument('-f', '--output-filename', type=str,
+                        default='collectedData.json',
+                        dest='filename', help='Specify the output filename')
+    parser.add_argument('-e', '--metropolitan-codes-file', dest='metropolitan_file', type=str,
+                        help='Specify the metropolitan codes file')
+    parser.add_argument('-l', '--logging-file', type=str, default='codes_parser.log',
+                        dest='log_file',
+                        help='Specify a logging file where the log should be saved')
+    parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
+                        choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the preferred log level')
+    # TODO config file
+
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser()
+    __create_parser_arguments(parser)
+    args = parser.parse_args()
+
+    global logger
+    logger = setup_logger(args.log_file, 'parse_codes', loglevel=args.log_level)
+    logger.debug('starting')
+
+    global THREADS_SEMA
+    THREADS_SEMA = Semaphore(args.maxThreads)
+    parse_codes(args)
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -133,7 +189,7 @@ def load_pages_for_character(character: str, offline_path: str):
     No return value
     """
 
-    print('Thread for character {0} startet'.format(character))
+    logger.debug('Thread for character {0} startet'.format(character))
 
     if offline_path:
         load_detailed_pages_offline(character, offline_path)
@@ -154,7 +210,7 @@ def load_pages_for_character(character: str, offline_path: str):
 
     load_detailed_pages(response.text, character)
     THREADS_SEMA.release()
-    # print('Thread for character {0} ended'.format(character))
+    # logger.debug('Thread for character {0} ended'.format(character))
 
 
 def load_detailed_pages(page_code: str, character: str):
@@ -176,7 +232,7 @@ def load_detailed_pages(page_code: str, character: str):
             try:
                 response = session.get(city_url, timeout=3.05)
             except requests.exceptions.Timeout as ex:
-                print(ex)
+                logger.exception(ex)
                 sleep(5)
             if response is not None and response.status_code == 200:
                 character_file.write(response.text)
@@ -190,7 +246,7 @@ def load_detailed_pages(page_code: str, character: str):
             page_code = page_code[index + len(search_string) + end_index:]
             index = page_code.find(search_string)
 
-    print('#timeouts for ', character, ': ', count_timeouts)
+    logger.debug('#timeouts for {}: {}'.format(character, count_timeouts))
 
 
 def load_detailed_pages_offline(character: str, offline_path: str):
@@ -228,7 +284,7 @@ def parse_airport_specific_page(page_text: str):
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
-        print('saved {0} locations'.format(len(AIRPORT_LOCATION_CODES)))
+        logger.debug('saved {0} locations'.format(len(AIRPORT_LOCATION_CODES)))
 
 
 # format of csv:
@@ -372,7 +428,7 @@ def get_geo_names(file_path: str, min_population: int):
             # [0:-1] remove last character \n and extract the information
             columns = line[0:-1].split('\t')
             if len(columns) < 15:
-                print(line)
+                logger.debug(line)
                 continue
             if len(columns[14]) == 0 or int(columns[14]) <= MAX_POPULATION:
                 continue
@@ -417,7 +473,7 @@ def location_merge(location1: LocationInfo, location2: LocationInfo):
         location1.city_name = location2.city_name
 
     # if location['stateCode'] is not None and loc['stateCode'] != location['stateCode']:
-    #     # print('This locations states do not match:\n', location, '\n', loc)
+    #     # logger.debug('This locations states do not match:\n', location, '\n', loc)
     #     continue
 
     if location1.locode_info is None:
@@ -507,7 +563,7 @@ def parse_airport_codes(args):
     # for loop for all characters of the alphabet
     threads = []
     for character in list(ascii_lowercase):
-        # print('start Thread for character {0}'.format(character))
+        # logger.debug('start Thread for character {0}'.format(character))
         THREADS_SEMA.acquire()
         thread = Thread(target=load_pages_for_character,
                         args=(character, args.offline_airportcodes))
@@ -520,7 +576,7 @@ def parse_airport_codes(args):
     with open('timeoutUrls.json', 'w') as timeout_file:
         json.dump(TIMEOUT_URLS, timeout_file, indent=4)
 
-    print('Finished airport codes parsing')
+    logger.debug('Finished airport codes parsing')
 
 
 def parse_locode_codes(path):
@@ -540,7 +596,7 @@ def parse_locode_codes(path):
     for thread in threads:
         thread.join()
 
-    print('Finished locode parsing')
+    logger.debug('Finished locode parsing')
 
 
 def merge_location_codes(merge_radius):
@@ -550,10 +606,10 @@ def merge_location_codes(merge_radius):
     """
     location_codes = []
     if merge_radius:
-        print('geonames length: ', len(GEONAMES_LOCATION_CODES))
-        print('locode length: ', len(LOCODE_LOCATION_CODES))
-        print('air length: ', len(AIRPORT_LOCATION_CODES))
-        print('clli length: ', len(CLLI_LOCATION_CODES))
+        logger.info('geonames length: ', len(GEONAMES_LOCATION_CODES))
+        logger.info('locode length: ', len(LOCODE_LOCATION_CODES))
+        logger.info('air length: ', len(AIRPORT_LOCATION_CODES))
+        logger.info('clli length: ', len(CLLI_LOCATION_CODES))
         # location_codes = GEONAMES_LOCATION_CODES
         location_codes = sorted(GEONAMES_LOCATION_CODES,
                                 key=lambda location: location.population,
@@ -565,13 +621,13 @@ def merge_location_codes(merge_radius):
         clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])
         # add_locations(location_codes, geo_codes)
 
-        print('geonames merged:', len(location_codes))
+        logger.info('geonames merged:', len(location_codes))
         add_locations(location_codes, locodes, merge_radius, create_new_locations=False)
-        print('locode merged:', len(location_codes))
+        logger.info('locode merged:', len(location_codes))
         add_locations(location_codes, airport_codes, merge_radius)
-        print('air merged:', len(location_codes))
+        logger.info('air merged:', len(location_codes))
         add_locations(location_codes, clli_codes, merge_radius, create_new_locations=False)
-        print('clli merged:', len(location_codes))
+        logger.info('clli merged:', len(location_codes))
 
     else:
         location_codes.extend(AIRPORT_LOCATION_CODES)
@@ -605,7 +661,7 @@ def print_stats(locations: [LocationInfo]):
             if len(location.airport_info.faa_codes) > 0:
                 faa_codes += len(location.airport_info.faa_codes)
 
-    print('iata: {0} icao: {1} faa: {2} locode: {3} clli: {4} geonames: {5}'
+    logger.info('iata: {0} icao: {1} faa: {2} locode: {3} clli: {4} geonames: {5}'
           .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
 
 
@@ -646,11 +702,11 @@ def parse_codes(args):
 
         if args.clli:
             get_clli_codes(args.clli)
-            print('Finished clli parsing')
+            logger.debug('Finished clli parsing')
 
         if args.geonames:
             get_geo_names(args.geonames, args.min_population)
-            print('Finished geonames parsing')
+            logger.debug('Finished geonames parsing')
 
         locations = merge_location_codes(args.merge_radius)
 
@@ -661,55 +717,13 @@ def parse_codes(args):
         
     end_time = time.clock()
     end_rtime = time.time()
-    print('finished and needed ', (end_time - start_time), ' seconds of the'
-          'processor computation time\nAnd ', int(end_rtime - start_rtime),
-          ' seconds of the real world time.\nCollected data on ', len(locations),
-          ' locations.')
+    logger.debug('finished and needed {} seconds of the processor computation time\n'
+          'And {} seconds of the real world time.\n'
+          'Collected data on {} locations.'.format((end_time - start_time),
+                                                   int(end_rtime - start_rtime),
+                                                   len(locations)))
 
     print_stats(locations)
-
-
-def __create_parser_arguments(parser: argparse.ArgumentParser):
-    """Creates the arguments for the parser"""
-    parser.add_argument('-a', '--load-airport-codes', action='store_true',
-                        dest='airport_codes',
-                        help='download airport_codes from world-airport-codes.com')
-    parser.add_argument('-o', '--load-offline-airport-codes', type=str,
-                        help='Do not download'
-                             ' the website but use the local files in the stated folder',
-                        dest='offline_airportcodes')
-    parser.add_argument('-l', '--locode', dest='locode', type=str,
-                        help='Load locode codes from the 3 files: for example '
-                        'collectedData/locodePart{}.csv {} is replaced with 1, 2, and 3')
-    parser.add_argument('-c', '--clli', dest='clli', type=str,
-                        help='Load clli codes from the path')
-    parser.add_argument('-g', '--geo-names', type=str, dest='geonames',
-                        help='Load geonames from the given path')
-    parser.add_argument('-m', '--merge-locations', type=int,
-                        dest='merge_radius',
-                        help='Try to merge locations in the given radius by gps')
-    parser.add_argument('-t', '--max-threads', default=16, type=int,
-                        dest='maxThreads',
-                        help='Specify the maximal amount of threads')
-    parser.add_argument('-p', '--min-population', default=10000, type=int,
-                        dest='min_population',
-                        help='Specify the allowed minimum population for locations')
-    parser.add_argument('-f', '--output-filename', type=str,
-                        default='collectedData.json',
-                        dest='filename', help='Specify the output filename')
-    parser.add_argument('-e', '--metropolitan-codes-file', dest='metropolitan_file', type=str,
-                        help='Specify the metropolitan codes file')
-    # TODO config file
-
-
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser()
-    __create_parser_arguments(parser)
-    args = parser.parse_args()
-    global THREADS_SEMA
-    THREADS_SEMA = Semaphore(args.maxThreads)
-    parse_codes(args)
 
 
 if __name__ == '__main__':
