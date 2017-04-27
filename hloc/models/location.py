@@ -160,7 +160,7 @@ class LocationInfo(Location):
         self.clli = []
         self.alternate_names = []
 
-        for name, value in kwargs:
+        for name, value in kwargs.items():
             setattr(self, name, value)
 
         super().__init__()
