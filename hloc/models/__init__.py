@@ -1,5 +1,5 @@
 
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from .sql_alchemy_base import Base, engine
 from .probe import Probe, RipeAtlasProbe
@@ -10,7 +10,7 @@ from .domain import Domain, DomainLabel, CodeMatch
 from .drop_rule import DRoPRule
 from .enums import LocationCodeType, AvailableType, MeasurementError
 
-Session = sessionmaker(bind=engine)
+Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
 Base.metadata.create_all(engine)
 
 

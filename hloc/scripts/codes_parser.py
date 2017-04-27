@@ -225,7 +225,6 @@ def parse_airport_specific_page(page_text: str):
     parser.feed(code_to_parse)
     if parser.airportInfo.city_name is not None:
         db_session.add(parser.airportInfo)
-        db_session.flush()
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
@@ -293,8 +292,6 @@ def get_locode_locations(locode_filename: str):
 
             db_session.add(airport_info)
             LOCODE_LOCATION_CODES.append(airport_info)
-
-            db_session.flush()
 
         THREADS_SEMA.release()
 
@@ -408,8 +405,6 @@ def get_geo_names(file_path: str, min_population: int):
 
             db_session.add(new_geo_names_info)
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
-
-            db_session.flush()
 
 
 def location_merge(location1: LocationInfo, location2: LocationInfo):
@@ -625,7 +620,6 @@ def parse_metropolitan_codes(metropolitan_filepath: str) -> [LocationInfo]:
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
             db_session.add(location)
-            db_session.flush()
 
     return metropolitan_locations
 
@@ -661,8 +655,6 @@ def parse_codes(args):
         locations = merge_location_codes(args.merge_radius)
 
         idfy_locations(locations)
-
-    db_session.flush()
 
     with open(args.filename, 'w') as character_codes_file:
         json_util.json_dump(locations, character_codes_file)
