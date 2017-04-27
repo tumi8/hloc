@@ -632,31 +632,34 @@ def parse_codes(args):
     """start real parsing"""
     start_time = time.clock()
     start_rtime = time.time()
-    if args.airport_codes:
-        parse_airport_codes(args)
-        if args.metropolitan_file:
-            metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
-            if args.merge_radius:
-                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
-                              create_new_locations=False)
-            else:
-                add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
-                              create_new_locations=False)
+    
+    with db_session.no_autoflush:
+        if args.airport_codes:
+            parse_airport_codes(args)
+            if args.metropolitan_file:
+                metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
+                if args.merge_radius:
+                    add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
+                                  create_new_locations=False)
+                else:
+                    add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
+                                  create_new_locations=False)
 
-    if args.locode:
-        parse_locode_codes(args.locode)
+        if args.locode:
+            parse_locode_codes(args.locode)
 
-    if args.clli:
-        get_clli_codes(args.clli)
-        print('Finished clli parsing')
+        if args.clli:
+            get_clli_codes(args.clli)
+            print('Finished clli parsing')
 
-    if args.geonames:
-        get_geo_names(args.geonames, args.min_population)
-        print('Finished geonames parsing')
+        if args.geonames:
+            get_geo_names(args.geonames, args.min_population)
+            print('Finished geonames parsing')
 
-    locations = merge_location_codes(args.merge_radius)
+        locations = merge_location_codes(args.merge_radius)
 
-    idfy_locations(locations)
+        idfy_locations(locations)
+
     with open(args.filename, 'w') as character_codes_file:
         json_util.json_dump(locations, character_codes_file)
         
