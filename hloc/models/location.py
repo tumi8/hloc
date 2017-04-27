@@ -163,6 +163,8 @@ class LocationInfo(Location):
         for name, value in kwargs:
             setattr(self, name, value)
 
+        super().__init__()
+
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
         if self.airport_info is None:
