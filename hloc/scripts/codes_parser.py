@@ -54,7 +54,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Do not download'
                              ' the website but use the local files in the stated folder',
                         dest='offline_airportcodes')
-    parser.add_argument('-l', '--locode', dest='locode', type=str,
+    parser.add_argument('-le', '--locode', dest='locode', type=str,
                         help='Load locode codes from the 3 files: for example '
                              'collectedData/locodePart{}.csv {} is replaced with 1, 2, and 3')
     parser.add_argument('-c', '--clli', dest='clli', type=str,
