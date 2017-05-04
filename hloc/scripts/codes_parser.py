@@ -147,9 +147,9 @@ class WorldAirportCodesParser(HTMLParser):
             split_index = data.find(',')
             city_name = data[:split_index]
             state_string = data[split_index + 2:]
-            self.airportInfo.city_name = city_name.lower()
-            if NORMAL_CHARS_REGEX.search(self.airportInfo.city_name) is None:
-                self.airportInfo.city_name = None
+            self.airportInfo.name = city_name.lower()
+            if NORMAL_CHARS_REGEX.search(self.airportInfo.name) is None:
+                self.airportInfo.name = None
             state_code_index_s = state_string.find('(') + 1
             if state_string[state_code_index_s:].find('(') != -1:
                 state_code_index_s = state_string[state_code_index_s:].find('(')
@@ -284,7 +284,7 @@ def parse_airport_specific_page(page_text: str, db_session: Session):
     parser = WorldAirportCodesParser()
     parser.db_session = db_session
     parser.feed(code_to_parse)
-    if parser.airportInfo.city_name is not None:
+    if parser.airportInfo.name is not None:
         db_session.add(parser.airportInfo)
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
@@ -345,7 +345,7 @@ def get_locode_locations(locode_filename: str, db_session: Session):
             airport_info.locode.place_codes.append(normalize_locode_info(
                 line_elements[2]).lower())
 
-            airport_info.city_name = locode_name.lower()
+            airport_info.name = locode_name.lower()
 
             airport_info.state = queries.state_for_code(current_state['state_code'].lower(),
                                                         current_state['state'].lower(),
@@ -442,11 +442,11 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
             alternatenames = columns[3].split(',')
             new_geo_names_info = LocationInfo(lat=float(columns[4]), lon=float(columns[5]))
 
-            if NORMAL_CHARS_REGEX.search(new_geo_names_info.city_name) is None \
+            if NORMAL_CHARS_REGEX.search(new_geo_names_info.name) is None \
                     or len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
 
-            new_geo_names_info.city_name = columns[2].lower()
+            new_geo_names_info.name = columns[2].lower()
 
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
@@ -474,8 +474,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session:
     location1 is the dominant one that means it defines the important properties
     """
     # TODO: check how to merge locations in the database
-    if location1.city_name is None:
-        location1.city_name = location2.city_name
+    if location1.name is None:
+        location1.name = location2.name
 
     # if location['stateCode'] is not None and loc['stateCode'] != location['stateCode']:
     #     # logger.debug('This locations states do not match:\n', location, '\n', loc)
@@ -499,8 +499,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session:
 
     location1.alternate_names.extend(location2.alternate_names)
 
-    if location2.city_name != location1.city_name:
-        location1.alternate_names.append(location2.city_name)
+    if location2.name != location1.name:
+        location1.alternate_names.append(location2.name)
 
     db_session.delete(location2)
 
@@ -614,8 +614,8 @@ def merge_location_codes(merge_radius, db_session: Session):
                                 reverse=True)
         merge_locations_by_gps(location_codes, merge_radius, db_session)
 
-        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
-        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
+        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.name)
+        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.name)
         clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])
         # add_locations(location_codes, geo_codes)
 
