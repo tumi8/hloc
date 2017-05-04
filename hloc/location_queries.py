@@ -25,5 +25,4 @@ def state_for_code(state_code, state_name, db_session):
 
     state = State(name=state_name, code=state_code)
     db_session.add(state)
-    db_session.flush()
     return State(name=state_name, code=state_code)
