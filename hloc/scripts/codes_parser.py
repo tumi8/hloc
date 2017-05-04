@@ -30,7 +30,6 @@ import hloc.location_queries as queries
 from hloc.util import setup_logger
 
 
-db_session = Session()
 logger = None
 
 CODE_SEPARATOR = '#################'
@@ -94,9 +93,13 @@ def main():
     logger = setup_logger(args.log_file, 'parse_codes', loglevel=args.log_level)
     logger.debug('starting')
 
+    db_session = Session()
+
     global THREADS_SEMA
     THREADS_SEMA = Semaphore(args.maxThreads)
-    parse_codes(args)
+    parse_codes(args, db_session)
+
+    Session.remove()
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -107,6 +110,7 @@ class WorldAirportCodesParser(HTMLParser):
     airportInfo = None
     __currentKey = None
     __th = False
+    db_session = None
 
     def error(self, var1):
         raise NotImplementedError
@@ -159,7 +163,7 @@ class WorldAirportCodesParser(HTMLParser):
             else:
                 state_name = state_string.strip().lower()
 
-            self.airportInfo.state = queries.state_for_code(state_code, state_name, db_session)
+            self.airportInfo.state = queries.state_for_code(state_code, state_name, self.db_session)
         elif self.__currentKey == 'iataCode':
             self.airportInfo.airport_info.iata_codes.append(data.lower())
         elif self.__currentKey == 'icaoCode':
@@ -179,7 +183,7 @@ class WorldAirportCodesParser(HTMLParser):
         return HTMLParser.reset(self)
 
 
-def load_pages_for_character(character: str, offline_path: str):
+def load_pages_for_character(character: str, offline_path: str, db_session: Session):
     """
     Loads the world-airport-codes side to the specific character, parses it
     and loops through all airports for the character. Loads their detailed page,
@@ -192,7 +196,7 @@ def load_pages_for_character(character: str, offline_path: str):
     logger.debug('Thread for character {0} startet'.format(character))
 
     if offline_path:
-        load_detailed_pages_offline(character, offline_path)
+        load_detailed_pages_offline(character, offline_path, db_session)
         THREADS_SEMA.release()
         return
 
@@ -208,12 +212,12 @@ def load_pages_for_character(character: str, offline_path: str):
     if response.status_code != 200:
         response.raise_for_status()
 
-    load_detailed_pages(response.text, character)
+    load_detailed_pages(response.text, character, db_session)
     THREADS_SEMA.release()
     # logger.debug('Thread for character {0} ended'.format(character))
 
 
-def load_detailed_pages(page_code: str, character: str):
+def load_detailed_pages(page_code: str, character: str, db_session: Session):
     """
     Parses the city Urls out of the page code and loads their pages to save them
     and also saves the parsed locations
@@ -237,7 +241,7 @@ def load_detailed_pages(page_code: str, character: str):
             if response is not None and response.status_code == 200:
                 character_file.write(response.text)
                 character_file.write(CODE_SEPARATOR)
-                parse_airport_specific_page(response.text)
+                parse_airport_specific_page(response.text, db_session)
             else:
                 TIMEOUT_URLS.append(city_url)
                 count_timeouts += 1
@@ -249,7 +253,7 @@ def load_detailed_pages(page_code: str, character: str):
     logger.debug('#timeouts for {}: {}'.format(character, count_timeouts))
 
 
-def load_detailed_pages_offline(character: str, offline_path: str):
+def load_detailed_pages_offline(character: str, offline_path: str, db_session: Session):
     """
     Parsers all files for the character offline from the saved pages saved in
     './page_data/page_locations_<character>.data'
@@ -261,11 +265,11 @@ def load_detailed_pages_offline(character: str, offline_path: str):
             if CODE_SEPARATOR not in line:
                 page_code = '{0}\n{1}'.format(page_code, line)
             else:
-                parse_airport_specific_page(page_code)
+                parse_airport_specific_page(page_code, db_session)
                 page_code = ''
 
 
-def parse_airport_specific_page(page_text: str):
+def parse_airport_specific_page(page_text: str, db_session: Session):
     """
     Parses from the page_text the the information
     Assumes the text is the HTML page code from a world-airport-codes page for
@@ -278,6 +282,7 @@ def parse_airport_specific_page(page_text: str):
         + city_start_index + len(city_end_search_string)
     code_to_parse = page_text[city_start_index:city_end_index]
     parser = WorldAirportCodesParser()
+    parser.db_session = db_session
     parser.feed(code_to_parse)
     if parser.airportInfo.city_name is not None:
         db_session.add(parser.airportInfo)
@@ -291,7 +296,7 @@ def parse_airport_specific_page(page_text: str):
 # [0]special,[1]countryCode,[2]placeCode,[3]name,[4]normalizedName,
 # [5]subdivisionCode,[6]functionCodes,np,np,
 # [9]iataCode(only if different from placeCode),[10]location,np
-def get_locode_locations(locode_filename: str):
+def get_locode_locations(locode_filename: str, db_session: Session):
     """
     Parses the locode information from a locode csv file and stores the
     locations into the LOCATION_CODES array
@@ -397,7 +402,7 @@ def get_locode_name(city_name: str):
     return city_name
 
 
-def get_clli_codes(file_path: str):
+def get_clli_codes(file_path: str, db_session: Session):
     """Get the clli codes from file ./collectedData/clli-lat-lon.txt"""
     with open(file_path) as clli_file:
         for line in clli_file:
@@ -420,7 +425,7 @@ def get_clli_codes(file_path: str):
 # 9: cc2                : alternate country codes, comma separated, ISO-3166 2-letter
 #                         country code, 200 characters
 # 14: population        : bigint (8 byte int)
-def get_geo_names(file_path: str, min_population: int):
+def get_geo_names(file_path: str, min_population: int, db_session: Session):
     """Get the geo names from file ./collectedData/cities1000.txt"""
 
     with open(file_path, encoding='utf-8') as geoname_file:
@@ -463,7 +468,7 @@ def get_geo_names(file_path: str, min_population: int):
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
 
 
-def location_merge(location1: LocationInfo, location2: LocationInfo):
+def location_merge(location1: LocationInfo, location2: LocationInfo, db_session: Session):
     """
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
@@ -501,7 +506,7 @@ def location_merge(location1: LocationInfo, location2: LocationInfo):
 
 
 def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo], radius: int,
-                                start: int=0):
+                                db_session: Session, start: int=0):
     """Merge all locations from the locations list to the location if they are near enough"""
     near_locations = []
 
@@ -510,12 +515,12 @@ def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo
             near_locations.append(locations[j])
 
     for mloc in near_locations:
-        location_merge(location, mloc)
+        location_merge(location, mloc, db_session)
         locations.remove(mloc)
 
 
 def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radius: int,
-                  create_new_locations: bool=True):
+                  db_session: Session, create_new_locations: bool=True):
     """
     The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in add_locations
@@ -524,14 +529,14 @@ def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radi
         create new location objects Default is true
     """
     for i, location in enumerate(locations):
-        merge_locations_to_location(location, add_locations, radius)
+        merge_locations_to_location(location, add_locations, radius, db_session)
 
     if create_new_locations:
-        merge_locations_by_gps(add_locations, radius)
+        merge_locations_by_gps(add_locations, radius, db_session)
         locations.extend(add_locations)
 
 
-def merge_locations_by_gps(locations: [LocationInfo], radius: int):
+def merge_locations_by_gps(locations: [LocationInfo], radius: int, db_session: Session):
     """
     this method starts at the beginning and matches all locations which are in a
     range of `radius` kilometers
@@ -545,7 +550,7 @@ def merge_locations_by_gps(locations: [LocationInfo], radius: int):
         if lat_is_none or lon_is_none:
             continue
 
-        merge_locations_to_location(location, locations, radius, start=i)
+        merge_locations_to_location(location, locations, radius, db_session, start=i)
 
 
 def idfy_locations(locations: [LocationInfo]):
@@ -558,7 +563,7 @@ def idfy_locations(locations: [LocationInfo]):
             hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest(), 16)
 
 
-def parse_airport_codes(args):
+def parse_airport_codes(args, db_session: Session):
     """Parses the airport codes"""
     # for loop for all characters of the alphabet
     threads = []
@@ -566,7 +571,7 @@ def parse_airport_codes(args):
         # logger.debug('start Thread for character {0}'.format(character))
         THREADS_SEMA.acquire()
         thread = Thread(target=load_pages_for_character,
-                        args=(character, args.offline_airportcodes))
+                        args=(character, args.offline_airportcodes, db_session))
         thread.start()
         threads.append(thread)
 
@@ -579,27 +584,20 @@ def parse_airport_codes(args):
     logger.debug('Finished airport codes parsing')
 
 
-def parse_locode_codes(path):
+def parse_locode_codes(path, db_session: Session):
     """Parses the locode codes from the files"""
-    threads = []
     locode_file1 = path.format(1)
     locode_file2 = path.format(2)
     locode_file3 = path.format(3)
-    # TODO do not use threads
-    threads.append(Thread(target=get_locode_locations, args=(locode_file1,)))
-    threads.append(Thread(target=get_locode_locations, args=(locode_file2,)))
-    threads.append(Thread(target=get_locode_locations, args=(locode_file3,)))
-    for thread in threads:
-        THREADS_SEMA.acquire()
-        thread.start()
 
-    for thread in threads:
-        thread.join()
+    get_locode_locations(locode_file1, db_session)
+    get_locode_locations(locode_file2, db_session)
+    get_locode_locations(locode_file3, db_session)
 
     logger.debug('Finished locode parsing')
 
 
-def merge_location_codes(merge_radius):
+def merge_location_codes(merge_radius, db_session: Session):
     """
     Return all merged location codes if the option is set else return all codes
     concatenated
@@ -614,7 +612,7 @@ def merge_location_codes(merge_radius):
         location_codes = sorted(GEONAMES_LOCATION_CODES,
                                 key=lambda location: location.population,
                                 reverse=True)
-        merge_locations_by_gps(location_codes, merge_radius)
+        merge_locations_by_gps(location_codes, merge_radius, db_session)
 
         locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
         airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
@@ -622,11 +620,12 @@ def merge_location_codes(merge_radius):
         # add_locations(location_codes, geo_codes)
 
         logger.info('geonames merged:', len(location_codes))
-        add_locations(location_codes, locodes, merge_radius, create_new_locations=False)
+        add_locations(location_codes, locodes, merge_radius, db_session, create_new_locations=False)
         logger.info('locode merged:', len(location_codes))
-        add_locations(location_codes, airport_codes, merge_radius)
+        add_locations(location_codes, airport_codes, merge_radius, db_session)
         logger.info('air merged:', len(location_codes))
-        add_locations(location_codes, clli_codes, merge_radius, create_new_locations=False)
+        add_locations(location_codes, clli_codes, merge_radius, db_session,
+                      create_new_locations=False)
         logger.info('clli merged:', len(location_codes))
 
     else:
@@ -662,10 +661,10 @@ def print_stats(locations: [LocationInfo]):
                 faa_codes += len(location.airport_info.faa_codes)
 
     logger.info('iata: {0} icao: {1} faa: {2} locode: {3} clli: {4} geonames: {5}'
-          .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
+                .format(iata_codes, icao_codes, faa_codes, locode_codes, clli_codes, geonames))
 
 
-def parse_metropolitan_codes(metropolitan_filepath: str) -> [LocationInfo]:
+def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) -> [LocationInfo]:
     """Parses the Iata metropolitan codes"""
     metropolitan_locations = []
     with open(metropolitan_filepath) as metropolitan_file:
@@ -680,35 +679,36 @@ def parse_metropolitan_codes(metropolitan_filepath: str) -> [LocationInfo]:
     return metropolitan_locations
 
 
-def parse_codes(args):
+def parse_codes(args, db_session: Session):
     """start real parsing"""
     start_time = time.clock()
     start_rtime = time.time()
 
     with db_session.no_autoflush:
         if args.airport_codes:
-            parse_airport_codes(args)
+            parse_airport_codes(args, db_session)
             if args.metropolitan_file:
-                metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file)
+                metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file,
+                                                                  db_session)
                 if args.merge_radius:
                     add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
-                                  create_new_locations=False)
+                                  db_session, create_new_locations=False)
                 else:
                     add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
-                                  create_new_locations=False)
+                                  db_session, create_new_locations=False)
 
         if args.locode:
-            parse_locode_codes(args.locode)
+            parse_locode_codes(args.locode, db_session)
 
         if args.clli:
-            get_clli_codes(args.clli)
+            get_clli_codes(args.clli, db_session)
             logger.debug('Finished clli parsing')
 
         if args.geonames:
-            get_geo_names(args.geonames, args.min_population)
+            get_geo_names(args.geonames, args.min_population, db_session)
             logger.debug('Finished geonames parsing')
 
-        locations = merge_location_codes(args.merge_radius)
+        locations = merge_location_codes(args.merge_radius, db_session)
 
         idfy_locations(locations)
 
@@ -718,10 +718,10 @@ def parse_codes(args):
     end_time = time.clock()
     end_rtime = time.time()
     logger.debug('finished and needed {} seconds of the processor computation time\n'
-          'And {} seconds of the real world time.\n'
-          'Collected data on {} locations.'.format((end_time - start_time),
-                                                   int(end_rtime - start_rtime),
-                                                   len(locations)))
+                 'And {} seconds of the real world time.\n'
+                 'Collected data on {} locations.'.format((end_time - start_time),
+                                                          int(end_rtime - start_rtime),
+                                                          len(locations)))
 
     print_stats(locations)
 
