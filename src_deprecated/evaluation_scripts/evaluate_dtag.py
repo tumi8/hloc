@@ -19,15 +19,15 @@ def __create_parser_arguments(parser):
     parser.add_argument('-f', '--file-count', type=int, default=8,
                         dest='fileCount',
                         help='number of files from preprocessing')
-    parser.add_argument('-loc', '--location-file-name', required=True, type=str,
-                        dest='locationFile',
-                        help='The path to the location file.'
-                             ' The output file from the codes_parser')
+    # parser.add_argument('-loc', '--location-file-name', required=True, type=str,
+    #                     dest='locationFile',
+    #                     help='The path to the location file.'
+    #                          ' The output file from the codes_parser')
     parser.add_argument('-o', '--output-file', type=str, default='dtag_output.domains',
                         dest='output_file',
                         help='Specify a output file where the dtag domains should be saved')
 
-    parser.add_argument('-l', '--logging-file', type=str, default='compare_methods.log',
+    parser.add_argument('-l', '--logging-file', type=str, default='eval_dtag.log',
                         dest='log_file',
                         help='Specify a logging file where the log should be saved')
 
@@ -100,3 +100,6 @@ def dtag_ips_to_range(dtag_ip_to_location):
 
     return dtag_ip_to_range
 
+
+if __name__ == '__main__':
+    main()
