@@ -107,7 +107,7 @@ def parse_ripe_domains(filename_proto, file_count, dtag_ip_to_range, dtag_type_c
             line = ripe_file.readline().decode('utf-8')
             while line:
                 domain_type_dict = util.json_loads(line)
-                for domain_type, domains in domain_type_dict:
+                for domain_type, domains in domain_type_dict.items():
                     for domain in domains:
                         if domain.ip_address in dtag_ip_to_range:
                             count += 1
