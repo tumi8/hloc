@@ -93,7 +93,7 @@ def dtag_ips_to_range(dtag_ip_to_location):
         base_ip, subnet_bits = ip_range.split('/')
         base_ip_int = struct.unpack('>I', socket.inet_aton(base_ip))[0]
 
-        ips = [socket.inet_ntoa(struct.pack('>I', i)) for i in range(base_ip_int, base_ip_int + (2**subnet_bits))]
+        ips = [socket.inet_ntoa(struct.pack('>I', i)) for i in range(base_ip_int, base_ip_int + (2**int(subnet_bits)))]
 
         for ip in ips:
             dtag_ip_to_range[ip] = ip_range
