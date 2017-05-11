@@ -35,23 +35,6 @@ def __create_parser_arguments(parser):
                         help='path to a file with a white list of IPs')
 
 
-def select_ip_regex(regex_strategy):
-    """Selects the regular expression according to the option set in the arguments"""
-    if regex_strategy == ABSTRACT_STRATEGY:
-        # most abstract regex
-        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
-               r'.*(\1.*\2.*\3.*\4|\4.*\3.*\2.*\1).*$'
-    elif regex_strategy == MODERATE_STRATEGY:
-        # slightly stricter regex
-        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
-               r'.*(\1.+\2.+\3.+\4|\4.+\3.+\2.+\1).*$'
-    elif regex_strategy == STRICT_STRATEGY:
-        # regex with delimiters restricted to '.','-' and '_'
-        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
-               r'.*(0{0,2}?\1[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\3[\.\-_]' \
-               r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
-
-
 def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
@@ -134,7 +117,7 @@ def preprocess_domains(ip_domain_tuples: [(str, str)], tlds: {str}, white_list: 
     ip_encoded_lines = []
     custom_filter_lines = []
 
-    ipregex_text = select_ip_regex(regex_strategy)
+    ipregex_text = __select_ip_regex(regex_strategy)
     ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
     is_ipv6 = ip_version == 'ipv6'
 
@@ -162,7 +145,7 @@ def preprocess_domains(ip_domain_tuples: [(str, str)], tlds: {str}, white_list: 
         bad_characters
 
 
-def hex_for_ip(ip_address):
+def __hex_for_ip(ip_address):
     """Returns the hexadecimal code for the ip address"""
     ip_blocks = [int(ip_block) for ip_block in ip_address.split('.')]
     hexdata = '{:02X}{:02X}{:02X}{:02X}'.format(*ip_blocks)
@@ -171,7 +154,7 @@ def hex_for_ip(ip_address):
 
 def is_ip_hex_encoded(ip_address, domain):
     """check if the ip address is encoded in hex format in the domain"""
-    hex_ip = hex_for_ip(ip_address)
+    hex_ip = __hex_for_ip(ip_address)
 
     return hex_ip.upper() in domain.upper()
 
@@ -181,7 +164,7 @@ def has_ip_encoded(ip, domain, ipregex):
     return ipregex.search(ip + ',' + domain)
 
 
-def ip_to_int(ip_addr, ip_version):
+def __ip_to_int(ip_addr, ip_version):
     if ip_version == 'ipv6':
         return int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, ip_addr)), 16)
     elif ip_version == 'ipv4':
@@ -189,10 +172,10 @@ def ip_to_int(ip_addr, ip_version):
 
 
 def has_ip_alphanumeric_encoded(ip_address, domain, ip_version):
-    return int_to_alphanumeric(ip_to_int(ip_address, ip_version)) in domain
+    return __int_to_alphanumeric(__ip_to_int(ip_address, ip_version)) in domain
 
 
-def int_to_alphanumeric(num: int):
+def __int_to_alphanumeric(num: int):
     rest = num % 36
     if rest < 10:
         rest_ret = '{}'.format(rest)
@@ -202,7 +185,25 @@ def int_to_alphanumeric(num: int):
     if div == 0:
         return rest_ret
     else:
-        return int_to_alphanumeric(div) + rest_ret
+        return __int_to_alphanumeric(div) + rest_ret
+
+
+def __select_ip_regex(regex_strategy):
+    """Selects the regular expression according to the option set in the arguments"""
+    if regex_strategy == ABSTRACT_STRATEGY:
+        # most abstract regex
+        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
+               r'.*(\1.*\2.*\3.*\4|\4.*\3.*\2.*\1).*$'
+    elif regex_strategy == MODERATE_STRATEGY:
+        # slightly stricter regex
+        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
+               r'.*(\1.+\2.+\3.+\4|\4.+\3.+\2.+\1).*$'
+    elif regex_strategy == STRICT_STRATEGY:
+        # regex with delimiters restricted to '.','-' and '_'
+        return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
+               r'.*(0{0,2}?\1[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\3[\.\-_]' \
+               r'0{0,2}?\4|0{0,2}?\4[\.\-_]0{0,2}?\3[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\1).*$'
+
 
 if __name__ == '__main__':
     main()
