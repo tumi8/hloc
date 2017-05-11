@@ -10,6 +10,9 @@ import binascii
 import socket
 
 ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
+ABSTRACT_STRATEGY = 'abstract'
+MODERATE_STRATEGY = 'moderate'
+STRICT_STRATEGY = 'strict'
 
 
 def __create_parser_arguments(parser):
@@ -20,8 +23,8 @@ def __create_parser_arguments(parser):
     parser.add_argument('-t', '--tlds-file', type=str, required=True,
                         dest='tlds_file', help='The path to the ICANN tlds file')
     parser.add_argument('-s', '--strategy', type=str, dest='regexStrategy',
-                        choices=['strict', 'abstract', 'moderate'],
-                        default='abstract', help='Specify a regex Strategy')
+                        choices=[STRICT_STRATEGY, ABSTRACT_STRATEGY, MODERATE_STRATEGY],
+                        default=ABSTRACT_STRATEGY, help='Specify a regex Strategy')
     parser.add_argument('-d', '--destination', type=str, dest='destination', default='domain-files',
                         help='the desination directory (must not exist)')
     parser.add_argument('-i', '--ip-encoding-filter', action='store_true', dest='isp_ip_filter',
@@ -34,15 +37,15 @@ def __create_parser_arguments(parser):
 
 def select_ip_regex(regex_strategy):
     """Selects the regular expression according to the option set in the arguments"""
-    if regex_strategy == 'abstract':
+    if regex_strategy == ABSTRACT_STRATEGY:
         # most abstract regex
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(\1.*\2.*\3.*\4|\4.*\3.*\2.*\1).*$'
-    elif regex_strategy == 'moderate':
+    elif regex_strategy == MODERATE_STRATEGY:
         # slightly stricter regex
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(\1.+\2.+\3.+\4|\4.+\3.+\2.+\1).*$'
-    elif regex_strategy == 'strict':
+    elif regex_strategy == STRICT_STRATEGY:
         # regex with delimiters restricted to '.','-' and '_'
         return r'^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3}),' \
                r'.*(0{0,2}?\1[\.\-_]0{0,2}?\2[\.\-_]0{0,2}?\3[\.\-_]' \
@@ -53,8 +56,6 @@ def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
     args = parser.parse_args()
-    ipregex_text = select_ip_regex(args.regexStrategy)
-    ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
 
     tlds = set()
     with open(args.tlds_file) as tldFile:
@@ -104,20 +105,21 @@ def main():
 
             if len(ip_domain_tuples) > 10**5:
                 correct, bad, bad_dns, ip_encoded, custom_filtered, _ = preprocess_domains(
-                    ip_domain_tuples, ipregex, tlds, white_list=white_list,
-                    ip_version=args.ip_version)
+                    ip_domain_tuples, tlds, white_list=white_list, ip_version=args.ip_version,
+                    regex_strategy=args.regexStrategy)
                 save(correct, bad, bad_dns, ip_encoded, custom_filtered)
                 del ip_domain_tuples[:]
 
             line = domain_file_mm.readline().decode(args.encoding)
 
         correct, bad, bad_dns, ip_encoded, custom_filtered, _ = preprocess_domains(
-            ip_domain_tuples, ipregex, tlds, white_list=white_list)
+            ip_domain_tuples, tlds, white_list=white_list, ip_version=args.ip_version,
+            regex_strategy=args.regexStrategy)
         save(correct, bad, bad_dns, ip_encoded, custom_filtered)
 
 
-def preprocess_domains(ip_domain_tuples: [(str, str)], ipregex: re, tlds: {str},
-                       white_list: {str} = None, ip_version: str = 'ipv4',
+def preprocess_domains(ip_domain_tuples: [(str, str)], tlds: {str}, white_list: {str} = None,
+                       ip_version: str = 'ipv4', regex_strategy: str = ABSTRACT_STRATEGY,
                        ip_encoding_filter: bool = True):
     """
     Sanitize filepart from start to end
@@ -132,6 +134,8 @@ def preprocess_domains(ip_domain_tuples: [(str, str)], ipregex: re, tlds: {str},
     ip_encoded_lines = []
     custom_filter_lines = []
 
+    ipregex_text = select_ip_regex(regex_strategy)
+    ipregex = re.compile(ipregex_text, flags=re.MULTILINE)
     is_ipv6 = ip_version == 'ipv6'
 
     for ip_address, domain in ip_domain_tuples:
