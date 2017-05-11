@@ -84,6 +84,7 @@ def main():
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as bad_dns_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
             custom_filter_file:
+
         def save(correct, bad, bad_dns, ip_encoded, custom_filtered):
             correct_file.write('\n'.join([','.join(tup) for tup in correct]) + '\n')
             bad_file.write('\n'.join([','.join(tup) for tup in bad]) + '\n')
@@ -91,7 +92,7 @@ def main():
             ip_encoded_file.write('\n'.join([','.join(tup) for tup in ip_encoded]) + '\n')
             custom_filter_file.write('\n'.join([','.join(tup) for tup in custom_filtered]) + '\n')
 
-        line = domain_file_mm.readline().decode('utf-8')
+        line = domain_file_mm.readline().decode(args.encoding)
         while line:
             line = line.strip()
             ip_domain_tuples.append(line.split(',', 1))
@@ -103,7 +104,7 @@ def main():
                 save(correct, bad, bad_dns, ip_encoded, custom_filtered)
                 del ip_domain_tuples[:]
 
-            line = domain_file_mm.readline().decode('utf-8')
+            line = domain_file_mm.readline().decode(args.encoding)
 
         correct, bad, bad_dns, ip_encoded, custom_filtered, _ = preprocess_domains(
             ip_domain_tuples, ipregex, tlds, white_list=white_list)
