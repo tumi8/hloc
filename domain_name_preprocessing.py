@@ -74,8 +74,10 @@ def main():
 
     ip_domain_tuples = []
 
-    filename = args.filename
-    with open(filename, encoding=args.encoding) as domain_file, \
+    print('Putting outputfiles into ' + args.destination)
+
+    filename = os.path.basename(args.filename)
+    with open(args.filename, encoding=args.encoding) as domain_file, \
             mmap.mmap(domain_file.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
             open(os.path.join(args.destination, filename + '.cor'), 'w',
                  encoding='utf-8') as correct_file, \
