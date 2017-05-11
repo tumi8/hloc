@@ -78,11 +78,11 @@ def main():
             mmap.mmap(domain_file.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as correct_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
-                    ip_encoded_file, \
+            ip_encoded_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as bad_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as bad_dns_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
-                    custom_filter_file:
+            custom_filter_file:
         def save(correct, bad, bad_dns, ip_encoded, custom_filtered):
             correct_file.write('\n'.join([','.join(tup) for tup in correct]) + '\n')
             bad_file.write('\n'.join([','.join(tup) for tup in bad]) + '\n')
@@ -104,10 +104,9 @@ def main():
 
             line = domain_file_mm.readline().decode('utf-8')
 
-        correct, bad, bad_dns, ip_encoded, custom_filtered, _ = preprocess_domains(ip_domain_tuples, ipregex, tlds, white_list=white_list)
+        correct, bad, bad_dns, ip_encoded, custom_filtered, _ = preprocess_domains(
+            ip_domain_tuples, ipregex, tlds, white_list=white_list)
         save(correct, bad, bad_dns, ip_encoded, custom_filtered)
-
-
 
 
 def preprocess_domains(ip_domain_tuples: [(str, str)], ipregex: re, tlds: {str},
@@ -134,14 +133,14 @@ def preprocess_domains(ip_domain_tuples: [(str, str)], ipregex: re, tlds: {str},
             bad_lines.append((ip_address, domain))
         else:
             if white_list is not None and ip_address not in white_list:
-                custom_filter_lines.append((ip, domain))
+                custom_filter_lines.append((ip_address, domain))
             elif not is_ipv6 and ip_encoding_filter and has_ip_encoded(ip_address, domain, ipregex):
                 ip_encoded_lines.append((ip_address, domain))
             elif not is_ipv6 and ip_encoding_filter and \
                     is_ip_hex_encoded(ip_address, domain):
                 ip_encoded_lines.append((ip_address, domain))
             elif ip_encoding_filter and has_ip_alphanumeric_encoded(ip_address, domain, ip_version):
-                ip_encoded_lines((ip_address, domain))
+                ip_encoded_lines.append((ip_address, domain))
             else:
                 if domain.split('.')[-1] in tlds:
                     good_lines.append((ip_address, domain))
@@ -149,7 +148,8 @@ def preprocess_domains(ip_domain_tuples: [(str, str)], ipregex: re, tlds: {str},
                     bad_dns_lines.append((ip_address, domain))
 
     return good_lines, bad_lines, bad_dns_lines, ip_encoded_lines, custom_filter_lines, \
-           bad_characters
+        bad_characters
+
 
 def hex_for_ip(ip_address):
     """Returns the hexadecimal code for the ip address"""
@@ -179,6 +179,7 @@ def ip_to_int(ip_addr, ip_version):
 
 def has_ip_alphanumeric_encoded(ip_address, domain, ip_version):
     return int_to_alphanumeric(ip_to_int(ip_address, ip_version)) in domain
+
 
 def int_to_alphanumeric(num: int):
     rest = num % 36
