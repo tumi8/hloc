@@ -15,6 +15,8 @@ ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 def __create_parser_arguments(parser):
     """Creates the arguments for the parser"""
     parser.add_argument('filename', help='filename to sanitize', type=str)
+    parser.add_argument('-e', '--encoding', default='uft-8', type=str, help='the encoding for the '
+                                                                            'filename')
     parser.add_argument('-t', '--tlds-file', type=str, required=True,
                         dest='tlds_file', help='The path to the ICANN tlds file')
     parser.add_argument('-s', '--strategy', type=str, dest='regexStrategy',
@@ -24,9 +26,8 @@ def __create_parser_arguments(parser):
                         help='the desination directory (must not exist)')
     parser.add_argument('-i', '--ip-encoding-filter', action='store_true', dest='isp_ip_filter',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version',
-                        choices=['ipv4', 'ipv6'],
-                        help='specify the ipVersion')
+    parser.add_argument('-v', '--ip-version', type=str, dest='ip_version', choices=['ipv4', 'ipv6'],
+                        default='ipv4', help='specify the ipVersion')
     parser.add_argument('-f', '--white-list-file', type=str, dest='white_list_file_path',
                         help='path to a file with a white list of IPs')
 
@@ -74,7 +75,7 @@ def main():
     ip_domain_tuples = []
 
     filename = args.filename
-    with open(filename) as domain_file, \
+    with open(filename, encoding=args.encoding) as domain_file, \
             mmap.mmap(domain_file.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as correct_file, \
             open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
