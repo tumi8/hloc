@@ -77,13 +77,16 @@ def main():
     filename = args.filename
     with open(filename, encoding=args.encoding) as domain_file, \
             mmap.mmap(domain_file.fileno(), 0, access=mmap.ACCESS_READ) as domain_file_mm, \
-            open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as correct_file, \
-            open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
-            ip_encoded_file, \
-            open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as bad_file, \
-            open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as bad_dns_file, \
-            open(os.path.join(args.destination, filename), 'w', encoding='utf-8') as \
-            custom_filter_file:
+            open(os.path.join(args.destination, filename + '.cor'), 'w',
+                 encoding='utf-8') as correct_file, \
+            open(os.path.join(args.destination, filename + '.ipencoded'), 'w',
+                 encoding='utf-8') as ip_encoded_file, \
+            open(os.path.join(args.destination, filename + '.bad'), 'w',
+                 encoding='utf-8') as bad_file, \
+            open(os.path.join(args.destination, filename + '-dns.bad'), 'w',
+                 encoding='utf-8') as bad_dns_file, \
+            open(os.path.join(args.destination, filename + '-custom-filtered'), 'w',
+                 encoding='utf-8') as custom_filter_file:
 
         def save(correct, bad, bad_dns, ip_encoded, custom_filtered):
             correct_file.write('\n'.join([','.join(tup) for tup in correct]) + '\n')
