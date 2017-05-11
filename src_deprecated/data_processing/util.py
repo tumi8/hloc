@@ -52,11 +52,8 @@ def seek_lines(seeking_file, seek_until_line):
 
 def hex_for_ip(ip_address):
     """Returns the hexadecimal code for the ip address"""
-    ip_blocks = ip_address.split('.')
-    hexdata = ''
-    # TODO use format %02x%02x%02x%02x
-    for block in ip_blocks:
-        hexdata += hex(int(block))[2:].zfill(2)
+    ip_blocks = [int(ip_block) for ip_block in ip_address.split('.')]
+    hexdata = '{:02x}{:02x}{:02x}{:02x}'.format(*ip_blocks)
     return hexdata.upper()
 
 
