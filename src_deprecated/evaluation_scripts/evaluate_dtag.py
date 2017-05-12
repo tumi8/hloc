@@ -126,3 +126,8 @@ def parse_ripe_domains(filename_proto, file_count, dtag_ip_to_range, dtag_type_c
 
 if __name__ == '__main__':
     main()
+
+# for ip_range, type_dict in dtag_domain_dict.items():
+#     for domain_type, domains in type_dict.items():
+#         for domain in domains:
+#             ip_domain_evals.append(domain_type + ', ' + domain.ip_address + ', ' + domain.domain_name)
