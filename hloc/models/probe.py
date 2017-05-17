@@ -14,7 +14,7 @@ import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 
 from hloc import util, constants
-from .location import Location
+from .location import Location, probe_location_info_table
 from .sql_alchemy_base import Base
 from .enums import AvailableType
 
@@ -33,6 +33,9 @@ class Probe(Base):
     last_seen = sqla.Column(sqla.DateTime)
 
     location = sqlorm.relationship(Location, back_populates='probes')
+    location_infos = sqlorm.relationship('LocationInfo',
+                                         secondary=probe_location_info_table,
+                                         back_populates="nearby_probes")
     measurements = sqlorm.relationship('MeasurementResult', back_populates='probe')
 
     measurement_type = sqla.Column(sqla.String)
@@ -48,7 +51,6 @@ class Probe(Base):
         """return timestamp when the probe was last updated"""
         raise NotImplementedError("subclass must implement this")
 
-    @property
     def available(self, max_age: datetime.timedelta) -> AvailableType:
         """Should return if the probe is available for measurements"""
         raise NotImplementedError("subclass must implement this")
@@ -80,11 +82,6 @@ class RipeAtlasProbe(Probe):
 
     __slots__ = ['_last_update', '_probe_obj']
 
-    class JsonKeys:
-        Id_key = 'id'
-        Lat_key = 'latitude'
-        Lon_key = 'longitude'
-
     required_keys = ['Measurement_name', 'IP_version', 'Api_key', 'Create_semaphore']
 
     class MeasurementKeys:
@@ -102,6 +99,15 @@ class RipeAtlasProbe(Probe):
                 return 1
             raise ValueError('Property ' + property_key + ' has no default value')
 
+    def __init__(self, **kwargs):
+        self._last_update = None
+        self._probe_obj = None
+
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+
+        super().__init__()
+
     @staticmethod
     def parse_from_json(json_dict):
         _id = None
@@ -114,7 +120,7 @@ class RipeAtlasProbe(Probe):
         if RipeAtlasProbe.JsonKeys.Lat_key in json_dict and \
                 RipeAtlasProbe.JsonKeys.Lon_key in json_dict:
             _location = Location(json_dict[RipeAtlasProbe.JsonKeys.Lat_key],
-                                      json_dict[RipeAtlasProbe.JsonKeys.Lon_key])
+                                 json_dict[RipeAtlasProbe.JsonKeys.Lon_key])
         else:
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
@@ -185,7 +191,6 @@ class RipeAtlasProbe(Probe):
         """return timestamp when the probe was last updated"""
         return self._last_update
 
-    @property
     def available(self, max_age=datetime.timedelta(hours=12)) -> AvailableType:
         """
         Should return if the probe is available for measurements

@@ -132,6 +132,13 @@ class Location(Base):
         return math.degrees(lat_new), math.degrees(lon_new)
 
 
+probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
+                                       sqla.Column('probe_id', sqla.Integer,
+                                                   sqla.ForeignKey('probes.id')),
+                                       sqla.Column('location_info_id', sqla.Integer,
+                                                   sqla.ForeignKey('location_infos.id')))
+
+
 class LocationInfo(Location):
     """
     A location object with the location name, coordinates and location codes
@@ -153,6 +160,9 @@ class LocationInfo(Location):
 
     state = sqlorm.relationship(State, back_populates='location_infos')
     matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
+    nearby_probes = sqlorm.relationship('Probe',
+                                        secondary=probe_location_info_table,
+                                        back_populates='location_infos')
     airport_info = sqlorm.relationship(AirportInfo)
     locode_info = sqlorm.relationship(LocodeInfo)
 
