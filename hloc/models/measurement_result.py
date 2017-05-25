@@ -3,12 +3,14 @@
  * All measurement result classes used by the HLOC framework
 """
 
+import enum
+import datetime
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 from sqlalchemy.dialects import postgresql
-from hloc.models.sql_alchemy_base import Base
 
-from hloc import constants
+
+from hloc.models.sql_alchemy_base import Base
 from .enums import MeasurementError
 
 
@@ -30,51 +32,67 @@ class MeasurementResult(Base):
 
     measurement_result_type = sqla.Column(sqla.String)
 
-    __mapper_args__ = {'polymorphic_on': measurement_result_type}
+    __mapper_args__ = {'polymorphic_on': measurement_result_type,
+                       'polymorphic_identity': 'employee'}
+
+    def __init__(self, **kwargs):
+        self.rtts = []
+
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+
+        super().__init__()
+
+    @property
+    def min_rtt(self):
+        return min(self.rtts) if self.rtts else None
+
+
+class RipeMeasurementResult(MeasurementResult):
+    __mapper_args__ = {
+        'polymorphic_identity': 'manager'
+    }
+
+    class RipeMeasurementResultKey(enum.Enum):
+        destination_addr = 'dest_addr'
+        source_addr = 'src_addr'
+        rtt_dicts = 'result'
+        rtt = 'rtt'
+        execution_time = 'timestamp'
+
+    ripe_id = sqla.Column(sqla.Integer)
 
     @staticmethod
-    def parse_from_json(dict):
-        NotImplementedError('This method ust be implemented in subclass!\n'
-                            'MeasurementResult is an custom abstract base class!')
+    def create_from_dict(ripe_result_dict):
+        """
+        
+        :param ripe_result_dict: the measurement dict from ripe.atlas.cousteau.AtlasResultsRequest  
+                                 return value
+        :return (RipeMeasurementResult): Our MeasurementResult object
+        """
+        measurement_result = RipeMeasurementResult()
+        measurement_result.destination_address = \
+            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.destination_addr.value]
+        measurement_result.source_address = \
+            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.source_addr.value]
+        rtts = []
+        for ping in measurement_result[
+                           RipeMeasurementResult.RipeMeasurementResultKey.rtt_dicts.value]:
+            rtt_value = ping.get(RipeMeasurementResult.RipeMeasurementResultKey.rtt.value, None)
+            if rtt_value:
+                try:
+                    rtts.append(float(rtt_value))
+                except ValueError:
+                    continue
 
+        measurement_result.rtts = rtts
+        if not rtts:
+            measurement_result.error_msg = MeasurementError.not_reachable
 
-class LocationResult(object):
-    """
-    Old Results object with json en/decoding
+        measurement_result.execution_time = datetime.datetime.fromtimestamp(
+            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.execution_time.value])
 
-    Stores the result for a location
-    """
-
-    class_name_identifier = 'lr'
-
-    __slots__ = ['location_id', 'rtt', 'location']
-
-    class PropertyKey:
-        location_id = '0'
-        rtt = '1'
-
-    def __init__(self, location_id: str, rtt: float, location=None):
-        """init"""
-        self.location_id = location_id
-        self.location = location
-        self.rtt = rtt
-
-    def dict_representation(self):
-        """Returns a dictionary with the information of the object"""
-        return {
-            constants.JSON_CLASS_IDENTIFIER: self.class_name_identifier,
-            self.PropertyKey.location_id: self.location_id,
-            self.PropertyKey.rtt: self.rtt
-        }
-
-    @staticmethod
-    def create_object_from_dict(dct: dict):
-        """Creates a LocationResult object from a dictionary"""
-        return LocationResult(dct[LocationResult.PropertyKey.location_id],
-                              dct[LocationResult.PropertyKey.rtt])
-
-    def copy(self):
-        return LocationResult(self.location_id, self.rtt, location=self.location)
+        return measurement_result
 
 
 __all__ = ['MeasurementResult'

@@ -8,15 +8,19 @@ import datetime
 import logging
 import random
 import time
+import typing
+import multiprocessing as mp
 
 import ripe.atlas.cousteau as ripe_atlas
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 
 from hloc import util, constants
-from .location import Location, probe_location_info_table
+from .location import probe_location_info_table
 from .sql_alchemy_base import Base
-from .enums import AvailableType
+from hloc.ripe_helper import get_ripe_measurement
+from hloc.exceptions import ProbeError
+from hloc.models import Session, Location, RipeMeasurementResult, AvailableType
 
 
 class Probe(Base):
@@ -42,7 +46,7 @@ class Probe(Base):
 
     __mapper_args__ = {'polymorphic_on': measurement_type}
 
-    def measure_rtt(self, dest_address, **kwargs):
+    def measure_rtt(self, dest_address, db_session, **kwargs):
         """Creates a method for the Probe"""
         raise NotImplementedError("subclass must implement this")
 
@@ -82,7 +86,7 @@ class RipeAtlasProbe(Probe):
 
     __slots__ = ['_last_update', '_probe_obj']
 
-    required_keys = ['Measurement_name', 'IP_version', 'Api_key', 'Create_semaphore']
+    required_keys = ['Measurement_name', 'IP_version', 'Api_key', 'Ripe_Slowdown_Sema']
 
     class MeasurementKeys:
 
@@ -91,12 +95,14 @@ class RipeAtlasProbe(Probe):
         Num_packets = 'num_packets'
         Api_key = 'api_key'
         Bill_to_address = 'bill_to_address'
-        Create_semaphore = 'create_sema'
+        Ripe_Slowdown_Sema = 'ripe_slowdown_sema'
 
         @staticmethod
-        def get_default_for(property_key):
+        def get_default_for(property_key) -> typing.Any:
             if property_key == RipeAtlasProbe.MeasurementKeys.Num_packets:
                 return 1
+            elif property_key == RipeAtlasProbe.MeasurementKeys.Bill_to_address:
+                return None
             raise ValueError('Property ' + property_key + ' has no default value')
 
     def __init__(self, **kwargs):
@@ -129,9 +135,11 @@ class RipeAtlasProbe(Probe):
         probe.location = _location
         probe._update()
 
-    def measure_rtt(self, dest_address, **kwargs):
+    def measure_rtt(self, dest_address: str, db_session: Session, **kwargs) -> typing.Optional[RipeMeasurementResult]:
         if not self.available:
+            # TODO use own errors
             raise ValueError('Probe currently not available')
+
         for prop_key in util.get_class_properties(RipeAtlasProbe.MeasurementKeys):
             key = RipeAtlasProbe.MeasurementKeys().__getattribute__(prop_key)
             if key not in kwargs:
@@ -140,6 +148,8 @@ class RipeAtlasProbe(Probe):
                                      ' for creating a Ripe Atlas measurement')
                 else:
                     kwargs[key] = RipeAtlasProbe.MeasurementKeys.get_default_for(key)
+
+        ripe_slowdown_sema = kwargs.pop(RipeAtlasProbe.MeasurementKeys().Ripe_Slowdown_Sema)
 
         atlas_request = self._create_request(dest_address, kwargs)
 
@@ -158,8 +168,15 @@ class RipeAtlasProbe(Probe):
                 logging.error('Create error {}'.format(response))
 
         # TODO create lazy measurement result which waits until response is available
-        measurement_ids = response['measurements']
-        return measurement_ids[0]
+        measurement_id = response['measurements'][0]
+
+        if measurement_id is None:
+            return None
+
+        measurement_result = self._get_measurement_response(measurement_id,
+                                                            ripe_slowdown_sema=ripe_slowdown_sema)
+        db_session.add(measurement_result)
+        return measurement_result
 
     def _create_request(self, dest_address, kwargs):
         """Creates a Ripe atlas request out of the arguments"""
@@ -185,6 +202,40 @@ class RipeAtlasProbe(Probe):
             atlas_request_args['bill_to'] = kwargs[RipeAtlasProbe.MeasurementKeys.Bill_to_address]
 
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
+
+    def _get_measurement_response(self, measurement_id: int, ripe_slowdown_sema: mp.Semaphore) -> \
+            RipeMeasurementResult:
+
+        def sleep_time(amount: float = 10):
+            """Sleep for ten seconds"""
+            time.sleep(amount)
+
+        sleep_time(amount=360)
+        while True:
+            res = get_ripe_measurement(measurement_id)
+            if res is not None:
+                if res.status_id == 4:
+                    break
+                elif res.status_id in [6, 7]:
+                    raise ProbeError()
+                elif res.status_id in [0, 1, 2]:
+                    sleep_time()
+            else:
+                sleep_time()
+
+        ripe_slowdown_sema.acquire()
+        success, m_results = ripe_atlas.AtlasResultsRequest(
+            **{'msm_id': measurement_id}).create()
+        while not success:
+            logging.error('ResultRequest error {}'.format(m_results))
+            sleep_time(amount=(10 + (random.randrange(0, 500) / 100)))
+            ripe_slowdown_sema.acquire()
+            success, m_results = ripe_atlas.AtlasResultsRequest(
+                **{'msm_id': measurement_id}).create()
+
+        measurement_result = RipeMeasurementResult.create_from_dict(m_results[0])
+        measurement_result.probe = self
+        return measurement_result
 
     @property
     def last_update(self):

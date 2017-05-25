@@ -16,3 +16,5 @@ PROBE_API_URL_PING = \
 PROBE_API_URL_GET_PROBES = \
     'https://kong.speedcheckerapi.com:8443/ProbeAPIService/Probes.svc/GetProbesByBoundingBox'
 EARTH_RADIUS = 6371
+
+DEFAULT_BUFFER_TIME = 9

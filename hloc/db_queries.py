@@ -5,7 +5,7 @@ A collection of queries connected to the location object
 
 import sqlalchemy as sqla
 
-from hloc.models import State, Probe, Session
+from hloc.models import State, Probe, Session, Domain, MeasurementResult
 
 
 def state_for_code(state_code, state_name, db_session: Session):
@@ -30,8 +30,17 @@ def state_for_code(state_code, state_name, db_session: Session):
 
 def probe_for_id(probe_id: int, db_session: Session) -> Probe:
     """
-    searches
+    searches for a probe with the probe_id
     :param probe_id (int): the id of the probe
     :return (Probe): the Probe with the corresponding id or None
     """
     return db_session.query(Probe).filter(Probe.probe_id == probe_id).first()
+
+
+def get_measurements_for_domain(domain: Domain, ip_version: str, db_session: Session) -> [MeasurementResult]:
+    """
+    
+    :param domain: the domain for which measurements should be returned
+    :return: all measurements related to this domain
+    """
+    return db_session.query(MeasurementResult).filter(MeasurementResult.destination_address == domain.ip_for_version(ip_version))

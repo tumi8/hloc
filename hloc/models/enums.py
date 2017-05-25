@@ -55,7 +55,17 @@ class AvailableType(enum.Enum):
     not_available = '3'
     unknown = '4'
 
+
+@enum.unique
+class DomainType(enum.Enum):
+    verified = 'verified'
+    verification_not_possible = 'verification not possible'
+    no_match_possible = 'no match possible'
+    not_reachable = 'not reachable'
+
+
 __all__ = ['LocationCodeType',
            'MeasurementError',
            'AvailableType',
+           'DomainType',
            ]

@@ -68,7 +68,7 @@ class Location(Base):
     location_type = sqla.Column(sqla.String)
 
     __mapper_args__ = {
-        'polymorphic_identity': 'location',
+        'polymorphic_identity': 'basic_location',
         'polymorphic_on': location_type
     }
 
@@ -83,10 +83,10 @@ class Location(Base):
 
     def gps_distance_equirectangular(self, location):
         """Return the distance between the two locations using the equirectangular method"""
-        lon1 = math.radians(float(self.lon))
-        lat1 = math.radians(float(self.lat))
-        lon2 = math.radians(float(location.lon))
-        lat2 = math.radians(float(location.lat))
+        lon1 = math.radians(self.lon)
+        lat1 = math.radians(self.lat)
+        lon2 = math.radians(location.lon)
+        lat2 = math.radians(location.lat)
 
         return math.sqrt((((lon2 - lon1) * math.cos(0.5 * (lat2 + lat1))) ** 2 + (
             lat2 - lat1) ** 2)) * constants.EARTH_RADIUS
@@ -97,10 +97,10 @@ class Location(Base):
         on the earth (specified in decimal degrees)
         """
         # convert decimal degrees to radians
-        lon1 = math.radians(float(self.lon))
-        lat1 = math.radians(float(self.lat))
-        lon2 = math.radians(float(location2.lon))
-        lat2 = math.radians(float(location2.lat))
+        lon1 = math.radians(self.lon)
+        lat1 = math.radians(self.lat)
+        lon2 = math.radians(location2.lon)
+        lat2 = math.radians(location2.lat)
         # haversine formula
         dlon = lon2 - lon1
         dlat = lat2 - lat1
@@ -119,8 +119,8 @@ class Location(Base):
         """
         bearing_rad = math.radians(bearing)
         angular_dist = distance / constants.EARTH_RADIUS
-        lat_rad = math.radians(float(self.lat))
-        lon_rad = math.radians(float(self.lon))
+        lat_rad = math.radians(self.lat)
+        lon_rad = math.radians(self.lon)
 
         lat_new = math.asin(math.sin(lat_rad) * math.cos(angular_dist) +
                             math.cos(lat_rad) * math.sin(angular_dist) * math.cos(bearing_rad))
@@ -145,11 +145,8 @@ class LocationInfo(Location):
     Additionally information like the population can be saved
     """
 
-    __tablename__ = 'location_infos'
-
     __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
-    id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id), primary_key=True)
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
