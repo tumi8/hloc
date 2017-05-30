@@ -16,7 +16,7 @@ import collections
 from multiprocessing import Process
 import marisa_trie
 
-import src_deprecated.data_processing.util as util
+import src.data_processing.util as util
 
 logger = None
 

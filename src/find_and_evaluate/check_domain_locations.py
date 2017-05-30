@@ -20,7 +20,7 @@ import math
 # import pympler.asizeof
 import gc
 
-import src_deprecated.data_processing.util as util
+import src.data_processing.util as util
 
 API_KEY = '1dc0b3c2-5e97-4a87-8864-0e5a19374e60'
 RIPE_SESSION = requests.Session()
