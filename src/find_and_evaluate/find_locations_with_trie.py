@@ -58,7 +58,12 @@ def main():
         trie = pickle.load(trie_file)
 
     with open(args.special_filter) as special_filter_file:
-        special_filter = json.load(special_filter_file)
+        json_txt = ""
+        for line in special_filter_file:
+            line = line.strip()
+            if line[0] != '#':
+                json_txt += line
+        special_filter = json.loads(json_txt)
 
     popular_labels = {}
     """

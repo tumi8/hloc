@@ -26,12 +26,16 @@ def main():
     blacklist = set()
     with open(args.code_black_list) as blacklist_file:
         for line in blacklist_file:
-            blacklist.add(line.strip())
+            line = line.strip()
+            if line[0] != '#':
+                blacklist.add(line)
 
     general_filter = set()
     with open(args.general_filter) as general_filter_file:
         for line in general_filter_file:
-            general_filter.add(line.strip())
+            line = line.strip()
+            if line[0] != '#':
+                general_filter.add(line)
 
     trie = create_trie(locations, blacklist, general_filter)
 
