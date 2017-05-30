@@ -62,7 +62,12 @@ def main():
     code_to_location_blacklist = {}
     if args.code_to_location_blacklist_file:
         with open(args.code_to_location_blacklist_file) as code_to_location_blacklist_file:
-            code_to_location_blacklist = json.load(code_to_location_blacklist_file)
+            json_txt = ""
+            for line in code_to_location_blacklist_file:
+                line = line.strip()
+                if line[0] != '#':
+                    json_txt += line
+            code_to_location_blacklist = json.loads(json_txt)
 
     processes = []
     for index in range(0, args.fileCount):
@@ -95,13 +100,17 @@ def create_trie(location_filepath: str, code_blacklist_filepath: str, word_black
     if code_blacklist_filepath:
         with open(code_blacklist_filepath) as code_blacklist_file:
             for line in code_blacklist_file:
-                code_blacklist_set.add(line.strip())
+                line = line.strip()
+                if line[0] != '#':
+                    code_blacklist_set.add(line)
 
     word_blacklist_set = set()
     if word_blacklist_filepath:
         with open(word_blacklist_filepath) as word_blacklist_file:
             for line in word_blacklist_file:
-                word_blacklist_set.add(line.strip())
+                line = line.strip()
+                if line[0] != '#':
+                    word_blacklist_set.add(line)
 
     return create_trie_obj(locations.values(), code_blacklist_set, word_blacklist_set)
 
