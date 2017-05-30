@@ -12,4 +12,4 @@ setup(name='hloc',
       author_email='sattler@in.tum.de',
       packages=['hloc', 'hloc.scripts', 'hloc.models'],
       install_requires=install_requires,
-     )
+      )

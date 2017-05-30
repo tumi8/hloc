@@ -8,6 +8,7 @@ import datetime
 import logging
 import random
 import time
+import enum
 import typing
 import multiprocessing as mp
 
@@ -86,16 +87,15 @@ class RipeAtlasProbe(Probe):
 
     __slots__ = ['_last_update', '_probe_obj']
 
-    required_keys = ['Measurement_name', 'IP_version', 'Api_key', 'Ripe_Slowdown_Sema']
+    required_keys = ['measurement_name', 'ip_version', 'api_key', 'ripe_slowdown_sema']
 
-    class MeasurementKeys:
-
-        Measurement_name = 'measurement_name'
-        IP_version = 'ip_version'
-        Num_packets = 'num_packets'
-        Api_key = 'api_key'
-        Bill_to_address = 'bill_to_address'
-        Ripe_Slowdown_Sema = 'ripe_slowdown_sema'
+    class MeasurementKeys(enum.Enum):
+        measurement_name = 'measurement_name'
+        ip_version = 'ip_version'
+        num_packets = 'num_packets'
+        api_key = 'api_key'
+        bill_to_address = 'bill_to_address'
+        ripe_slowdown_sema = 'ripe_slowdown_sema'
 
         @staticmethod
         def get_default_for(property_key) -> typing.Any:

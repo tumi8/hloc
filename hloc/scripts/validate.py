@@ -8,10 +8,8 @@ import time
 import multiprocessing as mp
 import threading
 import collections
-import requests
 import random
-
-from typing import Callable, Optional, Union
+import typing
 
 import ripe.atlas.cousteau as ripe_atlas
 
@@ -19,9 +17,10 @@ from hloc import util, constants
 from hloc.models import *
 from hloc.db_queries import probe_for_id, get_measurements_for_domain
 from hloc.exceptions import ProbeError
-from hloc.ripe_helper import get_ripe_measurement, get_measurement_ids, check_measurements_for_nodes
+from hloc.ripe_helper import get_measurement_ids, check_measurements_for_nodes
 
 logger = None
+MAX_THREADS = 10
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -46,6 +45,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-o', '--without-new-measurements', action='store_true',
                         help='Evaluate the matches using only data/measurements already available '
                              'locally and remote')
+    parser.add_argument('-ma', '--allowed-measurement-age', type=int,
+                        help='The allowed measurement age in seconds')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
@@ -151,6 +152,7 @@ def main():
                                    args.ip_version,
                                    args.bill_to,
                                    args.wo_measurements,
+                                   args.allowed_measurement_age,
                                    args.api_key),
                              name='domain_checking_{}'.format(pid))
 
@@ -260,9 +262,13 @@ def get_nearest_ripe_nodes(location: LocationInfo, max_distance: int, ip_version
             thread_sema.release()
 
 
-def ripe_check_for_list(pid: int, ripe_create_sema: mp.Semaphore,
-                        ripe_slow_down_sema: mp.Semaphore, ip_version: str,
-                        bill_to_address: str, wo_measurements: bool, api_key: str):
+def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
+                        ripe_slow_down_sema: mp.Semaphore,
+                        ip_version: str,
+                        bill_to_address: str,
+                        wo_measurements: bool,
+                        allowed_measurement_age: int,
+                        api_key: str):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -304,6 +310,7 @@ def ripe_check_for_list(pid: int, ripe_create_sema: mp.Semaphore,
                                             ip_version,
                                             bill_to_address,
                                             wo_measurements,
+                                            allowed_measurement_age,
                                             api_key,
                                             db_session))
 
@@ -325,14 +332,15 @@ def ripe_check_for_list(pid: int, ripe_create_sema: mp.Semaphore,
     logger.info('correct_count {}'.format(correct_type_count))
 
 
-def domain_check_threading_manage(nextdomain: Callable[[], Domain],
-                                  increment_domain_type_count: Callable[[DomainType, ], ],
-                                  increment_count_for_type: Callable[[LocationCodeType], ],
+def domain_check_threading_manage(nextdomain: typing.Callable[[], Domain],
+                                  increment_domain_type_count: typing.Callable[[DomainType, ], ],
+                                  increment_count_for_type: typing.Callable[[LocationCodeType], ],
                                   ripe_create_sema: mp.Semaphore,
                                   ripe_slow_down_sema: mp.Semaphore,
                                   ip_version: str,
                                   bill_to_address: str,
                                   wo_measurements: bool,
+                                  allowed_measurement_age: int,
                                   api_key: str,
                                   db_session: Session):
     """The method called to create a thread and manage the domain checks"""
@@ -343,7 +351,7 @@ def domain_check_threading_manage(nextdomain: Callable[[], Domain],
             check_domain_location_ripe(next_domain_tuple, increment_domain_type_count,
                                        increment_count_for_type, ripe_create_sema,
                                        ripe_slow_down_sema, ip_version, bill_to_address,
-                                       wo_measurements, api_key, db_session)
+                                       wo_measurements, allowed_measurement_age, api_key, db_session)
         except Exception:
             logger.exception('Check Domain Error')
 
@@ -352,8 +360,8 @@ def domain_check_threading_manage(nextdomain: Callable[[], Domain],
 
 
 def check_domain_location_ripe(domain: Domain,
-                               increment_domain_type_count: Callable[[DomainType], ],
-                               increment_count_for_type: Callable[[LocationCodeType], ],
+                               increment_domain_type_count: typing.Callable[[DomainType], ],
+                               increment_count_for_type: typing.Callable[[LocationCodeType], ],
                                ripe_create_sema: mp.Semaphore,
                                ripe_slow_down_sema: mp.Semaphore,
                                ip_version: str,
@@ -427,7 +435,8 @@ def check_domain_location_ripe(domain: Domain,
                                                           location,
                                                           near_nodes,
                                                           results,
-                                                          ripe_slow_down_sema)
+                                                          ripe_slow_down_sema,
+                                                          allowed_measurement_age)
         logger.debug('checked for measurement results')
 
         def add_new_result(new_result: MeasurementResult):
@@ -453,22 +462,25 @@ def check_domain_location_ripe(domain: Domain,
                     no_verification_matches.append(next_match)
                     next_match = get_next_match()
                     continue
+
                 measurement_result = create_and_check_measurement(
                     str(domain.ip_for_version(ip_version)), ip_version, location, available_nodes,
-                    ripe_create_sema, ripe_slow_down_sema, bill_to_address=bill_to_address)
+                    ripe_create_sema, ripe_slow_down_sema, api_key, bill_to_address=bill_to_address)
                 if measurement_result is None:
                     matches.remove(next_match)
                     next_match = get_next_match()
                     continue
 
-                node_location_dist = location.gps_distance_haversine(measurement_result.probe_id.location)
+                node_location_dist = location.gps_distance_haversine(
+                    measurement_result.probe_id.location)
 
                 logger.debug('finished measurement')
 
                 if measurement_result.min_rtt is None:
                     increment_domain_type_count(DomainType.not_reachable)
                     return
-                elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME + node_location_dist / 100):
+                elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
+                                                   node_location_dist / 100):
                     increment_count_for_type(next_match.code_type)
                     matched = True
                     increment_domain_type_count(DomainType.verified)
@@ -482,7 +494,8 @@ def check_domain_location_ripe(domain: Domain,
         else:
             node_location_dist = location.gps_distance_haversine(measurement_result.probe.location)
 
-            if measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME + node_location_dist / 100):
+            if measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
+                                             node_location_dist / 100):
                 increment_count_for_type(next_match.code_type)
                 matched = True
                 increment_domain_type_count(DomainType.verified)
@@ -513,7 +526,8 @@ def eliminate_duplicate_results(results: [MeasurementResult]):
         if result not in remove_obj:
             for inner_result in results:
                 if result is not inner_result and inner_result not in remove_obj:
-                    if result.probe.location.gps_distance_haversine(inner_result.probe.location) < 100:
+                    if result.probe.location.gps_distance_haversine(inner_result.probe.location) \
+                            < 100:
                         if result.min_rtt < inner_result.min_rtt:
                             remove_obj.append(inner_result)
                         else:
@@ -524,7 +538,8 @@ def eliminate_duplicate_results(results: [MeasurementResult]):
         results.remove(obj)
 
 
-def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) -> Union[bool, (float, CodeMatch)]:
+def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) \
+        -> typing.Union[bool, (float, CodeMatch)]:
     """
     Sort the matches after their most probable location
     :returns if there are any matches left
@@ -545,12 +560,13 @@ def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) 
 
                 distance = result.probe.location.gps_distance_haversine(match.location_info)
 
-                if distance > (result.min_rtt * 100):
+                if distance > result.min_rtt * 100:
                     break
 
                 # Only verify location if there is also a match
-                if distance < 100 and result.min_rtt < constants.DEFAULT_BUFFER_TIME + distance / 100:
-                    return (result.rtt, match)
+                if distance < 100 and \
+                        result.min_rtt < constants.DEFAULT_BUFFER_TIME + distance / 100:
+                    return result.rtt, match
 
                 location_distances.append((result, distance))
 
@@ -602,7 +618,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                                  ripe_create_sema: mp.Semaphore,
                                  ripe_slow_down_sema: mp.Semaphore,
                                  api_key: str,
-                                 bill_to_address: str=None) -> Optional[RipeMeasurementResult]:
+                                 bill_to_address: str=None) \
+        -> typing.Optional[RipeMeasurementResult]:
     """creates a measurement for the parameters and checks for the created measurement"""
     near_nodes = [node for node in nodes if node not in NON_WORKING_PROBES]
 
@@ -620,9 +637,17 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
     with ripe_create_sema:
         while True:
             try:
-                measurement_result = near_node.measure_rtt(
-                    ip_addr, measurement_name='{} test for location {}'.format(ip_addr, location.name),
-                    ip_version=ip_version, api_key=api_key, ripe_slowdown_sema=ripe_slow_down_sema)
+                params = {
+                    RipeAtlasProbe.MeasurementKeys.measurement_name.value:
+                        '{} test for location {}'.format(ip_addr, location.name),
+                    RipeAtlasProbe.MeasurementKeys.ip_version.value: ip_version,
+                    RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
+                    RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema
+                }
+                if bill_to_address:
+                    params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
+
+                measurement_result = near_node.measure_rtt(ip_addr, **params)
                 return measurement_result
             except ProbeError:
                 with NON_WORKING_PROBES_LOCK:
