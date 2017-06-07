@@ -1,6 +1,6 @@
 # HLOC: Hints-Based Geolocation Leveraging Multiple Measurement Frameworks
 
-This repository servers both for providing additional data for our publication [branch tma17] and ongoing development of our tool [branch master].
+This repository servers both for providing additional data for our publication [branch tma17](https://github.com/tumi8/hloc/tree/tma17) and ongoing development of our tool [branch master](https://github.com/tumi8/hloc).
 
 
 ## Pre-Processing
