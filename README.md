@@ -1,5 +1,7 @@
 # HLOC: Hints-Based Geolocation Leveraging Multiple Measurement Frameworks
 
+This repository servers both for providing additional data for our publication [branch tma17] and ongoing development of our tool [branch master].
+
 
 ## Pre-Processing
 
