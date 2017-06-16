@@ -4,25 +4,40 @@ This repository servers both for providing additional data for our publication [
 
 Our architecture approach:
 
-<img src="images/schema.jpg" alt="Drawing" width=500 style="align: center;" />
-
-`TODO: One execution example per step`
+<img src="images/schema.jpg" alt="Drawing" width=500 />
 
 ## Code Collection
 
+Collects codes from the selected sources.
+
+```
+python3 -m src.data_processing.codes_parser -a -l src/data_processing/collectedData/locodePart{}.csv -c src/data_processing/collectedData/clli-lat-lon.txt -g src/data_processing/collectedData/cities1000.txt -m 100 -e src/data_processing/collectedData/iata_metropolitan.txt -f locations.json
+```
 
 ## Pre-Processing
 
 The pre-processing step obtains locations and codes from various sources and merges them into a .json file. We deliver the .json file we have used in our study for convenience.   
 It also parses IP/DNS files to a json format, which we can not deliver due to its size.
 
+```
+python3 -m src.data_processing.preprocessing <rdns-file> -n <number-of-processes> -t src/data_processing/collectedData/tlds.txt -d preprocessing_output -i -v [ipv4, ipv6]
+```
+
+The *number-of-processes* defines also the number of output files.
+
 ## Find
 
 The find step does:
 
 * Convert the location/code json file into a trie
+```
+python3 -m src.find_and_evaluate.create_trie <locations-file> blacklists/code.blacklist.txt -f blacklists/word.blacklist.txt
+```
 * Match the IP/DNS json file against this trie
-* Produce a .found json
+```
+python3 -m src.find_and_evaluate.find_locations_with_trie RDNS_DOMAIN_FOLDER/file_name_{}.cor locations-trie.pickle -n <number-of-processes> -e -s blacklists/special.blacklist.txt
+```
+* Produces a .found json
 
 ## Measure
 
@@ -37,6 +52,12 @@ The measure step does:
 
 The evaluate step is used for comparison against other location hints provided by e.g., databases or other measurement-based approaches
 
+Measuring and evaluating is combined into one single script:
+
+```
+python3 -m src.find_and_evaluate.check_domain_locations RDNS_DOMAIN_FOLDER/file_name_{}-found.json -f <number-of-processes> -loc locations.json -v [ipv4, ipv6] -z zmap-measurements/ipv4-zmap-results -raak RIPE_ATLAS_KEY
+```
+
 ## Dateset
 
 The data is hosted by the TUM library: [https://mediatum.ub.tum.de/1359182](https://mediatum.ub.tum.de/1359182)
@@ -46,7 +67,7 @@ The structure of the data is as follows:
  -  Input Files
     - Router rdns files:
         - All router rdns entries: `rdns-sources/router.domains.rdns`
-        - DRoP domains: `rdns-sources/``
+        - DRoP domains: `rdns-sources/`
     - Location File: `location-codes.json`
     - Zmap measurement results:
         - IPv4: `zmap-measurements/ipv4-zmap-results`
