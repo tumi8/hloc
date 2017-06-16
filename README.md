@@ -6,6 +6,10 @@ Our architecture approach:
 
 <img src="images/schema.jpg" alt="Drawing" width=500 />
 
+## Codes Parsing
+
+The Codes Parsing process collect location codes from the selected sources and merges them if desired
+
 ## Pre-Processing
 
 The pre-processing step obtains locations and codes from various sources and merges them into a .json file. We deliver the .json file we have used in our study for convenience.   
