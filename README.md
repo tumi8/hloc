@@ -4,9 +4,7 @@ This repository servers both for providing additional data for our publication [
 
 Our architecture approach:
 
-![Approach](images/schema.jpg)
-
-`TODO: Scale picture`
+<img src="images/schema.jpg" alt="Drawing" width=500 style="align: center;" />
 
 `TODO: One execution example per step`
 
