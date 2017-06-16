@@ -4,7 +4,7 @@ This repository servers both for providing additional data for our publication [
 
 Our architecture approach:
 
-![Approach](images/schema.jpg)
+<img src="images/schema.jpg" alt="Drawing" width=500 />
 
 ## Pre-Processing
 
