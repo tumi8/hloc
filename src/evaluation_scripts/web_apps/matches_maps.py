@@ -32,6 +32,7 @@ def main_old():
     parser.add_argument('-loc', '--location-file-name', required=True, type=str,
                         dest='location_filename', help='The path to the location file.'
                         ' The output file from the codes_parser')
+    parser.add_argument('-m', '--google-maps-key', required=True, type=str)
     parser.add_argument('-a', action='store_true', dest='analyze')
 
     args = parser.parse_args()
@@ -82,7 +83,7 @@ def main_old():
     if not args.analyze:
         application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
                                                           'web_apps/static')
-        flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
+        flask_googlemaps.GoogleMaps(application, key=args.google_maps_key)
 
         @application.route('/<any("drop","trie"):method>/<any(circles,markers):mark_type>')
         def matches_map(method, mark_type):
