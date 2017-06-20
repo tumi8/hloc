@@ -232,6 +232,7 @@ def main():
     parser.add_argument('-loc', '--location-file-name', required=True, type=str,
                         dest='location_filename', help='The path to the location file.'
                         ' The output file from the codes_parser')
+    parser.add_argument('-m', '--google-maps-key', type=str, help='test')
     args = parser.parse_args()
 
     with open(args.location_filename) as location_file:
@@ -256,7 +257,7 @@ def main():
 
     application = flask.Flask(__name__, static_folder='/data/rdns-parse/src/evaluation_scripts/'
                                                       'web_apps/static')
-    flask_googlemaps.GoogleMaps(application, key='AIzaSyBE3G8X89jm3rqBksk4OllYshmlUdYl1Ds')
+    flask_googlemaps.GoogleMaps(application, key=args.google_maps_key)
 
     matches_circles_map = create_verified_map_circles(domain_locations_count, locations)
     matches_marker_all_map = create_verified_map_marker(domain_locations_count, locations, all=True)
