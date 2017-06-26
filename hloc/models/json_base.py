@@ -1,8 +1,5 @@
 
 import abc
-from .location import Location, LocationInfo, AirportInfo, LocodeInfo
-from .domain import Domain, DomainLabel, CodeMatch
-from .measurement_result import LocationResult
 from .drop_rule import DRoPRule
 
 

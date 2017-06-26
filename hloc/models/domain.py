@@ -10,26 +10,28 @@ from sqlalchemy.dialects import postgresql
 from hloc import constants
 from .sql_alchemy_base import Base
 from .enums import LocationCodeType
-
-label_matches_table = sqla.Table('DomainLabelCodeMatches', Base.metadata,
-                                 sqla.Column('code_matches_id', sqla.Integer, sqla.ForeignKey('code_matches.id')),
-                                 sqla.Column('domain_labels_id', sqla.Integer, sqla.ForeignKey('domain_labels.id')))
+from .location import LocationHint, domain_location_hints_table
 
 
-class CodeMatch(Base):
+code_match_label_table = sqla.Table('CodeMatchLabels', Base.metadata,
+                                    sqla.Column('code_match_id', sqla.Integer,
+                                                sqla.ForeignKey('location_hints.id')),
+                                    sqla.Column('domain_label_id', sqla.Integer,
+                                                sqla.ForeignKey('domain_labels.id')))
+
+
+class CodeMatch(LocationHint):
     """The model for a Match between a domain name label and a location code"""
 
-    __tablename__ = 'code_matches'
+    __mapper_args__ = {'polymorphic_identity': 'code_match'}
 
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey('location_infos.id'), nullable=False)
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType), nullable=False)
     code = sqla.Column(sqla.String(50), nullable=False)
 
     location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
     labels = sqlorm.relationship("DomainLabel",
-                                 secondary=label_matches_table,
-                                 back_populates="matches")
+                                 secondary=code_match_label_table,
+                                 back_populates="code_matches")
 
     def __init__(self, location_info, code_type: LocationCodeType, code=None):
         """init"""
@@ -48,10 +50,9 @@ class DomainLabel(Base):
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'), nullable=False)
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
-    matches = sqlorm.relationship(CodeMatch,
-                                  secondary=label_matches_table,
-                                  back_populates='labels')
-
+    code_matches = sqlorm.relationship(CodeMatch,
+                                       secondary=code_match_label_table,
+                                       back_populates="labels")
 
     def __init__(self, name: str):
         """
@@ -81,6 +82,9 @@ class Domain(Base):
     ipv6_address = sqla.Column(postgresql.INET)
 
     labels = sqlorm.relationship(DomainLabel, back_populates='domain')
+    hints = sqlorm.relationship(LocationHint,
+                                secondary=domain_location_hints_table,
+                                back_populates='domains')
 
     # TODO create function to check for a validated location
 

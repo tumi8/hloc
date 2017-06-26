@@ -136,7 +136,7 @@ probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
                                                    sqla.ForeignKey('probes.id')),
                                        sqla.Column('location_info_id', sqla.Integer,
-                                                   sqla.ForeignKey('location_infos.id')))
+                                                   sqla.ForeignKey('locations.id')))
 
 
 class LocationInfo(Location):
@@ -211,6 +211,39 @@ class LocationInfo(Location):
             for code in self.airport_info.faa_codes:
                 ret_list.append((code.lower(), (self.id, LocationCodeType.faa.value)))
         return ret_list
+
+
+domain_location_hints_table = sqla.Table('DomainLocationHints', Base.metadata,
+                                         sqla.Column('location_hint_id', sqla.Integer,
+                                                     sqla.ForeignKey('location_hints.id')),
+                                         sqla.Column('domain_id', sqla.Integer,
+                                                     sqla.ForeignKey('domains.id')))
+
+
+class LocationHint(Base):
+    """
+    Connection class between Locations and Domains
+    Represents a possible location of a domain
+    """
+
+    __tablename__ = 'location_hints'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id))
+    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
+
+    location = sqlorm.relationship(Location)
+    domains = sqlorm.relationship('Domain',
+                                  secondary=domain_location_hints_table,
+                                  back_populates='hints')
+
+    hint_type = sqla.Column(sqla.String)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'basic_location_hint',
+        'polymorphic_on': hint_type
+    }
+
 
 
 __all__ = ['AirportInfo',

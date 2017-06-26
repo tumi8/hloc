@@ -17,7 +17,8 @@ from hloc import util, constants
 from hloc.models import *
 from hloc.db_queries import probe_for_id, get_measurements_for_domain
 from hloc.exceptions import ProbeError
-from hloc.ripe_helper import get_measurement_ids, check_measurements_for_nodes
+from hloc.ripe_helper.basics_helper import get_measurement_ids
+from hloc.ripe_helper.history_helper import check_measurements_for_nodes
 
 logger = None
 MAX_THREADS = 10

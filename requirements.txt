@@ -1,5 +1,6 @@
-requests==2.17.3
-ripe.atlas.cousteau==1.4
-configargparse==0.12
-sqlalchemy==1.1.10
-psycopg2==2.7.1
+requests>=2.17.3
+ripe.atlas.cousteau>=1.4
+configargparse>=0.12
+sqlalchemy>=1.1.10
+psycopg2>=2.7.1
+marisa-trie>=0.7.4

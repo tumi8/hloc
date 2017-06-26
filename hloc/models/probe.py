@@ -16,10 +16,10 @@ import ripe.atlas.cousteau as ripe_atlas
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 
+import hloc.ripe_helper.basics_helper as ripe_helper
 from hloc import util, constants
 from .location import probe_location_info_table
 from .sql_alchemy_base import Base
-from hloc.ripe_helper import get_ripe_measurement
 from hloc.exceptions import ProbeError
 from hloc.models import Session, Location, RipeMeasurementResult, AvailableType
 
@@ -212,7 +212,7 @@ class RipeAtlasProbe(Probe):
 
         sleep_time(amount=360)
         while True:
-            res = get_ripe_measurement(measurement_id)
+            res = ripe_helper.get_ripe_measurement(measurement_id)
             if res is not None:
                 if res.status_id == 4:
                     break
