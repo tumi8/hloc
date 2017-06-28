@@ -152,7 +152,8 @@ class WorldAirportCodesParser(HTMLParser):
                 while state_string[state_code_index_s:].find('(') != -1:
                     state_code_index_s += state_string[state_code_index_s:].find('(') + 1
 
-                state_code_index_e = state_string[state_code_index_s:].find(')') + state_code_index_s
+                state_code_index_e = state_string[state_code_index_s:].find(')') + \
+                    state_code_index_s
 
                 state_code = None
                 if state_code_index_s > 0 and state_code_index_e > 0:
@@ -163,6 +164,7 @@ class WorldAirportCodesParser(HTMLParser):
 
                 self.airportInfo.state = queries.state_for_code(state_code, state_name,
                                                                 self.db_session)
+
             self.__currentKey = None
 
     def reset(self):
@@ -448,7 +450,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
 
 
-def location_merge(location1: LocationInfo, location2: LocationInfo):
+def location_merge(location1: LocationInfo, location2: LocationInfo, db_session: Session):
     """
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
@@ -466,9 +468,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo):
 
     if location1.locode_info is None:
         location1.locode_info = location2.locode_info
-    else:
-        if location2.locode_info is not None:
-            location1.locode_info.place_codes.extend(location2.locode_info.place_codes)
+    elif location2.locode_info is not None:
+        location1.locode_info.place_codes.extend(location2.locode_info.place_codes)
 
     location1.clli.extend(location2.clli)
 
@@ -485,7 +486,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo):
     if location2.name != location1.name:
         location1.alternate_names.append(location2.name)
 
-    # db_session.delete(location2)
+    if location1.population is None:
+        location1.population = location2.population
 
 
 def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo], radius: int,
@@ -499,13 +501,14 @@ def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo
 
     for mloc in near_locations:
         try:
-            location_merge(location, mloc)
+            location_merge(location, mloc, db_session)
             locations.remove(mloc)
+            db_session.expunge(mloc)
         except ValueError:
             continue
 
 
-def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radius: int,
+def add_locations(locations: [LocationInfo], to_add_locations: [LocationInfo], radius: int,
                   db_session: Session, create_new_locations: bool=True):
     """
     The first argument is a list which will not be condensed but the items
@@ -515,10 +518,10 @@ def add_locations(locations: [LocationInfo], add_locations: [LocationInfo], radi
         create new location objects Default is true
     """
     for i, location in enumerate(locations):
-        merge_locations_to_location(location, add_locations, radius, db_session)
+        merge_locations_to_location(location, to_add_locations, radius, db_session)
 
     if create_new_locations:
-        merge_locations_by_gps(add_locations, radius, db_session)
+        merge_locations_by_gps(to_add_locations, radius, db_session)
         locations.extend(add_locations)
 
 
@@ -545,8 +548,7 @@ def idfy_locations(locations: [LocationInfo]):
     sorted alphabetically. That should guarantee a unique and 
     """
     for location in locations:
-        location.id = int(
-            hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest(), 16)
+        location.id = hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest()
 
 
 def parse_airport_codes(args, db_session: Session):

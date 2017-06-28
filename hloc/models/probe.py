@@ -34,7 +34,7 @@ class Probe(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     probe_id = sqla.Column(sqla.String(30), nullable=False)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id), nullable=False)
+    location_id = sqla.Column(sqla.String(16), sqla.ForeignKey(Location.id), nullable=False)
     last_seen = sqla.Column(sqla.DateTime)
 
     location = sqlorm.relationship(Location, back_populates='probes')

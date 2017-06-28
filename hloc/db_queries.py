@@ -16,16 +16,16 @@ def state_for_code(state_code, state_name, db_session: Session):
     :return: the state object for the state code
     """
     state = db_session.query(State).filter(
-        sqla.or_(State.code == state_code, State.name == state_name)).first()
+        sqla.or_(State.iso3166code == state_code, State.name == state_name)).first()
 
     if state:
         if state_name and not state.name:
             state.name = state_name
         return state
 
-    state = State(name=state_name, code=state_code)
+    state = State(name=state_name, iso3166code=state_code)
     db_session.add(state)
-    return State(name=state_name, code=state_code)
+    return State(name=state_name, iso3166code=state_code)
 
 
 def probe_for_id(probe_id: int, db_session: Session) -> Probe:

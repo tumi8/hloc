@@ -45,8 +45,8 @@ class State(Base):
     __tablename__ = 'states'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(50), nullable=False)
-    code = sqla.Column(sqla.String(5))
+    name = sqla.Column(sqla.String(50))
+    iso3166code = sqla.Column(sqla.String(5), nullable=False)
 
     location_infos = sqlorm.relationship("LocationInfo", back_populates="state")
 
@@ -59,7 +59,7 @@ class Location(Base):
 
     __tablename__ = 'locations'
 
-    id = sqla.Column(sqla.Integer, primary_key=True)
+    id = sqla.Column(sqla.String(16), primary_key=True)
     lat = sqla.Column(sqla.Float, nullable=False)
     lon = sqla.Column(sqla.Float, nullable=False)
 
@@ -135,7 +135,7 @@ class Location(Base):
 probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
                                                    sqla.ForeignKey('probes.id')),
-                                       sqla.Column('location_info_id', sqla.Integer,
+                                       sqla.Column('location_info_id', sqla.String(16),
                                                    sqla.ForeignKey('locations.id')))
 
 
@@ -199,9 +199,9 @@ class LocationInfo(Location):
         for name in self.alternate_names:
             if name:
                 ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
-        if self.locode and self.state_code:
+        if self.locode and self.state.iso3166code:
             for code in self.locode_info.place_codes:
-                ret_list.append(('{}{}'.format(self.state_code.lower(), code.lower()),
+                ret_list.append(('{}{}'.format(self.state.iso3166code.lower(), code.lower()),
                                  (self.id, LocationCodeType.locode.value)))
         if self.airport_info:
             for code in self.airport_info.iata_codes:
@@ -229,7 +229,7 @@ class LocationHint(Base):
     __tablename__ = 'location_hints'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.Integer, sqla.ForeignKey(Location.id))
+    location_id = sqla.Column(sqla.String(16), sqla.ForeignKey(Location.id))
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     location = sqlorm.relationship(Location)
