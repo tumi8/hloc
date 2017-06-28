@@ -522,7 +522,7 @@ def add_locations(locations: [LocationInfo], to_add_locations: [LocationInfo], r
 
     if create_new_locations:
         merge_locations_by_gps(to_add_locations, radius, db_session)
-        locations.extend(add_locations)
+        locations.extend(to_add_locations)
 
 
 def merge_locations_by_gps(locations: [LocationInfo], radius: int, db_session: Session):
