@@ -59,7 +59,7 @@ class Location(Base):
 
     __tablename__ = 'locations'
 
-    id = sqla.Column(sqla.String(16), primary_key=True)
+    id = sqla.Column(sqla.String(32), primary_key=True)
     lat = sqla.Column(sqla.Float, nullable=False)
     lon = sqla.Column(sqla.Float, nullable=False)
 
