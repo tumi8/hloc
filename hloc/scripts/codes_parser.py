@@ -275,7 +275,7 @@ def parse_airport_specific_page(page_text: str, db_session: Session):
             (parser.airportInfo.airport_info.iata_codes or
              parser.airportInfo.airport_info.icao_codes or
              parser.airportInfo.airport_info.faa_codes):
-        db_session.add(parser.airportInfo)
+        # db_session.add(parser.airportInfo)
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
     if len(AIRPORT_LOCATION_CODES) % 5000 == 0:
@@ -341,7 +341,7 @@ def get_locode_locations(locode_filename: str, db_session: Session):
                                                         current_state['state'].lower(),
                                                         db_session)
 
-            db_session.add(airport_info)
+            # db_session.add(airport_info)
             LOCODE_LOCATION_CODES.append(airport_info)
 
 
@@ -388,7 +388,7 @@ def get_clli_codes(file_path: str, db_session: Session):
             clli, lat, lon = line.split('\t')
             new_clli_info = LocationInfo(lat=float(lat), lon=float(lon))
             new_clli_info.clli.append(clli[0:6])
-            db_session.add(new_clli_info)
+            # db_session.add(new_clli_info)
             CLLI_LOCATION_CODES.append(new_clli_info)
 
 
@@ -446,7 +446,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
                 if len(maxname) > 0:
                     new_geo_names_info.alternate_names.append(maxname.lower())
 
-            db_session.add(new_geo_names_info)
+            # db_session.add(new_geo_names_info)
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
 
 
@@ -503,7 +503,7 @@ def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo
         try:
             location_merge(location, mloc, db_session)
             locations.remove(mloc)
-            db_session.expunge(mloc)
+            # db_session.expunge(mloc)
         except ValueError:
             continue
 
@@ -655,7 +655,7 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
-            db_session.add(location)
+            # db_session.add(location)
 
     return metropolitan_locations
 
@@ -692,6 +692,7 @@ def parse_codes(args, db_session: Session):
     locations = merge_location_codes(args.merge_radius, db_session)
 
     idfy_locations(locations)
+    db_session.add_all(locations)
     db_session.commit()
 
     end_time = time.clock()
