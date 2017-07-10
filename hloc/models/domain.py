@@ -33,11 +33,11 @@ class CodeMatch(LocationHint):
                                  secondary=code_match_label_table,
                                  back_populates="code_matches")
 
-    def __init__(self, domain, location_info, domain_label,
+    def __init__(self, domain, location_info_id, domain_label,
                  code_type: LocationCodeType, code=None):
         """init"""
         self.domains.append(domain)
-        self.location_info = location_info
+        self.location_info_id = location_info_id
         self.code_type = code_type
         self.code = code
         self.labels.append(domain_label)

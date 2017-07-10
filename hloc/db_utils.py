@@ -3,6 +3,7 @@
 A collection of queries connected to the location object
 """
 
+import typing
 import sqlalchemy as sqla
 
 from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel
@@ -73,3 +74,15 @@ def add_labels_to_domain(domain: Domain, db_session: Session):
     for label in domain.name.split('.')[::-1]:
         label_obj = label_for_name(label, db_session)
         domain.labels.append(label_obj)
+
+
+def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int, db_session: Session) \
+        -> typing.Generator[Domain, None, None]:
+    offset = index * block_limit
+
+    domains = db_session.query(Domain).limit(block_limit).offset(offset)
+    while domains.count():
+        offset += nr_processes * block_limit
+        for domain in domains:
+            yield domain
+        domains = db_session.query(Domain).limit(block_limit).offset(offset)

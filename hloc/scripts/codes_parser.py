@@ -23,7 +23,6 @@ import requests
 from html.parser import HTMLParser
 
 from hloc.models import LocationInfo, Session, Base, State
-import hloc.db_queries as queries
 from hloc.util import setup_logger
 from hloc.constants import ACCEPTED_CHARACTER
 
@@ -717,15 +716,6 @@ def parse_codes(args):
 
     locations = merge_location_codes(args.merge_radius, db_session)
 
-    state_locations = [state.location_infos for state in STATES]
-    count_locs = sum([len(locs) for locs in state_locations])
-    print('state locs', count_locs)
-
-    import pprint
-    pprint.pprint([loc.id for loc in locations])
-
-    # recreate_states_workaround(locations, STATES)
-
     db_session.bulk_save_objects(locations, return_defaults=True)
 
     db_session.commit()
@@ -739,22 +729,6 @@ def parse_codes(args):
                  'Collected data on {} locations.'.format((end_time - start_time),
                                                           int(end_rtime - start_rtime),
                                                           len(locations)))
-
-    # print_stats(locations)
-
-
-def recreate_states_workaround(locations: [LocationInfo], states: [State]):
-    print(len(locations))
-    new_states = {}
-    for state in states:
-        new_states[state.iso3166code] = State(iso3166code=state.iso3166code, name=state.name)
-
-    for location in locations:
-        if location.state:
-            location.state = new_states[location.state.iso3166code]
-        # else:
-        #     print(location.id, 'has no state', str(location.airport_info is None),
-        #           str(location.locode_info is None), location.clli, sep=' ')
 
 
 if __name__ == '__main__':
