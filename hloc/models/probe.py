@@ -33,8 +33,8 @@ class Probe(Base):
     __tablename__ = 'probes'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    probe_id = sqla.Column(sqla.String(30), nullable=False)
-    location_id = sqla.Column(sqla.String(16), sqla.ForeignKey(Location.id), nullable=False)
+    probe_id = sqla.Column(sqla.String(100), nullable=False)
+    location_id = sqla.Column(sqla.String(32), sqla.ForeignKey(Location.id), nullable=False)
     last_seen = sqla.Column(sqla.DateTime)
 
     location = sqlorm.relationship(Location, back_populates='probes')
@@ -137,8 +137,7 @@ class RipeAtlasProbe(Probe):
 
     def measure_rtt(self, dest_address: str, db_session: Session, **kwargs) -> typing.Optional[RipeMeasurementResult]:
         if not self.available:
-            # TODO use own errors
-            raise ValueError('Probe currently not available')
+            raise ProbeError('Probe currently not available')
 
         for prop_key in util.get_class_properties(RipeAtlasProbe.MeasurementKeys):
             key = RipeAtlasProbe.MeasurementKeys().__getattribute__(prop_key)
@@ -167,7 +166,6 @@ class RipeAtlasProbe(Probe):
             if retries % 5 == 0:
                 logging.error('Create error {}'.format(response))
 
-        # TODO create lazy measurement result which waits until response is available
         measurement_id = response['measurements'][0]
 
         if measurement_id is None:

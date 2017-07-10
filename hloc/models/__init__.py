@@ -12,8 +12,6 @@ from .json_base import JSONBase
 from .domain import Domain, DomainLabel, CodeMatch
 from .drop_rule import DRoPRule
 
-Base.metadata.create_all(engine)
-
 
 __all__ = ['MeasurementResult',
            'Probe',

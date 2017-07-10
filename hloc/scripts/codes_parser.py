@@ -13,7 +13,6 @@
 """
 import argparse
 import json
-import re
 import time
 import hashlib
 from string import ascii_lowercase
@@ -23,7 +22,7 @@ from time import sleep
 import requests
 from html.parser import HTMLParser
 
-from hloc.models import LocationInfo, Session
+from hloc.models import LocationInfo, Session, Base, State
 import hloc.db_queries as queries
 from hloc.util import setup_logger
 from hloc.constants import ACCEPTED_CHARACTER
@@ -36,9 +35,9 @@ AIRPORT_LOCATION_CODES = []
 LOCODE_LOCATION_CODES = []
 CLLI_LOCATION_CODES = []
 GEONAMES_LOCATION_CODES = []
+STATES = []
 TIMEOUT_URLS = []
 MAX_POPULATION = 10000
-NORMAL_CHARS_REGEX = re.compile(r'^[a-zA-Z0-9/.-_\s]+$', flags=re.MULTILINE)  # TODO use set
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -60,9 +59,6 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-m', '--merge-locations', type=int,
                         dest='merge_radius',
                         help='Try to merge locations in the given radius by gps')
-    parser.add_argument('-t', '--max-threads', default=16, type=int,
-                        dest='maxThreads',
-                        help='Specify the maximal amount of threads')
     parser.add_argument('-p', '--min-population', default=10000, type=int,
                         dest='min_population',
                         help='Specify the allowed minimum population for locations')
@@ -74,6 +70,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
+    parser.add_argument('-d', '--database-debug',  action='store_true',
+                        help='Recreates the database structure. Attention deletes all data!')
     # TODO config file
 
 
@@ -83,15 +81,17 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    if args.database_debug:
+        inp = input('Do you really want to recreate the database structure? (y)')
+        if inp == 'y':
+            Base.metadata.drop_all()
+            Base.metadata.create_all()
+
     global logger
     logger = setup_logger(args.log_file, 'parse_codes', loglevel=args.log_level)
     logger.debug('starting')
 
-    db_session = Session()
-
-    parse_codes(args, db_session)
-
-    Session.remove()
+    parse_codes(args)
 
 
 class WorldAirportCodesParser(HTMLParser):
@@ -100,6 +100,7 @@ class WorldAirportCodesParser(HTMLParser):
     to parse the airport detailed information side
     """
     airportInfo = None
+    state = None
     __currentKey = None
     __th = False
     db_session = None
@@ -162,8 +163,7 @@ class WorldAirportCodesParser(HTMLParser):
                 else:
                     state_name = state_string.strip().lower()
 
-                self.airportInfo.state = queries.state_for_code(state_code, state_name,
-                                                                self.db_session)
+                self.state = state_for_code(state_code, state_name)
 
             self.__currentKey = None
 
@@ -185,7 +185,7 @@ def load_pages_for_character(character: str, offline_path: str, request_session:
     No return value
     """
 
-    logger.debug('Thread for character {0} startet'.format(character))
+    logger.debug('parser for character {0} startet'.format(character))
 
     if offline_path:
         load_detailed_pages_offline(character, offline_path, db_session)
@@ -205,7 +205,7 @@ def load_pages_for_character(character: str, offline_path: str, request_session:
         response.raise_for_status()
 
     load_detailed_pages(response.text, character, request_session, db_session)
-    # logger.debug('Thread for character {0} ended'.format(character))
+    # logger.debug('Parser for character {0} ended'.format(character))
 
 
 def load_detailed_pages(page_code: str, character: str, request_session: requests.Session,
@@ -275,6 +275,8 @@ def parse_airport_specific_page(page_text: str, db_session: Session):
             (parser.airportInfo.airport_info.iata_codes or
              parser.airportInfo.airport_info.icao_codes or
              parser.airportInfo.airport_info.faa_codes):
+        idfy_location(parser.airportInfo)
+        parser.airportInfo.state = parser.state
         # db_session.add(parser.airportInfo)
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
@@ -293,7 +295,7 @@ def get_locode_locations(locode_filename: str, db_session: Session):
     """
     # i = 0
     with open(locode_filename, encoding='ISO-8859-1') as locode_file:
-        current_state = {'state': None, 'state_code': None}
+        current_state = None
         for line in locode_file:
             line_elements = line.split(',')
             # normally there are exactly 12 elements
@@ -306,8 +308,11 @@ def get_locode_locations(locode_filename: str, db_session: Session):
 
             # if no place code is provided the line is a state definition line
             if len(line_elements[2]) == 0:
-                current_state['state'] = normalize_locode_info(line_elements[3])[1:]
-                current_state['state_code'] = normalize_locode_info(line_elements[1])
+                current_state = state_for_code(normalize_locode_info(line_elements[1]),
+                                               normalize_locode_info(line_elements[3])[1:])
+                if not current_state:
+                    print('Alert', normalize_locode_info(line_elements[1]),
+                          normalize_locode_info(line_elements[3])[1:], sep=' ')
                 continue
 
             if len(line_elements[6]) < 4:
@@ -336,10 +341,9 @@ def get_locode_locations(locode_filename: str, db_session: Session):
                 line_elements[2]).lower())
 
             airport_info.name = locode_name.lower()
+            idfy_location(airport_info)
 
-            airport_info.state = queries.state_for_code(current_state['state_code'].lower(),
-                                                        current_state['state'].lower(),
-                                                        db_session)
+            airport_info.state = current_state
 
             # db_session.add(airport_info)
             LOCODE_LOCATION_CODES.append(airport_info)
@@ -388,6 +392,7 @@ def get_clli_codes(file_path: str, db_session: Session):
             clli, lat, lon = line.split('\t')
             new_clli_info = LocationInfo(lat=float(lat), lon=float(lon))
             new_clli_info.clli.append(clli[0:6])
+            idfy_location(new_clli_info)
             # db_session.add(new_clli_info)
             CLLI_LOCATION_CODES.append(new_clli_info)
 
@@ -424,6 +429,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
                                               lon=float(columns[5]),
                                               name=name)
 
+            idfy_location(new_geo_names_info)
             if set(new_geo_names_info.name).difference(ACCEPTED_CHARACTER) \
                     or len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
@@ -433,8 +439,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
                     columns[9] = columns[9].split(',')[0]
-                new_geo_names_info.state = queries.state_for_code(columns[9].lower(), None,
-                                                                  db_session)
+                new_geo_names_info.state = state_for_code(columns[9].lower(), None,)
 
             new_geo_names_info.population = int(columns[14])
 
@@ -458,28 +463,33 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session:
     if location1.name is None:
         location1.name = location2.name
 
-    if location1.state_id is not None and location2.state_id is not None and \
-            location1.state_id != location2.state_id:
+    if location1.state is not None and location2.state is not None and \
+            location1.state != location2.state:
         raise ValueError('Location states do not match {} {}'.format(
             location1.name, location2.name))
 
-    if location1.state_id is None:
+    if location1.state is None:
         location1.state = location2.state
 
-    if location1.locode_info is None:
-        location1.locode_info = location2.locode_info
-    elif location2.locode_info is not None:
+    if location2.state:
+        location2.state.location_infos.remove(location2)
+
+    location2.state = None
+
+    if location2.locode_info:
+        if location1.locode_info is None:
+            location1.add_locode_info()
         location1.locode_info.place_codes.extend(location2.locode_info.place_codes)
 
     location1.clli.extend(location2.clli)
 
-    if location2.airport_info is not None:
+    if location2.airport_info:
         if location1.airport_info is None:
-            location1.airport_info = location2.airport_info
-        else:
-            location1.airport_info.iata_codes.extend(location2.airport_info.iata_codes)
-            location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
-            location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
+            location1.add_airport_info()
+
+        location1.airport_info.iata_codes.extend(location2.airport_info.iata_codes)
+        location1.airport_info.icao_codes.extend(location2.airport_info.icao_codes)
+        location1.airport_info.faa_codes.extend(location2.airport_info.faa_codes)
 
     location1.alternate_names.extend(location2.alternate_names)
 
@@ -503,7 +513,7 @@ def merge_locations_to_location(location: LocationInfo, locations: [LocationInfo
         try:
             location_merge(location, mloc, db_session)
             locations.remove(mloc)
-            # db_session.expunge(mloc)
+            del mloc
         except ValueError:
             continue
 
@@ -523,6 +533,11 @@ def add_locations(locations: [LocationInfo], to_add_locations: [LocationInfo], r
     if create_new_locations:
         merge_locations_by_gps(to_add_locations, radius, db_session)
         locations.extend(to_add_locations)
+    else:
+        for location in to_add_locations:
+            if location.state:
+                location.state.location_infos.remove(location)
+                location.state = None
 
 
 def merge_locations_by_gps(locations: [LocationInfo], radius: int, db_session: Session):
@@ -542,13 +557,22 @@ def merge_locations_by_gps(locations: [LocationInfo], radius: int, db_session: S
         merge_locations_to_location(location, locations, radius, db_session, start=i)
 
 
-def idfy_locations(locations: [LocationInfo]):
+def state_for_code(state_code, state_name):
+    states_for_code = [state for state in STATES if state.iso3166code == state_code]
+    if states_for_code:
+        return states_for_code[0]
+
+    state = State(name=state_name, iso3166code=state_code)
+    STATES.append(state)
+    return state
+
+
+def idfy_location(location: LocationInfo):
     """
     Assign a unique id to every location in the array by computing the hash over all codes 
     sorted alphabetically. That should guarantee a unique and 
     """
-    for location in locations:
-        location.id = hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest()
+    location.id = hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest()
 
 
 def parse_airport_codes(args, db_session: Session):
@@ -652,6 +676,7 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
         for line in metropolitan_file:
             code, lat, lon = line.strip().split(',')
             location = LocationInfo(lat=float(lat), lon=float(lon))
+            idfy_location(location)
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
@@ -660,8 +685,9 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
     return metropolitan_locations
 
 
-def parse_codes(args, db_session: Session):
+def parse_codes(args):
     """start real parsing"""
+    db_session = Session()
     start_time = time.clock()
     start_rtime = time.time()
 
@@ -691,9 +717,20 @@ def parse_codes(args, db_session: Session):
 
     locations = merge_location_codes(args.merge_radius, db_session)
 
-    idfy_locations(locations)
-    db_session.add_all(locations)
+    state_locations = [state.location_infos for state in STATES]
+    count_locs = sum([len(locs) for locs in state_locations])
+    print('state locs', count_locs)
+
+    import pprint
+    pprint.pprint([loc.id for loc in locations])
+
+    # recreate_states_workaround(locations, STATES)
+
+    db_session.bulk_save_objects(locations, return_defaults=True)
+
     db_session.commit()
+    db_session.close()
+    Session.remove()
 
     end_time = time.clock()
     end_rtime = time.time()
@@ -703,7 +740,21 @@ def parse_codes(args, db_session: Session):
                                                           int(end_rtime - start_rtime),
                                                           len(locations)))
 
-    print_stats(locations)
+    # print_stats(locations)
+
+
+def recreate_states_workaround(locations: [LocationInfo], states: [State]):
+    print(len(locations))
+    new_states = {}
+    for state in states:
+        new_states[state.iso3166code] = State(iso3166code=state.iso3166code, name=state.name)
+
+    for location in locations:
+        if location.state:
+            location.state = new_states[location.state.iso3166code]
+        # else:
+        #     print(location.id, 'has no state', str(location.airport_info is None),
+        #           str(location.locode_info is None), location.clli, sep=' ')
 
 
 if __name__ == '__main__':

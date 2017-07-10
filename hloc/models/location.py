@@ -48,7 +48,7 @@ class State(Base):
     name = sqla.Column(sqla.String(50))
     iso3166code = sqla.Column(sqla.String(5), nullable=False)
 
-    location_infos = sqlorm.relationship("LocationInfo", back_populates="state")
+    location_infos = sqlorm.relationship("LocationInfo", back_populates="state", cascade="all")
 
 
 class Location(Base):
@@ -135,7 +135,7 @@ class Location(Base):
 probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
                                                    sqla.ForeignKey('probes.id')),
-                                       sqla.Column('location_info_id', sqla.String(16),
+                                       sqla.Column('location_info_id', sqla.String(32),
                                                    sqla.ForeignKey('locations.id')))
 
 
@@ -155,7 +155,7 @@ class LocationInfo(Location):
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
 
-    state = sqlorm.relationship(State, back_populates='location_infos')
+    state = sqlorm.relationship(State, back_populates='location_infos', cascade="all")
     matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
     nearby_probes = sqlorm.relationship('Probe',
                                         secondary=probe_location_info_table,
@@ -229,7 +229,7 @@ class LocationHint(Base):
     __tablename__ = 'location_hints'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    location_id = sqla.Column(sqla.String(16), sqla.ForeignKey(Location.id))
+    location_id = sqla.Column(sqla.String(32), sqla.ForeignKey(Location.id))
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
     location = sqlorm.relationship(Location)
