@@ -59,8 +59,9 @@ class RipeMeasurementResult(MeasurementResult):
         rtt_dicts = 'result'
         rtt = 'rtt'
         execution_time = 'timestamp'
+        measurement_id = 'msm_id'
 
-    ripe_id = sqla.Column(sqla.Integer)
+    ripe_measurement_id = sqla.Column(sqla.Integer)
 
     @staticmethod
     def create_from_dict(ripe_result_dict):
@@ -75,6 +76,8 @@ class RipeMeasurementResult(MeasurementResult):
             ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.destination_addr.value]
         measurement_result.source_address = \
             ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.source_addr.value]
+        measurement_result.ripe_measurement_id = \
+            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.measurement_id.value]
         rtts = []
         for ping in measurement_result[
                            RipeMeasurementResult.RipeMeasurementResultKey.rtt_dicts.value]:

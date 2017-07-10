@@ -15,6 +15,7 @@ import configargparse
 
 import hloc.constants as constants
 from hloc import util
+from hloc.db_queries import add_labels_to_domain
 from hloc.models import Domain, DomainType, Session
 from hloc.scripts.domain_name_preprocessing import RegexStrategy, preprocess_domains
 
@@ -186,6 +187,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         domain = Domain(domain_address, ipv4_address=ip_address)
 
                     domain.classification_type = DomainType.valid
+                    add_labels_to_domain(domain, db_session)
                     db_session.add(domain)
 
                 for ip_address, domain_address in bad_lines:
@@ -195,6 +197,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         domain = Domain(domain_address, ipv4_address=ip_address)
 
                     domain.classification_type = DomainType.invalid_characters
+                    add_labels_to_domain(domain, db_session)
                     db_session.add(domain)
 
                 for ip_address, domain_address in bad_tld_lines:
@@ -204,6 +207,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         domain = Domain(domain_address, ipv4_address=ip_address)
 
                     domain.classification_type = DomainType.bad_tld
+                    add_labels_to_domain(domain, db_session)
                     db_session.add(domain)
 
                 for ip_address, domain_address in ip_encoded_lines:
@@ -213,6 +217,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         domain = Domain(domain_address, ipv4_address=ip_address)
 
                     domain.classification_type = DomainType.ip_encoded
+                    add_labels_to_domain(domain, db_session)
                     db_session.add(domain)
 
                 for ip_address, domain_address in custom_filter_lines:
@@ -222,6 +227,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         domain = Domain(domain_address, ipv4_address=ip_address)
 
                     domain.classification_type = DomainType.blacklisted
+                    add_labels_to_domain(domain, db_session)
                     db_session.add(domain)
 
                 db_session.commit()

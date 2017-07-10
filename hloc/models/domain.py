@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
-from .enums import LocationCodeType
+from .enums import LocationCodeType, DomainType
 from .location import LocationHint, domain_location_hints_table
 
 
@@ -33,11 +33,14 @@ class CodeMatch(LocationHint):
                                  secondary=code_match_label_table,
                                  back_populates="code_matches")
 
-    def __init__(self, location_info, code_type: LocationCodeType, code=None):
+    def __init__(self, domain, location_info, domain_label,
+                 code_type: LocationCodeType, code=None):
         """init"""
+        self.domains.append(domain)
         self.location_info = location_info
         self.code_type = code_type
         self.code = code
+        self.labels.append(domain_label)
 
 
 class DomainLabel(Base):
@@ -48,6 +51,7 @@ class DomainLabel(Base):
     id = sqla.Column(sqla.Integer, primary_key=True)
     name = sqla.Column(sqla.String(100), unique=True, index=True, nullable=False)
     domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'), nullable=False)
+    last_searched = sqla.Column(sqla.DateTime)
 
     domain = sqlorm.relationship('Domain', back_populates='labels')
     code_matches = sqlorm.relationship(CodeMatch,
@@ -80,6 +84,7 @@ class Domain(Base):
     name = sqla.Column(sqla.String(200), nullable=False)
     ipv4_address = sqla.Column(postgresql.INET)
     ipv6_address = sqla.Column(postgresql.INET)
+    classification_type = sqla.Column(postgresql.ENUM(DomainType), default=DomainType.valid)
 
     labels = sqlorm.relationship(DomainLabel, back_populates='domain')
     hints = sqlorm.relationship(LocationHint,
@@ -91,16 +96,10 @@ class Domain(Base):
     def __init__(self, domain_name, ipv4_address=None, ipv6_address=None):
         """init"""
 
-        def create_labels() -> [DomainLabel]:
-            labels = []
-            for label in domain_name.split('.')[::-1]:
-                labels.append(DomainLabel(label))
-            return labels
-
         self.domain_name = domain_name
         self.ipv4_address = ipv4_address
         self.ipv6_address = ipv6_address
-        self.domain_labels = create_labels()
+        self.domain_labels = []
 
     @property
     def drop_domain_keys(self):

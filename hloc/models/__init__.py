@@ -4,7 +4,7 @@ from .sql_alchemy_base import Base, engine
 
 Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
 
-from .enums import LocationCodeType, AvailableType, MeasurementError, DomainType
+from .enums import LocationCodeType, AvailableType, MeasurementError, DomainLocationType, DomainType
 from .location import Location, LocationInfo, AirportInfo, LocodeInfo, State
 from .measurement_result import MeasurementResult, RipeMeasurementResult
 from .probe import Probe, RipeAtlasProbe
@@ -30,6 +30,7 @@ __all__ = ['MeasurementResult',
            'DRoPRule',
            'Session',
            'DomainType',
+           'DomainLocationType',
            'MeasurementError',
            'RipeMeasurementResult',
            ]

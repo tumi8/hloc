@@ -7,6 +7,7 @@ import logging
 import os
 import socket
 import subprocess
+import ipaddress
 
 from hloc import constants
 
@@ -134,6 +135,11 @@ def int_to_alphanumeric(num: int):
         return rest_ret
     else:
         return int_to_alphanumeric(div) + rest_ret
+
+
+def is_ipv6_address_encoded(ipv6_address, domain):
+    ip_address_exploded = ipaddress.ip_address('ffff::1').exploded.split(':')
+    return '.'.join(ip_address_exploded) in domain or '.'.join(ip_address_exploded[::-1])
 
 
 def get_class_properties(subj_class) -> [str]:

@@ -58,6 +58,15 @@ class AvailableType(enum.Enum):
 
 @enum.unique
 class DomainType(enum.Enum):
+    blacklisted = 'blacklisted'
+    ip_encoded = 'ip_encode'
+    bad_tld = 'bad_tld'
+    invalid_characters = 'invalid_characters'
+    valid = 'valid'
+
+
+@enum.unique
+class DomainLocationType(enum.Enum):
     verified = 'verified'
     verification_not_possible = 'verification not possible'
     no_match_possible = 'no match possible'
@@ -67,5 +76,6 @@ class DomainType(enum.Enum):
 __all__ = ['LocationCodeType',
            'MeasurementError',
            'AvailableType',
-           'DomainType',
+           'DomainLocationType',
+           'DomainType'
            ]
