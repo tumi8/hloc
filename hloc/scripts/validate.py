@@ -281,7 +281,7 @@ def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
     def increment_count_for_type(ctype: LocationCodeType):
         correct_type_count[ctype.name] += 1
 
-    def increment_domain_type_count(dtype: DomainType):
+    def increment_domain_type_count(dtype: DomainLocationType):
         """Append current domain in the domain dict to the dtype"""
         domain_type_count[dtype] += 1
 
@@ -334,7 +334,7 @@ def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
 
 
 def domain_check_threading_manage(nextdomain: typing.Callable[[], Domain],
-                                  increment_domain_type_count: typing.Callable[[DomainType, ], ],
+                                  increment_domain_type_count: typing.Callable[[DomainLocationType, ],],
                                   increment_count_for_type: typing.Callable[[LocationCodeType], ],
                                   ripe_create_sema: mp.Semaphore,
                                   ripe_slow_down_sema: mp.Semaphore,
@@ -361,7 +361,7 @@ def domain_check_threading_manage(nextdomain: typing.Callable[[], Domain],
 
 
 def check_domain_location_ripe(domain: Domain,
-                               increment_domain_type_count: typing.Callable[[DomainType], ],
+                               increment_domain_type_count: typing.Callable[[DomainLocationType],],
                                increment_count_for_type: typing.Callable[[LocationCodeType], ],
                                ripe_create_sema: mp.Semaphore,
                                ripe_slow_down_sema: mp.Semaphore,
@@ -378,7 +378,7 @@ def check_domain_location_ripe(domain: Domain,
     eliminate_duplicate_results(results)
 
     if not results and wo_measurements:
-        increment_domain_type_count(DomainType.not_responding)
+        increment_domain_type_count(DomainLocationType.not_responding)
         return
 
     matches = domain.all_matches
@@ -402,7 +402,7 @@ def check_domain_location_ripe(domain: Domain,
             # match.matching = True
             # match.matching_rtt = rtt
 
-            increment_domain_type_count(DomainType.correct)
+            increment_domain_type_count(DomainLocationType.correct)
             matched = True
             return None
         else:
@@ -478,19 +478,19 @@ def check_domain_location_ripe(domain: Domain,
                 logger.debug('finished measurement')
 
                 if measurement_result.min_rtt is None:
-                    increment_domain_type_count(DomainType.not_reachable)
+                    increment_domain_type_count(DomainLocationType.not_reachable)
                     return
                 elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
                                                    node_location_dist / 100):
                     increment_count_for_type(next_match.code_type)
                     matched = True
-                    increment_domain_type_count(DomainType.verified)
+                    increment_domain_type_count(DomainLocationType.verified)
                     break
                 else:
                     add_new_result(measurement_result)
 
         elif measurement_result.min_rtt is None:
-            increment_domain_type_count(DomainType.not_reachable)
+            increment_domain_type_count(DomainLocationType.not_reachable)
             return
         else:
             node_location_dist = location.gps_distance_haversine(measurement_result.probe.location)
@@ -499,7 +499,7 @@ def check_domain_location_ripe(domain: Domain,
                                              node_location_dist / 100):
                 increment_count_for_type(next_match.code_type)
                 matched = True
-                increment_domain_type_count(DomainType.verified)
+                increment_domain_type_count(DomainLocationType.verified)
                 break
             else:
                 add_new_result(measurement_result)
@@ -512,11 +512,11 @@ def check_domain_location_ripe(domain: Domain,
     if not matched:
         still_matches = filter_possible_matches(no_verification_matches, results)
         if still_matches:
-            increment_domain_type_count(DomainType.verification_not_possible)
+            increment_domain_type_count(DomainLocationType.verification_not_possible)
         else:
             for domain_match in domain.all_matches:
                 domain_match.possible = False
-            increment_domain_type_count(DomainType.no_match_possible)
+            increment_domain_type_count(DomainLocationType.no_match_possible)
 
     return 0
 
