@@ -15,9 +15,10 @@ import configargparse
 
 import hloc.constants as constants
 from hloc import util
-from hloc.db_queries import add_labels_to_domain
+from hloc.db_utils import add_labels_to_domain
 from hloc.models import Domain, DomainType, Session
-from hloc.scripts.domain_name_preprocessing import RegexStrategy, preprocess_domains
+from hloc.domain_processing_helper.domain_name_preprocessing import RegexStrategy, \
+    preprocess_domains
 
 logger = None
 BLOCK_SIZE = 10
@@ -42,8 +43,8 @@ def __create_parser_arguments(parser):
                         help='path to a file with a white list of IPs')
     parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log',
                         help='Specify a logging file where the log should be saved')
-    parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
-                        is_config_file=True, help='The path to a config file')
+    # parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
+    #                     is_config_file=True, help='The path to a config file')
 
 
 def main():
