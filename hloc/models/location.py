@@ -132,7 +132,7 @@ class Location(Base):
         return math.degrees(lat_new), math.degrees(lon_new)
 
 
-probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
+probe_location_info_table = sqla.Table('probe_location_infos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
                                                    sqla.ForeignKey('probes.id', ondelete='cascade')),
                                        sqla.Column('location_info_id', sqla.String(32),
@@ -213,7 +213,7 @@ class LocationInfo(Location):
         return ret_list
 
 
-domain_location_hints_table = sqla.Table('DomainLocationHints', Base.metadata,
+domain_location_hints_table = sqla.Table('domain_location_hints', Base.metadata,
                                          sqla.Column('location_hint_id', sqla.Integer,
                                                      sqla.ForeignKey('location_hints.id', ondelete='cascade')),
                                          sqla.Column('domain_id', sqla.Integer,

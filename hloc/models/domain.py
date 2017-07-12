@@ -13,7 +13,7 @@ from .enums import LocationCodeType, DomainType
 from .location import LocationHint, domain_location_hints_table
 
 
-code_match_label_table = sqla.Table('CodeMatchLabels', Base.metadata,
+code_match_label_table = sqla.Table('code_match_labels', Base.metadata,
                                     sqla.Column('code_match_id', sqla.Integer,
                                                 sqla.ForeignKey('location_hints.id', ondelete='cascade')),
                                     sqla.Column('domain_label_id', sqla.Integer,
@@ -43,7 +43,7 @@ class CodeMatch(LocationHint):
         self.labels.append(domain_label)
 
 
-domain_to_label_table = sqla.Table('DomainToLabels', Base.metadata,
+domain_to_label_table = sqla.Table('domain_to_labels', Base.metadata,
                                     sqla.Column('domain_id', sqla.Integer,
                                                 sqla.ForeignKey('domains.id', ondelete='cascade')),
                                     sqla.Column('domain_label_id', sqla.Integer,
