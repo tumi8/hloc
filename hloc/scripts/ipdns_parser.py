@@ -163,6 +163,7 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         seek_after -= 1
                     if seek_after == 0 and len(lines) >= BLOCK_SIZE:
                         yield lines
+                        del lines[:]
                 if lines:
                     yield lines
 
@@ -178,6 +179,10 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
                         continue
                     line = line.strip()
                     ip, domain = line.split(',', 1)
+                    if not domain:
+                        logger.info('Warning found empty domain for IP {} skipping'.format(ip))
+                        continue
+
                     ip_domain_list.append((ip, domain))
 
                     with parsed_ips_lock:
