@@ -83,6 +83,8 @@ def main():
         with open(args.white_list_file_path) as filter_list_file:
             for line in filter_list_file:
                 whitelist.add(line.strip())
+    else:
+        whitelist = None
 
     processes = []
     parsed_ips = set()
