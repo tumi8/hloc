@@ -15,9 +15,9 @@ from .location import LocationHint, domain_location_hints_table
 
 code_match_label_table = sqla.Table('CodeMatchLabels', Base.metadata,
                                     sqla.Column('code_match_id', sqla.Integer,
-                                                sqla.ForeignKey('location_hints.id')),
+                                                sqla.ForeignKey('location_hints.id', ondelete='cascade')),
                                     sqla.Column('domain_label_id', sqla.Integer,
-                                                sqla.ForeignKey('domain_labels.id')))
+                                                sqla.ForeignKey('domain_labels.id', ondelete='cascade')))
 
 
 class CodeMatch(LocationHint):
@@ -43,6 +43,13 @@ class CodeMatch(LocationHint):
         self.labels.append(domain_label)
 
 
+domain_to_label_table = sqla.Table('DomainToLabels', Base.metadata,
+                                    sqla.Column('domain_id', sqla.Integer,
+                                                sqla.ForeignKey('domains.id', ondelete='cascade')),
+                                    sqla.Column('domain_label_id', sqla.Integer,
+                                                sqla.ForeignKey('domain_labels.id', ondelete='cascade')))
+
+
 class DomainLabel(Base):
     """The model for a domain name label"""
 
@@ -50,10 +57,12 @@ class DomainLabel(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     name = sqla.Column(sqla.String(100), unique=True, index=True, nullable=False)
-    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'), nullable=False)
     last_searched = sqla.Column(sqla.DateTime)
 
-    domain = sqlorm.relationship('Domain', back_populates='labels')
+
+    domains = sqlorm.relationship("Domain",
+                                  secondary=domain_to_label_table,
+                                  back_populates="labels")
     code_matches = sqlorm.relationship(CodeMatch,
                                        secondary=code_match_label_table,
                                        back_populates="labels")
@@ -86,7 +95,9 @@ class Domain(Base):
     ipv6_address = sqla.Column(postgresql.INET)
     classification_type = sqla.Column(postgresql.ENUM(DomainType), default=DomainType.valid)
 
-    labels = sqlorm.relationship(DomainLabel, back_populates='domain')
+    labels = sqlorm.relationship(DomainLabel,
+                                 secondary=domain_to_label_table,
+                                 back_populates='domains')
     hints = sqlorm.relationship(LocationHint,
                                 secondary=domain_location_hints_table,
                                 back_populates='domains')
@@ -96,7 +107,7 @@ class Domain(Base):
     def __init__(self, domain_name, ipv4_address=None, ipv6_address=None):
         """init"""
 
-        self.domain_name = domain_name
+        self.name = domain_name
         self.ipv4_address = ipv4_address
         self.ipv6_address = ipv6_address
         self.domain_labels = []

@@ -5,8 +5,21 @@ A collection of queries connected to the location object
 
 import typing
 import sqlalchemy as sqla
+import sqlalchemy.exc
+from sqlalchemy.orm import sessionmaker, scoped_session
 
-from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel
+from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, engine
+
+
+def create_session_for_process():
+    engine.dispose()
+    Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
+    return Session
+
+
+def recreate_db():
+    Base.metadata.drop_all()
+    Base.metadata.create_all()
 
 
 def state_for_code(state_code, state_name, db_session: Session):
@@ -42,8 +55,13 @@ def label_for_name(label_name: str, db_session: Session):
     if not label:
         label = DomainLabel(label_name)
         db_session.add(label)
-        db_session.commit()
-
+        try:
+            db_session.commit()
+        except sqlalchemy.exc.IntegrityError:
+            db_session.rollback()
+            label = db_session.query(DomainLabel).filter(DomainLabel.name == label_name).first()
+            if not label:
+                raise
     return label
 
 

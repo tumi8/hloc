@@ -22,9 +22,10 @@ from time import sleep
 import requests
 from html.parser import HTMLParser
 
-from hloc.models import LocationInfo, Session, Base, State
+from hloc.models import LocationInfo, State, Session
 from hloc.util import setup_logger
 from hloc.constants import ACCEPTED_CHARACTER
+from hloc.db_utils import recreate_db, create_session_for_process
 
 logger = None
 
@@ -69,7 +70,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
-    parser.add_argument('-d', '--database-debug',  action='store_true',
+    parser.add_argument('-d', '--database-recreate',  action='store_true',
                         help='Recreates the database structure. Attention deletes all data!')
     # TODO config file
 
@@ -80,11 +81,10 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    if args.database_debug:
+    if args.database_recreate:
         inp = input('Do you really want to recreate the database structure? (y)')
         if inp == 'y':
-            Base.metadata.drop_all()
-            Base.metadata.create_all()
+            recreate_db()
 
     global logger
     logger = setup_logger(args.log_file, 'parse_codes', loglevel=args.log_level)
@@ -686,41 +686,43 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
 
 def parse_codes(args):
     """start real parsing"""
+    Session = create_session_for_process()
     db_session = Session()
     start_time = time.clock()
     start_rtime = time.time()
+    try:
+        with db_session.no_autoflush:
+            if args.airport_codes:
+                parse_airport_codes(args, db_session)
+                if args.metropolitan_file:
+                    metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file,
+                                                                      db_session)
+                    if args.merge_radius:
+                        add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
+                                      db_session, create_new_locations=False)
+                    else:
+                        add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
+                                      db_session, create_new_locations=False)
 
-    with db_session.no_autoflush:
-        if args.airport_codes:
-            parse_airport_codes(args, db_session)
-            if args.metropolitan_file:
-                metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file,
-                                                                  db_session)
-                if args.merge_radius:
-                    add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
-                                  db_session, create_new_locations=False)
-                else:
-                    add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
-                                  db_session, create_new_locations=False)
+            if args.locode:
+                parse_locode_codes(args.locode, db_session)
 
-        if args.locode:
-            parse_locode_codes(args.locode, db_session)
+            if args.clli:
+                get_clli_codes(args.clli, db_session)
+                logger.debug('Finished clli parsing')
 
-        if args.clli:
-            get_clli_codes(args.clli, db_session)
-            logger.debug('Finished clli parsing')
+            if args.geonames:
+                get_geo_names(args.geonames, args.min_population, db_session)
+                logger.debug('Finished geonames parsing')
 
-        if args.geonames:
-            get_geo_names(args.geonames, args.min_population, db_session)
-            logger.debug('Finished geonames parsing')
+        locations = merge_location_codes(args.merge_radius, db_session)
 
-    locations = merge_location_codes(args.merge_radius, db_session)
+        db_session.bulk_save_objects(locations, return_defaults=True)
 
-    db_session.bulk_save_objects(locations, return_defaults=True)
-
-    db_session.commit()
-    db_session.close()
-    Session.remove()
+        db_session.commit()
+    finally:
+        db_session.close()
+        Session.remove()
 
     end_time = time.clock()
     end_rtime = time.time()

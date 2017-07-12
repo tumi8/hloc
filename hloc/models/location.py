@@ -134,9 +134,9 @@ class Location(Base):
 
 probe_location_info_table = sqla.Table('ProbeLocationInfos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
-                                                   sqla.ForeignKey('probes.id')),
+                                                   sqla.ForeignKey('probes.id', ondelete='cascade')),
                                        sqla.Column('location_info_id', sqla.String(32),
-                                                   sqla.ForeignKey('locations.id')))
+                                                   sqla.ForeignKey('locations.id', ondelete='cascade')))
 
 
 class LocationInfo(Location):
@@ -150,8 +150,8 @@ class LocationInfo(Location):
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
-    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(AirportInfo.id))
-    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(LocodeInfo.id))
+    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(AirportInfo.id, ondelete='set null'))
+    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(LocodeInfo.id, ondelete='set null'))
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
 
@@ -215,9 +215,9 @@ class LocationInfo(Location):
 
 domain_location_hints_table = sqla.Table('DomainLocationHints', Base.metadata,
                                          sqla.Column('location_hint_id', sqla.Integer,
-                                                     sqla.ForeignKey('location_hints.id')),
+                                                     sqla.ForeignKey('location_hints.id', ondelete='cascade')),
                                          sqla.Column('domain_id', sqla.Integer,
-                                                     sqla.ForeignKey('domains.id')))
+                                                     sqla.ForeignKey('domains.id', ondelete='cascade')))
 
 
 class LocationHint(Base):
@@ -230,9 +230,8 @@ class LocationHint(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     location_id = sqla.Column(sqla.String(32), sqla.ForeignKey(Location.id))
-    domain_id = sqla.Column(sqla.Integer, sqla.ForeignKey('domains.id'))
 
-    location = sqlorm.relationship(Location)
+    location = sqlorm.relationship(Location, cascade='all')
     domains = sqlorm.relationship('Domain',
                                   secondary=domain_location_hints_table,
                                   back_populates='hints')

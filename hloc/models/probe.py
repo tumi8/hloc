@@ -19,9 +19,8 @@ import sqlalchemy.orm as sqlorm
 import hloc.ripe_helper.basics_helper as ripe_helper
 from hloc import util, constants
 from .location import probe_location_info_table
-from .sql_alchemy_base import Base
 from hloc.exceptions import ProbeError
-from hloc.models import Session, Location, RipeMeasurementResult, AvailableType
+from hloc.models import Location, RipeMeasurementResult, AvailableType, Base, Session
 
 
 class Probe(Base):
@@ -37,7 +36,7 @@ class Probe(Base):
     location_id = sqla.Column(sqla.String(32), sqla.ForeignKey(Location.id), nullable=False)
     last_seen = sqla.Column(sqla.DateTime)
 
-    location = sqlorm.relationship(Location, back_populates='probes')
+    location = sqlorm.relationship(Location, back_populates='probes', cascade='all')
     location_infos = sqlorm.relationship('LocationInfo',
                                          secondary=probe_location_info_table,
                                          back_populates="nearby_probes")
@@ -47,7 +46,7 @@ class Probe(Base):
 
     __mapper_args__ = {'polymorphic_on': measurement_type}
 
-    def measure_rtt(self, dest_address, db_session, **kwargs):
+    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
         """Creates a method for the Probe"""
         raise NotImplementedError("subclass must implement this")
 

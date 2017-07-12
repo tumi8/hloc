@@ -15,8 +15,8 @@ import configargparse
 
 import hloc.constants as constants
 from hloc import util
-from hloc.db_utils import add_labels_to_domain
-from hloc.models import Domain, DomainType, Session
+from hloc.db_utils import add_labels_to_domain, recreate_db, create_session_for_process
+from hloc.models import Domain, DomainType
 from hloc.domain_processing_helper.domain_name_preprocessing import RegexStrategy, \
     preprocess_domains
 
@@ -33,8 +33,7 @@ def __create_parser_arguments(parser):
                         help='Set the path to the tlds file')
     parser.add_argument('-i', '--isp-ip-filter', action='store_true',
                         help='set if you want to filter isp ip domain names')
-    parser.add_argument('-s', '--strategy', type=str, dest='regex_strategy',
-                        choices=RegexStrategy.all_values(),
+    parser.add_argument('-s', '--regex-strategy', type=str, choices=RegexStrategy.all_values(),
                         default=RegexStrategy.abstract.value, help='Specify a regex Strategy')
     parser.add_argument('-v', '--ip-version', type=str, required=True,
                         choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
@@ -43,6 +42,8 @@ def __create_parser_arguments(parser):
                         help='path to a file with a white list of IPs')
     parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-d', '--database-recreate', action='store_true',
+                        help='Recreates the database structure. Attention deletes all data!')
     # parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
     #                     is_config_file=True, help='The path to a config file')
 
@@ -58,8 +59,13 @@ def main():
     global logger
     logger = util.setup_logger(args.logging_file, 'process')
 
+    if args.database_recreate:
+        inp = input('Do you really want to recreate the database structure? (y)')
+        if inp == 'y':
+            recreate_db()
+
     if args.isp_ip_filter:
-        logger.info('using strategy: {}'.format(args.regexStrategy))
+        logger.info('using strategy: {}'.format(args.regex_strategy))
     else:
         logger.info('processing without ip filtering')
 
@@ -82,7 +88,7 @@ def main():
     parsed_ips = set()
     parsed_ips_lock = mp.Lock()
 
-    for i in range(0, args.amount_processes):
+    for i in range(0, args.number_processes):
         process = mp.Process(target=preprocess_file_part,
                              args=(args.filepath, i, args.ip_version, args.number_processes,
                                    args.isp_ip_filter, regex_strategy, tlds, whitelist, parsed_ips,
@@ -124,129 +130,147 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
     """
     logger.info('starting')
     label_stats = collections.defaultdict(int)
+
+    Session = create_session_for_process()
+    db_session = Session()
+    try:
+        with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
+            def line_blocks():
+                lines = []
+                seek_before = 0
+                seek_after = 0
+
+                def prepare():
+                    nonlocal seek_before
+                    nonlocal seek_after
+                    nonlocal lines
+                    seek_before = BLOCK_SIZE * pnr
+                    seek_after = BLOCK_SIZE * number_processes - BLOCK_SIZE * (pnr + 1)
+                    del lines[:]
+
+                prepare()
+
+                for seek_line in rdns_file_handle:
+                    if seek_after == 0 and seek_before == 0 and len(lines) >= BLOCK_SIZE:
+                        prepare()
+                    if seek_before > 0:
+                        seek_before -= 1
+                    elif len(lines) < BLOCK_SIZE:
+                        lines.append(seek_line)
+                    elif seek_after > 0:
+                        seek_after -= 1
+                    if seek_after == 0 and len(lines) >= BLOCK_SIZE:
+                        yield lines
+                if lines:
+                    yield lines
+
+            bad_characters = collections.defaultdict(int)
+            count_good_lines = 0
+            count_isp_lines = 0
+
+            file_line_blocks = line_blocks()
+            ip_domain_list = []
+            for line_block in file_line_blocks:
+                for line in line_block:
+                    if len(line) == 0:
+                        continue
+                    line = line.strip()
+                    ip, domain = line.split(',', 1)
+                    ip_domain_list.append((ip, domain))
+
+                    with parsed_ips_lock:
+                        parsed_ips.add(ip)
+
+                if len(ip_domain_list) > 10**4:
+                    classify_domains(ip_domain_list, ip_version, ip_encoding_filter, regex_strategy,
+                                     tlds, whitelist, db_session)
+                    db_session.commit()
+                    del ip_domain_list[:]
+
+            classify_domains(ip_domain_list, ip_version, ip_encoding_filter, regex_strategy,
+                             tlds, whitelist, db_session)
+            db_session.commit()
+
+            directory = os.path.dirname(filepath)
+            filename = util.get_path_filename(filepath)
+
+            logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
+            with open(os.path.join(directory, '{0}-{1}-character.stats'.format(filename, pnr)),
+                      'w', encoding='utf-8') as characterStatsFile:
+                json.dump(bad_characters, characterStatsFile)
+
+            with open(os.path.join(directory, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
+                      'w', encoding='utf-8') as labelStatFile:
+                json.dump(label_stats, labelStatFile)
+    finally:
+        db_session.close()
+        Session.remove()
+
+
+def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
+                     regex_strategy: RegexStrategy, tlds: typing.Set[str],
+                     whitelist: typing.Set[str], db_session):
     is_ipv6 = ip_version == constants.IPV6_IDENTIFIER
 
-    db_session = Session()
+    (good_lines, bad_lines, bad_tld_lines, ip_encoded_lines, custom_filter_lines,
+     bad_characters_part) = preprocess_domains(ip_domain_list, tlds, whitelist,
+                                               ip_version, regex_strategy,
+                                               ip_encoding_filter)
 
-    with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
-        def line_blocks():
-            lines = []
-            seek_before = 0
-            seek_after = 0
+    logger.debug('good: {} bad: {} bad dns: {} ip: {} bad chars: {} custom filter {}'
+                 .format(len(good_lines), len(bad_lines), len(bad_tld_lines),
+                         len(ip_encoded_lines), len(bad_characters_part),
+                         len(custom_filter_lines)))
 
-            def prepare():
-                nonlocal seek_before
-                nonlocal seek_after
-                nonlocal lines
-                seek_before = BLOCK_SIZE * pnr
-                seek_after = BLOCK_SIZE * number_processes - BLOCK_SIZE * (pnr + 1)
-                del lines[:]
+    for ip_address, domain_address in good_lines:
+        if is_ipv6:
+            domain = Domain(domain_address, ipv6_address=ip_address)
+        else:
+            domain = Domain(domain_address, ipv4_address=ip_address)
 
-            prepare()
+        domain.classification_type = DomainType.valid
+        add_labels_to_domain(domain, db_session)
+        db_session.add(domain)
 
-            for seek_line in rdns_file_handle:
-                if seek_after == 0 and seek_before == 0 and len(lines) >= BLOCK_SIZE:
-                    prepare()
-                if seek_before > 0:
-                    seek_before -= 1
-                elif len(lines) < BLOCK_SIZE:
-                    lines.append(seek_line)
-                elif seek_after > 0:
-                    seek_after -= 1
-                if seek_after == 0 and len(lines) >= BLOCK_SIZE:
-                    yield lines
-            if lines:
-                yield lines
+    for ip_address, domain_address in bad_lines:
+        if is_ipv6:
+            domain = Domain(domain_address, ipv6_address=ip_address)
+        else:
+            domain = Domain(domain_address, ipv4_address=ip_address)
 
-        bad_characters = collections.defaultdict(int)
-        count_good_lines = 0
-        count_isp_lines = 0
+        domain.classification_type = DomainType.invalid_characters
+        add_labels_to_domain(domain, db_session)
+        db_session.add(domain)
 
-        file_line_blocks = line_blocks()
-        for line_block in file_line_blocks:
-            ip_domain_list = []
-            for line in line_block:
-                if len(line) == 0:
-                    continue
-                line = line.strip()
-                ip, domain = line.split(',', 1)
-                ip_domain_list.append((ip, domain))
+    for ip_address, domain_address in bad_tld_lines:
+        if is_ipv6:
+            domain = Domain(domain_address, ipv6_address=ip_address)
+        else:
+            domain = Domain(domain_address, ipv4_address=ip_address)
 
-                with parsed_ips_lock:
-                    parsed_ips.add(ip)
+        domain.classification_type = DomainType.bad_tld
+        add_labels_to_domain(domain, db_session)
+        db_session.add(domain)
 
-            if len(ip_domain_list) > 10**4:
-                (good_lines, bad_lines, bad_tld_lines, ip_encoded_lines, custom_filter_lines,
-                 bad_characters_part) = preprocess_domains(ip_domain_list, tlds, whitelist,
-                                                           ip_version, regex_strategy,
-                                                           ip_encoding_filter)
+    for ip_address, domain_address in ip_encoded_lines:
+        if is_ipv6:
+            domain = Domain(domain_address, ipv6_address=ip_address)
+        else:
+            domain = Domain(domain_address, ipv4_address=ip_address)
 
-                for ip_address, domain_address in good_lines:
-                    if is_ipv6:
-                        domain = Domain(domain_address, ipv6_address=ip_address)
-                    else:
-                        domain = Domain(domain_address, ipv4_address=ip_address)
+        domain.classification_type = DomainType.ip_encoded
+        add_labels_to_domain(domain, db_session)
+        db_session.add(domain)
 
-                    domain.classification_type = DomainType.valid
-                    add_labels_to_domain(domain, db_session)
-                    db_session.add(domain)
+    for ip_address, domain_address in custom_filter_lines:
+        if is_ipv6:
+            domain = Domain(domain_address, ipv6_address=ip_address)
+        else:
+            domain = Domain(domain_address, ipv4_address=ip_address)
 
-                for ip_address, domain_address in bad_lines:
-                    if is_ipv6:
-                        domain = Domain(domain_address, ipv6_address=ip_address)
-                    else:
-                        domain = Domain(domain_address, ipv4_address=ip_address)
-
-                    domain.classification_type = DomainType.invalid_characters
-                    add_labels_to_domain(domain, db_session)
-                    db_session.add(domain)
-
-                for ip_address, domain_address in bad_tld_lines:
-                    if is_ipv6:
-                        domain = Domain(domain_address, ipv6_address=ip_address)
-                    else:
-                        domain = Domain(domain_address, ipv4_address=ip_address)
-
-                    domain.classification_type = DomainType.bad_tld
-                    add_labels_to_domain(domain, db_session)
-                    db_session.add(domain)
-
-                for ip_address, domain_address in ip_encoded_lines:
-                    if is_ipv6:
-                        domain = Domain(domain_address, ipv6_address=ip_address)
-                    else:
-                        domain = Domain(domain_address, ipv4_address=ip_address)
-
-                    domain.classification_type = DomainType.ip_encoded
-                    add_labels_to_domain(domain, db_session)
-                    db_session.add(domain)
-
-                for ip_address, domain_address in custom_filter_lines:
-                    if is_ipv6:
-                        domain = Domain(domain_address, ipv6_address=ip_address)
-                    else:
-                        domain = Domain(domain_address, ipv4_address=ip_address)
-
-                    domain.classification_type = DomainType.blacklisted
-                    add_labels_to_domain(domain, db_session)
-                    db_session.add(domain)
-
-                db_session.commit()
-
-        directory = os.path.dirname(filepath)
-        filename = util.get_path_filename(filepath)
-
-        logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
-        with open(os.path.join(directory, '{0}-{1}-character.stats'.format(filename, pnr)),
-                  'w', encoding='utf-8') as characterStatsFile:
-            json.dump(bad_characters, characterStatsFile)
-
-        with open(os.path.join(directory, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
-                  'w', encoding='utf-8') as labelStatFile:
-            json.dump(label_stats, labelStatFile)
-
-    db_session.close()
-    Session.remove()
+        domain.classification_type = DomainType.blacklisted
+        add_labels_to_domain(domain, db_session)
+        db_session.add(domain)
 
 
 if __name__ == '__main__':
