@@ -199,7 +199,7 @@ class LocationInfo(Location):
         for name in self.alternate_names:
             if name:
                 ret_list.append((name.lower(), (self.id, LocationCodeType.geonames.value)))
-        if self.locode and self.state.iso3166code:
+        if self.locode_info and self.state.iso3166code:
             for code in self.locode_info.place_codes:
                 ret_list.append(('{}{}'.format(self.state.iso3166code.lower(), code.lower()),
                                  (self.id, LocationCodeType.locode.value)))

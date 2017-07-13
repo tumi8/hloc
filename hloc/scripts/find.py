@@ -13,10 +13,10 @@ import marisa_trie
 
 import configargparse
 
-import hloc.json_util as json_util
 from hloc import util
-from hloc.models import CodeMatch, Location, LocationCodeType, Session, Domain, DomainLabel
-from hloc.db_utils import get_all_domains_splitted
+from hloc.models import CodeMatch, Location, LocationCodeType, Session, Domain, DomainLabel, \
+    DomainType, LocationInfo
+from hloc.db_utils import get_all_domains_splitted, create_session_for_process
 
 logger = None
 
@@ -29,14 +29,15 @@ def __create_parser_arguments(parser):
     parser.add_argument('-f', '--word-blacklist-file', type=str, help='The word blacklist file')
     parser.add_argument('-s', '--code-to-location-blacklist-file', type=str,
                         help='The code to location blacklist file')
-    parser.add_argument('-a', '--amount-dns-entries', type=int, default=0,
-                        dest='amount',
+    parser.add_argument('-a', '--amount', type=int, default=0,
                         help='Specify the amount of dns entries which should be searched'
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-e', '--exclude-sld', help='Exclude sld from search',
                         dest='exclude_sld', action='store_true')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=10,
                         help='The number of domains taken per block to process them')
+    parser.add_argument('--include-ip-encoded', action='store_true',
+                        help='Search also domains of type IP encoded')
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log',
                         help='Specify a logging file where the log should be saved')
 
@@ -51,7 +52,7 @@ def main():
     global logger
     logger = util.setup_logger(args.logging_file, 'find')
 
-    trie = create_trie(args.location_file, args.code_blacklist_file, args.word_blacklist_file)
+    trie = create_trie(args.code_blacklist_file, args.word_blacklist_file)
 
     code_to_location_blacklist = {}
     if args.code_to_location_blacklist_file:
@@ -65,11 +66,10 @@ def main():
 
     processes = []
     for index in range(0, args.number_processes):
-        # start process for filename.format(0)
-
         process = mp.Process(target=search_process,
                              args=(index, trie, code_to_location_blacklist, args.exclude_sld,
-                                   args.limit, args.number_processes, args.profile),
+                                   args.domain_block_limit, args.number_processes,
+                                   args.include_ip_encoded),
                              kwargs={'amount': args.amount},
                              name='find_locations_{}'.format(index))
         process.start()
@@ -79,37 +79,41 @@ def main():
         process.join()
 
 
-def create_trie(location_filepath: str, code_blacklist_filepath: str, word_blacklist_filepath: str):
+def create_trie(code_blacklist_filepath: str, word_blacklist_filepath: str):
     """
     Creates a RecordTrie with the marisa library
-    :param location_filepath: the filepath where the locations are saved
     :param code_blacklist_filepath: the path to the code blacklist file
     :param word_blacklist_filepath: the path to the word blacklist file
     :rtype: marisa_trie.RecordTrie
     """
-    with open(location_filepath) as location_file:
-        locations = json_util.json_load(location_file)
+    Session = create_session_for_process()
+    db_session = Session()
+    try:
+        locations = db_session.query(LocationInfo)
 
-    code_blacklist_set = set()
-    if code_blacklist_filepath:
-        with open(code_blacklist_filepath) as code_blacklist_file:
-            for line in code_blacklist_file:
-                line = line.strip()
-                if line[0] != '#':
-                    code_blacklist_set.add(line)
+        code_blacklist_set = set()
+        if code_blacklist_filepath:
+            with open(code_blacklist_filepath) as code_blacklist_file:
+                for line in code_blacklist_file:
+                    line = line.strip()
+                    if line[0] != '#':
+                        code_blacklist_set.add(line)
 
-    word_blacklist_set = set()
-    if word_blacklist_filepath:
-        with open(word_blacklist_filepath) as word_blacklist_file:
-            for line in word_blacklist_file:
-                line = line.strip()
-                if line[0] != '#':
-                    word_blacklist_set.add(line)
+        word_blacklist_set = set()
+        if word_blacklist_filepath:
+            with open(word_blacklist_filepath) as word_blacklist_file:
+                for line in word_blacklist_file:
+                    line = line.strip()
+                    if line[0] != '#':
+                        word_blacklist_set.add(line)
 
-    return create_trie_obj(locations.values(), code_blacklist_set, word_blacklist_set)
+        return create_trie_obj(locations, code_blacklist_set, word_blacklist_set)
+    finally:
+        db_session.close()
+        Session.remove()
 
 
-def create_trie_obj(location_list: [Location], code_blacklist: [str], word_blacklist: [str]):
+def create_trie_obj(location_list: [Location], code_blacklist: {str}, word_blacklist: {str}):
     """
     Creates a RecordTrie with the marisa library
     :param location_list: a list with all locations
@@ -126,16 +130,20 @@ def create_trie_obj(location_list: [Location], code_blacklist: [str], word_black
                            code_tuple[0] not in word_blacklist]
 
     for code in word_blacklist:
-        code_id_type_tuples.append((code, (-1, -1)))
+        code_id_type_tuples.append((code, ('0'*32, -1)))
 
-    return marisa_trie.RecordTrie('<32sh', code_id_type_tuples)
+    encoded_tuples = [(code, (uid.encode(), code_type))
+                      for code, (uid, code_type) in code_id_type_tuples]
+
+    return marisa_trie.RecordTrie('<32sh', encoded_tuples)
 
 
 def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, nr_processes,
-                   amount=1000):
+                   include_ip_encoded, amount=1000):
     """
     for all amount=0
     """
+    Session = create_session_for_process()
     db_session = Session()
 
     match_count = collections.defaultdict(int)
@@ -145,11 +153,15 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
     label_wl_count = 0
     label_length = 0
 
+    domain_types = [DomainType.valid]
+    if include_ip_encoded:
+        domain_types.append(DomainType.ip_encoded)
+
     for domain in get_all_domains_splitted(index, block_limit=limit, nr_processes=nr_processes,
-                                           db_session=db_session):
+                                           domain_types=domain_types, db_session=db_session):
         loc_found = False
 
-        for i, domain_label in enumerate(domain.domain_labels):
+        for i, domain_label in enumerate(domain.labels):
             if i == 0:
                 # if tld skip
                 continue
@@ -163,7 +175,7 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
             label_loc_found = False
             label_length += len(domain_label.name)
 
-            if domain_label.last_searched > last_search:
+            if domain_label.last_searched and domain_label.last_searched > last_search:
                 if domain_label.code_matches:
                     label_wl_count += 1
 
@@ -171,7 +183,7 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
 
             pm_count = collections.defaultdict(int)
 
-            domain_label.code_matches = []
+            domain_label.code_matches.clear()
 
             temp_gr_count, matches = search_in_label(domain_label, trie,
                                                      code_to_location_blacklist,
@@ -185,7 +197,8 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
                 label_loc_found = True
                 loc_found = True
 
-            domain_label.code_matches.append(matches)
+            domain_label.code_matches.extend(matches)
+            domain_label.last_searched = datetime.datetime.now()
 
             if label_loc_found:
                 label_wl_count += 1
@@ -223,7 +236,7 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
 
 
 def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, special_filter,
-                    domain: Domain, db_session: Session):
+                    domain: Domain, db_session: Session) -> [CodeMatch]:
     """returns all matches for this label"""
     matches = []
     ids = set()
@@ -246,7 +259,7 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
                     continue
 
                 matching_locations = trie[key]
-                if [location_id for location_id, _ in matching_locations if location_id == -1]:
+                if [code_type for _, code_type in matching_locations if code_type == -1]:
                     blacklisted.append(key)
                     continue
 

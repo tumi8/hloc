@@ -8,7 +8,8 @@ import sqlalchemy as sqla
 import sqlalchemy.exc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
-from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, engine
+from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, \
+    DomainType, engine
 
 
 def create_session_for_process():
@@ -93,13 +94,21 @@ def add_labels_to_domain(domain: Domain, db_session: Session):
         domain.labels.append(label_obj)
 
 
-def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int, db_session: Session) \
+def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int,
+                             domain_types: typing.List[DomainType], db_session: Session) \
         -> typing.Generator[Domain, None, None]:
+    def make_db_request(offset, d_types):
+        if d_types:
+            return db_session.query(Domain).filter(Domain.classification_type.in_(d_types))\
+                .limit(block_limit).offset(offset)
+        else:
+            return db_session.query(Domain).limit(block_limit).offset(offset)
+
     offset = index * block_limit
 
-    domains = db_session.query(Domain).limit(block_limit).offset(offset)
+    domains = make_db_request(offset, domain_types)
     while domains.count():
         offset += nr_processes * block_limit
         for domain in domains:
             yield domain
-        domains = db_session.query(Domain).limit(block_limit).offset(offset)
+        domains = make_db_request(offset, domain_types)

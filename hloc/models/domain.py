@@ -78,7 +78,7 @@ class DomainLabel(Base):
     @property
     def sub_labels(self):
         """Returns a list of strings with the label separated by dash"""
-        return self.label.split('-')
+        return self.name.split('-')
 
 
 class Domain(Base):
@@ -110,7 +110,7 @@ class Domain(Base):
         self.name = domain_name
         self.ipv4_address = ipv4_address
         self.ipv6_address = ipv6_address
-        self.domain_labels = []
+        self.labels = []
 
     @property
     def drop_domain_keys(self):
