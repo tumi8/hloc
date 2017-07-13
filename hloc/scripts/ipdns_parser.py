@@ -7,9 +7,11 @@ sanitizing and classification of the domain names
 import collections
 import json
 import multiprocessing as mp
+import threading
 import time
 import typing
 import os
+import queue
 
 import configargparse
 
@@ -90,15 +92,21 @@ def main():
     parsed_ips = set()
     parsed_ips_lock = mp.Lock()
 
+    line_queue = mp.Queue(args.number_processes * 10)
+    line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue))
+    line_thread.start()
+
     for i in range(0, args.number_processes):
         process = mp.Process(target=preprocess_file_part,
-                             args=(args.filepath, i, args.ip_version, args.number_processes,
+                             args=(args.filepath, i, line_queue, args.ip_version,
                                    args.isp_ip_filter, regex_strategy, tlds, whitelist, parsed_ips,
                                    parsed_ips_lock),
                              name='preprocessing_{}'.format(i))
         processes.append(process)
         process.start()
 
+    line_thread.join()
+    line_queue.join_thread()
     alive = len(processes)
     while alive > 0:
         try:
@@ -106,7 +114,7 @@ def main():
                 process.join()
             process_sts = [pro.is_alive() for pro in processes]
             if process_sts.count(True) != alive:
-                logger.info('{} processes alive'.format(process_sts.count(True)))
+                logger.debug('{} processes alive'.format(process_sts.count(True)))
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
@@ -121,7 +129,15 @@ def main():
     logger.info('Running time: {0}'.format((end - start)))
 
 
-def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_processes: int,
+def read_file(filepath: str, line_queue: mp.Queue):
+    with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
+        for line in rdns_file_handle:
+            line_queue.put(line)
+
+    line_queue.close()
+
+
+def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_version: str,
                          ip_encoding_filter: bool, regex_strategy: RegexStrategy,
                          tlds: typing.Set[str], whitelist: typing.Set[str],
                          parsed_ips: typing.Set[str], parsed_ips_lock: mp.Lock):
@@ -136,100 +152,63 @@ def preprocess_file_part(filepath: str, pnr: int, ip_version: str, number_proces
     Session = create_session_for_process()
     db_session = Session()
     try:
-        with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
-            def line_blocks():
-                lines = []
-                seek_before = 0
-                seek_after = 0
+        bad_characters = collections.defaultdict(int)
+        count_good_lines = 0
+        count_isp_lines = 0
 
-                def prepare():
-                    nonlocal seek_before
-                    nonlocal seek_after
-                    nonlocal lines
-                    seek_before = BLOCK_SIZE * pnr
-                    seek_after = BLOCK_SIZE * number_processes - BLOCK_SIZE * (pnr + 1)
-                    del lines[:]
+        try:
+            while not line_queue.empty():
+                line = line_queue.get(timeout=2)
+                if len(line) == 0:
+                    continue
+                line = line.strip()
+                ip, domain = line.split(',', 1)
 
-                prepare()
+                if not domain:
+                    logger.info('Warning found empty domain for IP {} skipping'.format(ip))
+                    continue
 
-                for seek_line in rdns_file_handle:
-                    if seek_after == 0 and seek_before == 0 and len(lines) >= BLOCK_SIZE:
-                        prepare()
-                    if seek_before > 0:
-                        seek_before -= 1
-                    elif len(lines) < BLOCK_SIZE:
-                        lines.append(seek_line)
-                    elif seek_after > 0:
-                        seek_after -= 1
-                    if seek_after == 0 and len(lines) >= BLOCK_SIZE:
-                        yield lines
-                        del lines[:]
-                if lines:
-                    yield lines
+                with parsed_ips_lock:
+                    parsed_ips.add(ip)
 
-            bad_characters = collections.defaultdict(int)
-            count_good_lines = 0
-            count_isp_lines = 0
+                n_good_lines_count, n_ip_lines_count = classify_domain(
+                    ip, domain, ip_version, ip_encoding_filter, regex_strategy, tlds,
+                    whitelist, db_session)
+                count_good_lines += n_good_lines_count
+                count_isp_lines += n_ip_lines_count
 
-            file_line_blocks = line_blocks()
-            ip_domain_list = []
-            for line_block in file_line_blocks:
-                for line in line_block:
-                    if len(line) == 0:
-                        continue
-                    line = line.strip()
-                    ip, domain = line.split(',', 1)
-                    if not domain:
-                        logger.info('Warning found empty domain for IP {} skipping'.format(ip))
-                        continue
+                db_session.commit()
+        except queue.Empty:
+            logger.info('finished no more lines')
 
-                    ip_domain_list.append((ip, domain))
+        directory = os.path.dirname(filepath)
+        filename = util.get_path_filename(filepath)
 
-                    with parsed_ips_lock:
-                        parsed_ips.add(ip)
+        logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
+        with open(os.path.join(directory, '{0}-{1}-character.stats'.format(filename, pnr)),
+                  'w', encoding='utf-8') as characterStatsFile:
+            json.dump(bad_characters, characterStatsFile)
 
-                if len(ip_domain_list) > 10**4:
-                    classify_domains(ip_domain_list, ip_version, ip_encoding_filter, regex_strategy,
-                                     tlds, whitelist, db_session)
-                    db_session.commit()
-                    del ip_domain_list[:]
-
-            classify_domains(ip_domain_list, ip_version, ip_encoding_filter, regex_strategy,
-                             tlds, whitelist, db_session)
-            db_session.commit()
-
-            directory = os.path.dirname(filepath)
-            filename = util.get_path_filename(filepath)
-
-            logger.info('good lines: {} ips lines: {}'.format(count_good_lines, count_isp_lines))
-            with open(os.path.join(directory, '{0}-{1}-character.stats'.format(filename, pnr)),
-                      'w', encoding='utf-8') as characterStatsFile:
-                json.dump(bad_characters, characterStatsFile)
-
-            with open(os.path.join(directory, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
-                      'w', encoding='utf-8') as labelStatFile:
-                json.dump(label_stats, labelStatFile)
+        with open(os.path.join(directory, '{0}-{1}-domain-label.stats'.format(filename, pnr)),
+                  'w', encoding='utf-8') as labelStatFile:
+            json.dump(label_stats, labelStatFile)
     finally:
         db_session.close()
         Session.remove()
 
 
-def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
-                     regex_strategy: RegexStrategy, tlds: typing.Set[str],
-                     whitelist: typing.Set[str], db_session):
+def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: bool,
+                    regex_strategy: RegexStrategy, tlds: typing.Set[str],
+                    whitelist: typing.Set[str], db_session) -> (int, int):
     is_ipv6 = ip_version == constants.IPV6_IDENTIFIER
 
     (good_lines, bad_lines, bad_tld_lines, ip_encoded_lines, custom_filter_lines,
-     bad_characters_part) = preprocess_domains(ip_domain_list, tlds, whitelist,
+     bad_characters_part) = preprocess_domains([(ip, domain)], tlds, whitelist,
                                                ip_version, regex_strategy,
                                                ip_encoding_filter)
 
-    logger.debug('good: {} bad: {} bad dns: {} ip: {} bad chars: {} custom filter {}'
-                 .format(len(good_lines), len(bad_lines), len(bad_tld_lines),
-                         len(ip_encoded_lines), len(bad_characters_part),
-                         len(custom_filter_lines)))
-
-    for ip_address, domain_address in good_lines:
+    if good_lines:
+        ip_address, domain_address = good_lines[0]
         if is_ipv6:
             domain = Domain(domain_address, ipv6_address=ip_address)
         else:
@@ -239,7 +218,8 @@ def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
         add_labels_to_domain(domain, db_session)
         db_session.add(domain)
 
-    for ip_address, domain_address in bad_lines:
+    if bad_lines:
+        ip_address, domain_address = bad_lines[0]
         if is_ipv6:
             domain = Domain(domain_address, ipv6_address=ip_address)
         else:
@@ -249,7 +229,8 @@ def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
         add_labels_to_domain(domain, db_session)
         db_session.add(domain)
 
-    for ip_address, domain_address in bad_tld_lines:
+    if bad_tld_lines:
+        ip_address, domain_address = bad_tld_lines[0]
         if is_ipv6:
             domain = Domain(domain_address, ipv6_address=ip_address)
         else:
@@ -259,7 +240,8 @@ def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
         add_labels_to_domain(domain, db_session)
         db_session.add(domain)
 
-    for ip_address, domain_address in ip_encoded_lines:
+    if ip_encoded_lines:
+        ip_address, domain_address = ip_encoded_lines[0]
         if is_ipv6:
             domain = Domain(domain_address, ipv6_address=ip_address)
         else:
@@ -269,7 +251,8 @@ def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
         add_labels_to_domain(domain, db_session)
         db_session.add(domain)
 
-    for ip_address, domain_address in custom_filter_lines:
+    if custom_filter_lines:
+        ip_address, domain_address = custom_filter_lines[0]
         if is_ipv6:
             domain = Domain(domain_address, ipv6_address=ip_address)
         else:
@@ -278,6 +261,8 @@ def classify_domains(ip_domain_list, ip_version: str, ip_encoding_filter: bool,
         domain.classification_type = DomainType.blacklisted
         add_labels_to_domain(domain, db_session)
         db_session.add(domain)
+
+    return len(good_lines), len(ip_encoded_lines)
 
 
 if __name__ == '__main__':

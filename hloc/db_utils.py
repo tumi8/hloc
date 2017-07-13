@@ -13,8 +13,7 @@ from hloc.models import State, Probe, Session, Domain, MeasurementResult, Domain
 
 def create_session_for_process():
     engine.dispose()
-    Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
-    return Session
+    return scoped_session(sessionmaker(autoflush=True, bind=engine))
 
 
 def recreate_db():
