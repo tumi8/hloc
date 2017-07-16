@@ -73,9 +73,17 @@ class DomainLocationType(enum.Enum):
     not_reachable = 'not reachable'
 
 
+@enum.unique
+class MeasurementProtocol(enum.Enum):
+    udp = 'udp'
+    tcp = 'tcp'
+    icmp = 'icmp'
+
+
 __all__ = ['LocationCodeType',
            'MeasurementError',
            'AvailableType',
            'DomainLocationType',
-           'DomainType'
+           'DomainType',
+           'MeasurementProtocol',
            ]

@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 
 from hloc.models.sql_alchemy_base import Base
-from .enums import MeasurementError
+from .enums import MeasurementError, MeasurementProtocol
 
 
 class MeasurementResult(Base):
@@ -26,7 +26,10 @@ class MeasurementResult(Base):
     source_address = sqla.Column(postgresql.INET)
     error_msg = sqla.Column(postgresql.ENUM(MeasurementError))
     rtts = sqla.Column(postgresql.ARRAY(sqla.Float), nullable=False)
-    # eventually save ttl if there?
+    ttls = sqla.Column(postgresql.ARRAY(sqla.Integer))
+    protocol = sqla.Column(postgresql.ENUM(MeasurementProtocol))
+    behind_nat = sqla.Column(sqla.Boolean, default=False)
+    from_traceroute = sqla.Column(sqla.Boolean, default=False)
 
     probe = sqlorm.relationship('Probe', back_populates='measurements', cascade='all')
 

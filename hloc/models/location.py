@@ -84,6 +84,15 @@ class Location(Base):
         self.lon = lon
         self._idfy_location()
 
+    def available_probes(self):
+        """
+
+        :return:
+        """
+        sorted_prbs = sorted(self.probes,
+                             key=lambda probe: self.gps_distance_haversine(probe.location))
+        return [probe for probe in sorted_prbs if probe.available()][:25]
+
     def _idfy_location(self):
         """
         Assign a unique id to every location in the array by computing the hash over all codes
