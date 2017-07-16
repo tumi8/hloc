@@ -2,6 +2,7 @@
 """The basic location object and all related inherited objects"""
 
 import math
+import hashlib
 
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
@@ -41,6 +42,7 @@ class LocodeInfo(Base):
         self.place_codes = []
         self.subdivision_codes = []
 
+
 class State(Base):
     __tablename__ = 'states'
 
@@ -76,6 +78,18 @@ class Location(Base):
         id = '0'
         lat = '1'
         lon = '2'
+
+    def __init__(self, lat: float, lon: float):
+        self.lat = lat
+        self.lon = lon
+        self._idfy_location()
+
+    def _idfy_location(self):
+        """
+        Assign a unique id to every location in the array by computing the hash over all codes
+        sorted alphabetically. That should guarantee a unique and
+        """
+        self.id = hashlib.md5('{}:{}'.format(self.lat, self.lon).encode()).hexdigest()
 
     def is_in_radius(self, location, radius):
         """Returns a True if the location is within the radius with the haversine method"""
@@ -134,9 +148,11 @@ class Location(Base):
 
 probe_location_info_table = sqla.Table('probe_location_infos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,
-                                                   sqla.ForeignKey('probes.id', ondelete='cascade')),
+                                                   sqla.ForeignKey('probes.id',
+                                                                   ondelete='cascade')),
                                        sqla.Column('location_info_id', sqla.String(32),
-                                                   sqla.ForeignKey('locations.id', ondelete='cascade')))
+                                                   sqla.ForeignKey('locations.id',
+                                                                   ondelete='cascade')))
 
 
 class LocationInfo(Location):
@@ -150,8 +166,10 @@ class LocationInfo(Location):
     name = sqla.Column(sqla.String(50))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
-    airport_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(AirportInfo.id, ondelete='set null'))
-    locode_info_id = sqla.Column(sqla.Integer, sqla.ForeignKey(LocodeInfo.id, ondelete='set null'))
+    airport_info_id = sqla.Column(sqla.Integer,
+                                  sqla.ForeignKey(AirportInfo.id, ondelete='set null'))
+    locode_info_id = sqla.Column(sqla.Integer,
+                                 sqla.ForeignKey(LocodeInfo.id, ondelete='set null'))
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
 
@@ -163,14 +181,14 @@ class LocationInfo(Location):
     airport_info = sqlorm.relationship(AirportInfo)
     locode_info = sqlorm.relationship(LocodeInfo)
 
-    def __init__(self, **kwargs):
+    def __init__(self, lat: float, lon: float, **kwargs):
         self.clli = []
         self.alternate_names = []
 
         for name, value in kwargs.items():
             setattr(self, name, value)
 
-        super().__init__()
+        super().__init__(lat, lon)
 
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""
@@ -258,7 +276,6 @@ class LocationHint(Base):
         'polymorphic_identity': 'basic_location_hint',
         'polymorphic_on': hint_type
     }
-
 
 
 __all__ = ['AirportInfo',

@@ -14,7 +14,6 @@
 import argparse
 import json
 import time
-import hashlib
 from string import ascii_lowercase
 from string import printable
 from time import sleep
@@ -169,7 +168,7 @@ class WorldAirportCodesParser(HTMLParser):
     def reset(self):
         self.__currentKey = None
         self.__th = False
-        self.airportInfo = LocationInfo()
+        self.airportInfo = LocationInfo(0, 0)
         return HTMLParser.reset(self)
 
 
@@ -274,8 +273,8 @@ def parse_airport_specific_page(page_text: str, db_session: Session):
             (parser.airportInfo.airport_info.iata_codes or
              parser.airportInfo.airport_info.icao_codes or
              parser.airportInfo.airport_info.faa_codes):
-        idfy_location(parser.airportInfo)
         parser.airportInfo.state = parser.state
+        parser.airportInfo._idfy_location()
         # db_session.add(parser.airportInfo)
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
@@ -311,7 +310,7 @@ def get_locode_locations(locode_filename: str, db_session: Session):
                                                normalize_locode_info(line_elements[3])[1:])
                 if not current_state:
                     print('Alert', normalize_locode_info(line_elements[1]),
-                          normalize_locode_info(line_elements[3])[1:], sep=' ')
+                          normalize_locode_info(line_elements[3])[1:])
                 continue
 
             if len(line_elements[6]) < 4:
@@ -340,7 +339,6 @@ def get_locode_locations(locode_filename: str, db_session: Session):
                 line_elements[2]).lower())
 
             airport_info.name = locode_name.lower()
-            idfy_location(airport_info)
 
             airport_info.state = current_state
 
@@ -391,7 +389,6 @@ def get_clli_codes(file_path: str, db_session: Session):
             clli, lat, lon = line.split('\t')
             new_clli_info = LocationInfo(lat=float(lat), lon=float(lon))
             new_clli_info.clli.append(clli[0:6])
-            idfy_location(new_clli_info)
             # db_session.add(new_clli_info)
             CLLI_LOCATION_CODES.append(new_clli_info)
 
@@ -428,7 +425,6 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
                                               lon=float(columns[5]),
                                               name=name)
 
-            idfy_location(new_geo_names_info)
             if set(new_geo_names_info.name).difference(ACCEPTED_CHARACTER) \
                     or len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
@@ -566,14 +562,6 @@ def state_for_code(state_code, state_name):
     return state
 
 
-def idfy_location(location: LocationInfo):
-    """
-    Assign a unique id to every location in the array by computing the hash over all codes 
-    sorted alphabetically. That should guarantee a unique and 
-    """
-    location.id = hashlib.md5('{}:{}'.format(location.lat, location.lon).encode()).hexdigest()
-
-
 def parse_airport_codes(args, db_session: Session):
     """Parses the airport codes"""
     # for loop for all characters of the alphabet
@@ -675,7 +663,6 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
         for line in metropolitan_file:
             code, lat, lon = line.strip().split(',')
             location = LocationInfo(lat=float(lat), lon=float(lon))
-            idfy_location(location)
             location.add_airport_info()
             location.airport_info.iata_codes.append(code)
             metropolitan_locations.append(location)
@@ -698,8 +685,8 @@ def parse_codes(args):
                     metropolitan_locations = parse_metropolitan_codes(args.metropolitan_file,
                                                                       db_session)
                     if args.merge_radius:
-                        add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, args.merge_radius,
-                                      db_session, create_new_locations=False)
+                        add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 
+                                      args.merge_radius, db_session, create_new_locations=False)
                     else:
                         add_locations(AIRPORT_LOCATION_CODES, metropolitan_locations, 100,
                                       db_session, create_new_locations=False)
