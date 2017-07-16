@@ -215,9 +215,22 @@ class LocationInfo(Location):
 
 domain_location_hints_table = sqla.Table('domain_location_hints', Base.metadata,
                                          sqla.Column('location_hint_id', sqla.Integer,
-                                                     sqla.ForeignKey('location_hints.id', ondelete='cascade')),
+                                                     sqla.ForeignKey('location_hints.id',
+                                                                     ondelete='cascade')),
                                          sqla.Column('domain_id', sqla.Integer,
-                                                     sqla.ForeignKey('domains.id', ondelete='cascade')))
+                                                     sqla.ForeignKey('domains.id',
+                                                                     ondelete='cascade')))
+
+
+location_hint_label_table = sqla.Table('location_hint_labels', Base.metadata,
+                                       sqla.Column('location_hint_id', sqla.Integer,
+                                                   sqla.ForeignKey('location_hints.id',
+                                                                   ondelete='cascade'),
+                                                   primary_key=True),
+                                       sqla.Column('domain_label_id', sqla.Integer,
+                                                   sqla.ForeignKey('domain_labels.id',
+                                                                   ondelete='cascade'),
+                                                   primary_key=True))
 
 
 class LocationHint(Base):
@@ -235,6 +248,9 @@ class LocationHint(Base):
     domains = sqlorm.relationship('Domain',
                                   secondary=domain_location_hints_table,
                                   back_populates='hints')
+    labels = sqlorm.relationship("DomainLabel",
+                                 secondary=location_hint_label_table,
+                                 back_populates="hints")
 
     hint_type = sqla.Column(sqla.String)
 

@@ -9,6 +9,7 @@ import collections
 import json
 import multiprocessing as mp
 import datetime
+import typing
 import marisa_trie
 
 import configargparse
@@ -16,6 +17,7 @@ import configargparse
 from hloc import util
 from hloc.models import CodeMatch, Location, LocationCodeType, Session, Domain, DomainLabel, \
     DomainType, LocationInfo
+from hloc.models.location import location_hint_label_table
 from hloc.db_utils import get_all_domains_splitted, create_session_for_process
 
 logger = None
@@ -40,6 +42,9 @@ def __create_parser_arguments(parser):
                         help='Search also domains of type IP encoded')
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log',
                         help='Specify a logging file where the log should be saved')
+    parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
+                        choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the preferred log level')
 
 
 def main():
@@ -50,7 +55,7 @@ def main():
     args = parser.parse_args()
 
     global logger
-    logger = util.setup_logger(args.logging_file, 'find')
+    logger = util.setup_logger(args.logging_file, 'find', loglevel=args.log_level)
 
     trie = create_trie(args.code_blacklist_file, args.word_blacklist_file)
 
@@ -70,7 +75,7 @@ def main():
                              args=(index, trie, code_to_location_blacklist, args.exclude_sld,
                                    args.domain_block_limit, args.number_processes,
                                    args.include_ip_encoded),
-                             kwargs={'amount': args.amount},
+                             kwargs={'amount': args.amount, 'debug': args.log_level == 'DEBUG'},
                              name='find_locations_{}'.format(index))
         process.start()
         processes.append(process)
@@ -139,7 +144,7 @@ def create_trie_obj(location_list: [Location], code_blacklist: {str}, word_black
 
 
 def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, nr_processes,
-                   include_ip_encoded, amount=1000):
+                   include_ip_encoded, amount=1000, debug: bool=False):
     """
     for all amount=0
     """
@@ -169,36 +174,36 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
                 # test for skipping the second level domain
                 continue
 
-            last_search = datetime.datetime.now() - datetime.timedelta(days=7)
+            if debug:
+                last_search = datetime.datetime.now() - datetime.timedelta(minutes=5)
+            else:
+                last_search = datetime.datetime.now() - datetime.timedelta(days=7)
 
             label_count += 1
             label_loc_found = False
             label_length += len(domain_label.name)
 
             if domain_label.last_searched and domain_label.last_searched > last_search:
-                if domain_label.code_matches:
+                if domain_label.hints:
                     label_wl_count += 1
 
                 continue
 
             pm_count = collections.defaultdict(int)
 
-            domain_label.code_matches.clear()
+            domain_label.hints.clear()
+            db_session.commit()
 
-            temp_gr_count, matches = search_in_label(domain_label, trie,
-                                                     code_to_location_blacklist,
-                                                     domain, db_session)
+            temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
+                                            db_session)
 
             for key, value in temp_gr_count.items():
                 match_count[key] += value
                 pm_count[key] += value
 
-            if len(matches) > 0:
+            if temp_gr_count:
                 label_loc_found = True
                 loc_found = True
-
-            domain_label.code_matches.extend(matches)
-            domain_label.last_searched = datetime.datetime.now()
 
             if label_loc_found:
                 label_wl_count += 1
@@ -236,11 +241,11 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
 
 
 def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, special_filter,
-                    domain: Domain, db_session: Session) -> [CodeMatch]:
+                    db_session: Session) -> typing.DefaultDict[LocationCodeType, int]:
     """returns all matches for this label"""
-    matches = []
     ids = set()
     type_count = collections.defaultdict(int)
+
     for o_label in label_obj.sub_labels:
         label = o_label[:]
         blacklisted = []
@@ -268,17 +273,18 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
                     if location_id in ids:
                         continue
 
-                    match = CodeMatch(domain, location_id, label_obj, code_type=real_code_type,
+                    match = CodeMatch(location_id.decode(), label_obj, code_type=real_code_type,
                                       code=key)
-                    matches.append(match)
+                    db_session.add(match)
+                    # label_obj.hints.append(match)
                     type_count[real_code_type] += 1
 
             label = label[1:]
 
-    db_session.add_all(matches)
+    label_obj.last_searched = datetime.datetime.now()
     db_session.commit()
 
-    return type_count, matches
+    return type_count
 
 
 if __name__ == '__main__':

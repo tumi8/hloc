@@ -10,14 +10,7 @@ from sqlalchemy.dialects import postgresql
 from hloc import constants
 from .sql_alchemy_base import Base
 from .enums import LocationCodeType, DomainType
-from .location import LocationHint, domain_location_hints_table
-
-
-code_match_label_table = sqla.Table('code_match_labels', Base.metadata,
-                                    sqla.Column('code_match_id', sqla.Integer,
-                                                sqla.ForeignKey('location_hints.id', ondelete='cascade')),
-                                    sqla.Column('domain_label_id', sqla.Integer,
-                                                sqla.ForeignKey('domain_labels.id', ondelete='cascade')))
+from .location import LocationHint, domain_location_hints_table, location_hint_label_table
 
 
 class CodeMatch(LocationHint):
@@ -29,15 +22,11 @@ class CodeMatch(LocationHint):
     code = sqla.Column(sqla.String(50), nullable=False)
 
     location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
-    labels = sqlorm.relationship("DomainLabel",
-                                 secondary=code_match_label_table,
-                                 back_populates="code_matches")
 
-    def __init__(self, domain, location_info_id, domain_label,
+    def __init__(self, location_id, domain_label,
                  code_type: LocationCodeType, code=None):
         """init"""
-        self.domains.append(domain)
-        self.location_info_id = location_info_id
+        self.location_id = location_id
         self.code_type = code_type
         self.code = code
         self.labels.append(domain_label)
@@ -63,8 +52,8 @@ class DomainLabel(Base):
     domains = sqlorm.relationship("Domain",
                                   secondary=domain_to_label_table,
                                   back_populates="labels")
-    code_matches = sqlorm.relationship(CodeMatch,
-                                       secondary=code_match_label_table,
+    hints = sqlorm.relationship(LocationHint,
+                                       secondary=location_hint_label_table,
                                        back_populates="labels")
 
     def __init__(self, name: str):
@@ -124,12 +113,12 @@ class Domain(Base):
         return domain_parts[::-1]
 
     @property
-    def all_matches(self):
+    def all_label_matches(self):
         """Returns all matches of the domain"""
         matches = []
         location_ids = set()
         for label in self.domain_labels[::-1]:
-            for match in label.matches:
+            for match in label.code_matches:
                 if match.location_id not in location_ids:
                     location_ids.add(match.location_id)
                     matches.append(match)
