@@ -10,12 +10,13 @@ import threading
 import collections
 import random
 import typing
+import operator
 
 import ripe.atlas.cousteau as ripe_atlas
 
 from hloc import util, constants
 from hloc.models import *
-from hloc.db_queries import probe_for_id, get_measurements_for_domain
+from hloc.db_utils import probe_for_id, get_measurements_for_domain, create_session_for_process
 from hloc.exceptions import ProbeError
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes
@@ -26,6 +27,8 @@ MAX_THREADS = 10
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
     """Creates the arguments for the parser"""
+    parser.add_argument('-p', '--number-processes', type=int, default=4,
+                        help='specify the number of processes used')
     parser.add_argument('-v', '--ip-version', type=str, default=constants.IPV4_IDENTIFIER,
                         choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
@@ -53,14 +56,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
-
-
-def __check_args(args):
-    """Checks arguments validity"""
-    if args.filename_proto.find('{}') < 0:
-        raise ValueError(
-            'Wrong format for the filename! It must be formatable with the '
-            '{}-brackets where the numbers have to be inserted.')
+    parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
+                        help='Debug argument to prevent getting ripe probes')
 
 
 def main():
@@ -68,75 +65,42 @@ def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
     args = parser.parse_args()
-    __check_args(args)
 
     global logger
     logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level)
     logger.debug('starting')
 
     start_time = time.time()
+    Session = create_session_for_process()
     db_session = Session()
 
-    ripe_create_sema = None
-    ripe_slow_down_sema = None
-    generator_thread = None
-    finish_event = None
+    ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
+    ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
+    global MAX_THREADS
 
-    if args.verifingMethod == 'ripe':
-        ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
-        ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
-        global MAX_THREADS
+    if args.log_level == 'DEBUG':
+        MAX_THREADS = 5
+    else:
+        MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
 
-        if args.log_level == 'DEBUG':
-            MAX_THREADS = 1
-        else:
-            MAX_THREADS = int(args.ripe_measurement_limit * 0.2)
+    finish_event = threading.Event()
+    generator_thread = threading.Thread(target=generate_ripe_request_tokens,
+                                        args=(ripe_slow_down_sema, args.ripeRequestLimit,
+                                              finish_event))
 
-        finish_event = threading.Event()
-        generator_thread = threading.Thread(target=generate_ripe_request_tokens,
-                                            args=(ripe_slow_down_sema, args.ripeRequestLimit,
-                                                  finish_event))
+    if not args.dry_run and not args.disable_probe_fetching:
+        locations = db_session.query(LocationInfo)
 
-        if not args.dry_run:
-            locations = db_session.query(LocationInfo)
+        probes = get_ripe_probes(db_session)
+        assign_location_probes(locations, probes)
 
-            if locations and not locations[0].probes:
-                logger.info('Getting the nodes from RIPE Atlas')
-                probe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
-                probes_finish_event = threading.Event()
-                probes_generator_thread = threading.Thread(target=generate_ripe_request_tokens,
-                                                           args=(probe_slow_down_sema,
-                                                                 args.ripeRequestLimit,
-                                                                 probes_finish_event))
-                probes_generator_thread.start()
-                thread_sema = threading.Semaphore(10)
-                threads = []
+        null_locations = [location for location in locations if not location.available_nodes]
 
-                for location in locations.values():
-                    if len(threads) > 10:
-                        for thread in threads:
-                            if not thread.is_alive():
-                                thread.join()
-                    thread_sema.acquire()
-                    thread = threading.Thread(target=get_nearest_ripe_nodes,
-                                              args=(location, 1000, args.ip_version,
-                                                    probe_slow_down_sema, thread_sema))
-                    thread.start()
-                    threads.append(thread)
+        logger.info('{} locations without nodes'.format(len(null_locations)))
 
-                for thread in threads:
-                    thread.join()
-
-                probes_finish_event.set()
-                probes_generator_thread.join()
-
-            null_locations = [location for location in locations if not location.available_nodes]
-
-            logger.info('{} locations without nodes'.format(len(null_locations)))
-
-        # logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
-        # logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
-        logger.debug('finished ripe')
+    # logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
+    # logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+    logger.debug('finished ripe')
 
     processes = []
 
@@ -201,66 +165,6 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
         except ValueError:
             continue
     logger.debug('generate thread stoopped')
-
-
-def get_nearest_ripe_nodes(location: LocationInfo, max_distance: int, ip_version: str,
-                           db_session: Session, slow_down_sema: mp.Semaphore=None,
-                           thread_sema: threading.Semaphore=None) -> \
-        ([[str, object]], [[str, object]]):
-    """
-    Searches for ripe nodes near the location
-    """
-    try:
-        if max_distance % 50 != 0:
-            logger.critical('max_distance must be a multiple of 50')
-            return
-
-        distances = [100, 250, 500, 1000]
-        if max_distance not in distances:
-            distances.append(max_distance)
-            distances.sort()
-
-        for distance in distances:
-            if distance > max_distance:
-                break
-            params = {
-                'radius': '{},{}:{}'.format(location.lat, location.lon, distance),
-                # 'limit': '500'
-                }
-
-            slow_down_sema.acquire()
-            results = ripe_atlas.ProbeRequest(**params)
-
-            results.next_batch()
-            if results.total_count > 0:
-                nodes = [node for node in results]
-                available_probes = 0
-
-                for node in nodes:
-                    probe_id = node['id']
-                    probe = probe_for_id(probe_id, db_session)
-
-                    if not probe:
-                        gps_location = Location(lat=node['geometry']['coordinates'][1],
-                                                lon=node['geometry']['coordinates'][0])
-                        db_session.add(gps_location)
-
-                        probe = RipeAtlasProbe(probe_id=probe_id, location=location)
-                        db_session.add(probe)
-
-                    location.nearby_probes.append(probe)
-                    if node['status']['name'] == 'Connected' \
-                            and 'system-{}-works'.format(ip_version) in \
-                                [tag['slug'] for tag in node['tags']] \
-                            and 'system-{}-capable'.format(ip_version) in \
-                                [tag['slug'] for tag in node['tags']]:
-                        available_probes += 1
-
-                if len(available_probes) > 5:
-                    break
-    finally:
-        if thread_sema:
-            thread_sema.release()
 
 
 def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
@@ -658,6 +562,48 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                 near_node = new_near_node()
                 if near_node is None:
                     return None
+
+
+def get_ripe_probes(db_session: Session) -> typing.List[RipeAtlasProbe]:
+    probes = []
+
+    logger.info('Getting the nodes from RIPE Atlas')
+
+    ripe_probes = ripe_atlas.ProbeRequest(return_objects=True)
+
+    for probe in ripe_probes:
+        probes.append(parse_probe(probe, db_session))
+
+    db_session.commit()
+
+    return probes
+
+
+def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
+    probe_db_obj = db_session.query(RipeAtlasProbe).filter_by(probe_id=probe.id).first()
+
+    if probe_db_obj:
+        if probe_db_obj.update():
+            return probe_db_obj
+
+    location = Location(probe.geometry['coordinates'][1], probe.geometry['coordinates'][0])
+
+    probe_db_obj = RipeAtlasProbe(id=probe.id, location=location)
+    db_session.add(probe_db_obj)
+    return probe_db_obj
+
+
+def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe]):
+    for location in locations:
+        near_probes = []
+        for probe in probes:
+            dist = probe.location.gps_distance_haversine(location)
+            if dist < 1000000:
+                near_probes.append((near_probes, dist))
+
+        # near_probes.sort(key=operator.itemgetter(1))
+
+        location.probes = near_probes
 
 
 if __name__ == '__main__':

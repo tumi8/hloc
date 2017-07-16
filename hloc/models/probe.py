@@ -21,6 +21,7 @@ from hloc import util, constants
 from .location import probe_location_info_table
 from hloc.exceptions import ProbeError
 from hloc.models import Location, RipeMeasurementResult, AvailableType, Base, Session
+from hloc.constants import IPV6_IDENTIFIER, IPV4_IDENTIFIER
 
 
 class Probe(Base):
@@ -51,11 +52,15 @@ class Probe(Base):
         raise NotImplementedError("subclass must implement this")
 
     @property
-    def last_update(self):
+    def last_update(self) -> datetime.datetime:
         """return timestamp when the probe was last updated"""
         raise NotImplementedError("subclass must implement this")
 
     def available(self, max_age: datetime.timedelta) -> AvailableType:
+        """Should return if the probe is available for measurements"""
+        raise NotImplementedError("subclass must implement this")
+
+    def is_available(self, max_age: datetime.timedelta) -> bool:
         """Should return if the probe is available for measurements"""
         raise NotImplementedError("subclass must implement this")
 
@@ -83,8 +88,6 @@ class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
 
     __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
-
-    __slots__ = ['_last_update', '_probe_obj']
 
     required_keys = ['measurement_name', 'ip_version', 'api_key', 'ripe_slowdown_sema']
 
@@ -114,7 +117,7 @@ class RipeAtlasProbe(Probe):
         super().__init__()
 
     @staticmethod
-    def parse_from_json(json_dict):
+    def parse_from_json(json_dict) -> 'RipeAtlasProbe':
         _id = None
         _location = None
         if RipeAtlasProbe.JsonKeys.Id_key in json_dict:
@@ -134,7 +137,10 @@ class RipeAtlasProbe(Probe):
         probe.location = _location
         probe._update()
 
-    def measure_rtt(self, dest_address: str, db_session: Session, **kwargs) -> typing.Optional[RipeMeasurementResult]:
+        return probe
+
+    def measure_rtt(self, dest_address: str, db_session: Session, **kwargs) \
+            -> typing.Optional[RipeMeasurementResult]:
         if not self.available:
             raise ProbeError('Probe currently not available')
 
@@ -239,13 +245,14 @@ class RipeAtlasProbe(Probe):
         """return timestamp when the probe was last updated"""
         return self._last_update
 
-    def available(self, max_age=datetime.timedelta(hours=12)) -> AvailableType:
+    def available(self, max_age=datetime.timedelta(hours=12)) -> typing.Optional[AvailableType]:
         """
         Should return if the probe is available for measurements
         :param max_age: :datetime.timedelta: the maximum age of the info
         """
         if datetime.datetime.now() - max_age >= self._last_update:
-            self._update()
+            if not self._update():
+                return None
 
         if not self._probe_obj:
             return AvailableType.unknown
@@ -266,6 +273,19 @@ class RipeAtlasProbe(Probe):
 
         return available
 
+    def is_available(self, ip_version: typing.Optional[str], max_age=datetime.timedelta(hours=12)) \
+            -> bool:
+        if not ip_version:
+            return self.available(max_age=max_age) == AvailableType.both_available
+
+        if ip_version == IPV4_IDENTIFIER:
+            return self.available(max_age=max_age) in [AvailableType.both_available,
+                                                       AvailableType.ipv4_available]
+        if ip_version == IPV6_IDENTIFIER:
+            return self.available(max_age=max_age) in [AvailableType.both_available,
+                                                       AvailableType.ipv6_available]
+        raise ValueError('ip version string not recognized')
+
     @property
     def ipv6_capable(self) -> bool:
         """Should return if the probe is capable of performing ipv6 measurements"""
@@ -273,10 +293,16 @@ class RipeAtlasProbe(Probe):
             self._update()
         return 'system-ipv6-capable' in [tag['slug'] for tag in self._probe_obj.tags]
 
-    def _update(self):
+    def update(self) -> bool:
+        return self._update()
+
+    def _update(self) -> bool:
         """Updates the probes status"""
         self._probe_obj = ripe_atlas.Probe(id=self._id)
         self._last_update = datetime.datetime.now()
+
+        return self._probe_obj.geometry and \
+            self._probe_obj.geometry['coordinates'] == (self.location.lon, self.location.lat)
 
 
 __all__ = ['Probe',
