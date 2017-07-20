@@ -14,7 +14,8 @@ import queue
 import typing
 import datetime
 import collections
-import operator
+import bz2
+import re
 
 import ripe.atlas.cousteau as ripe_atlas
 
@@ -29,6 +30,9 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Path to the directory with the archive files')
     parser.add_argument('-p', '--number-processes', type=int, default=4,
                         help='specify the number of processes used')
+    parser.add_argument('-r', '--file-regex', type=str, default=r'[ping|traceroute].*\.bz2$')
+    parser.add_argument('-t', '--plaintext', action='stroe_true', help='Use plaintext filereading')
+    parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
@@ -46,16 +50,29 @@ def main():
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
 
-    filenames = get_filenames(args.archive_path)
+    filenames = get_filenames(args.archive_path, args.file_regex)
+
+    processes = []
+
+    for i in range(args.number_processes):
+        process = mp.Process(target=parse_ripe_data, args=(filenames, args.debug,
+                                                           not args.plaintext),
+                             name='parse ripe data {}'.format(i))
+        processes.append(process)
+        process.start()
+
+    for process in processes:
+        process.join()
 
 
-
-
-def get_filenames(archive_path: str) -> mp.Queue:
+def get_filenames(archive_path: str, file_regex: str) -> mp.Queue:
     filename_queue = mp.Queue()
+    file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
+
     for dirname, _, filenames in os.walk(archive_path):
         for filename in filenames:
-            filename_queue.put(os.path.join(dirname, filename))
+            if file_regex_obj.match(filename):
+                filename_queue.put(os.path.join(dirname, filename))
 
     return filename_queue
 
@@ -77,24 +94,34 @@ class MeasurementKey(enum.Enum):
     execution_time = 'timestamp'
 
 
-def parse_ripe_data(filenames: mp.Queue):
+def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, debugging: bool):
     Session = create_session_for_process()
     db_session = Session()
     try:
         while True:
             filename = filenames.get(timeout=1)
 
-            with open(filename) as ripe_archive_filedesc, \
-                mmap.mmap(ripe_archive_filedesc.fileno(), 0,
-                          access=mmap.ACCESS_READ) as ripe_archive_file:
-                line = ripe_archive_file.readline().decode('utf-8')
+            if bz2_compressed:
+                with bz2.open(filename, 'rt') as ripe_archive_file:
+                    for line in ripe_archive_file:
+                        measurement_result = json.loads(line)
 
-                while len(line) > 0:
-                    measurement_result = json.loads(line)
-
-                    parse_measurement(measurement_result, db_session)
-
+                        parse_measurement(measurement_result, db_session)
+            else:
+                with open(filename) as ripe_archive_filedesc, \
+                    mmap.mmap(ripe_archive_filedesc.fileno(), 0,
+                              access=mmap.ACCESS_READ) as ripe_archive_file:
                     line = ripe_archive_file.readline().decode('utf-8')
+
+                    while len(line) > 0:
+                        measurement_result = json.loads(line)
+
+                        parse_measurement(measurement_result, db_session)
+
+                        line = ripe_archive_file.readline().decode('utf-8')
+
+            if debugging:
+                break
 
     except queue.Empty:
         pass
@@ -127,7 +154,8 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
     behind_nat = False
 
-    if MeasurementKey.source in measurement_result and MeasurementKey.source_alt in measurement_result:
+    if MeasurementKey.source in measurement_result and \
+            MeasurementKey.source_alt in measurement_result:
         # TODO check if source_alt in RFC 1918
         pass
 
