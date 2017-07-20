@@ -31,7 +31,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-p', '--number-processes', type=int, default=4,
                         help='specify the number of processes used')
     parser.add_argument('-r', '--file-regex', type=str, default=r'[ping|traceroute].*\.bz2$')
-    parser.add_argument('-t', '--plaintext', action='stroe_true', help='Use plaintext filereading')
+    parser.add_argument('-t', '--plaintext', action='store_true', help='Use plaintext filereading')
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
