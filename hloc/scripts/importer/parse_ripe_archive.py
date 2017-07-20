@@ -142,37 +142,37 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
 
 
 def parse_measurement(measurement_result: dict, db_session: Session):
-    probe_id = int(measurement_result[MeasurementKey.probe_id])
+    probe_id = int(measurement_result[MeasurementKey.probe_id.value])
 
     ripe_probe = ripe_atlas.Probe(id=probe_id)
 
     probe = parse_probe(ripe_probe, db_session)
     execution_time = datetime.datetime.fromtimestamp(
-        measurement_result[MeasurementKey.execution_time])
+        measurement_result[MeasurementKey.execution_time.value])
 
-    destination = measurement_result[MeasurementKey.destination]
+    destination = measurement_result[MeasurementKey.destination.value]
 
     behind_nat = False
 
-    if MeasurementKey.source in measurement_result and \
-            MeasurementKey.source_alt in measurement_result:
+    if MeasurementKey.source.value in measurement_result and \
+            MeasurementKey.source_alt.value in measurement_result:
         # TODO check if source_alt in RFC 1918
         pass
 
     if MeasurementKey.source in measurement_result:
-        source = measurement_result[MeasurementKey.source]
+        source = measurement_result[MeasurementKey.source.value]
     elif MeasurementKey.source_alt in measurement_result:
-        source = measurement_result[MeasurementKey.source_alt]
+        source = measurement_result[MeasurementKey.source_alt.value]
     else:
         raise ValueError('source not found {}'.format(str(measurement_result)))
 
     protocol = None
-    if MeasurementKey.protocol in measurement_result:
-        protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol])
+    if MeasurementKey.protocol.value in measurement_result:
+        protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol.value])
 
     measurement_id = measurement_result[MeasurementKey.measurement_id]
 
-    if measurement_result[MeasurementKey.type] == 'ping':
+    if measurement_result[MeasurementKey.type.value] == 'ping':
         rtts = parse_ping_results(measurement_result)
 
         result = RipeMeasurementResult()
@@ -187,7 +187,7 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
         db_session.add(result)
         db_session.commit()
-    elif measurement_result[MeasurementKey.type] == 'traceroute':
+    elif measurement_result[MeasurementKey.type.value] == 'traceroute':
         destination_rtts = parse_traceroute_results(measurement_result)
         for dest, rtt_ttl_tuples in destination_rtts.items():
             rtts = []
@@ -213,11 +213,11 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
 def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [float]:
     rtts = []
-    if MeasurementKey.result in measurement_result:
-        for result in measurement_result[MeasurementKey.result]:
-            rtts.append(result[MeasurementKey.rtt])
-    elif MeasurementKey.min_rtt in measurement_result:
-        rtts.append(measurement_result[MeasurementKey.min_rtt])
+    if MeasurementKey.result.value in measurement_result:
+        for result in measurement_result[MeasurementKey.result.value]:
+            rtts.append(result[MeasurementKey.rtt.value])
+    elif MeasurementKey.min_rtt.value in measurement_result:
+        rtts.append(measurement_result[MeasurementKey.min_rtt.value])
     else:
         raise ValueError('No rtt found')
 
@@ -228,10 +228,11 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
         -> typing.DefaultDict[str, typing.Tuple[float, int]]:
     rtts = collections.defaultdict(list)
     if MeasurementKey.result in measurement_result:
-        for result in measurement_result[MeasurementKey.result]:
-            for inner_result in result[MeasurementKey.result]:
-                rtts[inner_result[MeasurementKey.source]].append((inner_result[MeasurementKey.rtt],
-                                                                  inner_result[MeasurementKey.ttl]))
+        for result in measurement_result[MeasurementKey.result.value]:
+            for inner_result in result[MeasurementKey.result.value]:
+                rtts[inner_result[MeasurementKey.source]].append((
+                    inner_result[MeasurementKey.rtt.value],
+                    inner_result[MeasurementKey.ttl.value]))
     else:
         raise ValueError('No rtt found')
 
