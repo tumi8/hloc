@@ -30,7 +30,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Path to the directory with the archive files')
     parser.add_argument('-p', '--number-processes', type=int, default=4,
                         help='specify the number of processes used')
-    parser.add_argument('-r', '--file-regex', type=str, default=r'[ping|traceroute].*\.bz2$')
+    parser.add_argument('-r', '--file-regex', type=str, default=r'(ping|traceroute).*\.bz2$')
     parser.add_argument('-t', '--plaintext', action='store_true', help='Use plaintext filereading')
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
@@ -46,7 +46,7 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    if os.path.isdir(args.archive_path):
+    if not os.path.isdir(args.archive_path):
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
 
