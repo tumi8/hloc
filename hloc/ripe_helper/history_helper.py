@@ -53,10 +53,9 @@ def __get_measurements_for_nodes(measurement_ids: [int],
             ripe_measurement = RipeMeasurementResult.create_from_dict(res)
             ripe_measurement.probe = node_dct[res['prb_id']]
 
-            if ripe_measurement.min_rtt:
-                measurements.append(ripe_measurement)
+            measurements.append(ripe_measurement)
 
-        yield measurement_id, result_list
+        yield measurement_id, measurements
 
 
 def check_measurements_for_nodes(measurement_ids: [int],
@@ -78,27 +77,29 @@ def check_measurements_for_nodes(measurement_ids: [int],
                                                        nodes,
                                                        allowed_measurement_age)
     logging.debug('got measurement results')
-    temp_result_rtt = None
+    temp_result = None
     date_n = None
     # near_node_ids = [node['id'] for node in nodes]
-    for measurement_id, result_list in measurement_results:
-        logging.debug('next result {}'.format(len(result_list)))
-        for result in result_list:
+    for measurement_id, measurements in measurement_results:
+        logging.debug('next result {}'.format(len(measurements)))
+        for measurement in measurements:
             oldest_allowed_time = int(time.time()) - allowed_measurement_age
-            if result.execution_time < oldest_allowed_time:
+            if measurement.timestamp < oldest_allowed_time:
                 continue
 
-            result_rtt = result.min_rtt
+            result_rtt = measurement.min_rtt
 
             if result_rtt is None:
                 continue
             elif result_rtt == -1:
-                if temp_result_rtt is None:
-                    temp_result_rtt = result_rtt
-                if date_n is None or date_n < result.execution_time:
-                    date_n = result.execution_time
-            elif temp_result_rtt is None or result_rtt.min_rtt < temp_result_rtt.min_rtt:
-                temp_result_rtt = result_rtt
-                results.append(result)
+                if temp_result is None:
+                    temp_result = measurement
 
-    return temp_result_rtt
+                    if date_n is None or date_n < measurement.timestamp:
+                        date_n = measurement.timestamp
+
+            elif temp_result is None or result_rtt.min_rtt < temp_result.min_rtt:
+                temp_result = measurement
+                results.append(measurement)
+
+    return temp_result

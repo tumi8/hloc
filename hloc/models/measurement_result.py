@@ -21,7 +21,7 @@ class MeasurementResult(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probes.id'), nullable=False)
-    execution_time = sqla.Column(sqla.DateTime, nullable=False)
+    timestamp = sqla.Column(sqla.DateTime, nullable=False)
     destination_address = sqla.Column(postgresql.INET, nullable=False)
     source_address = sqla.Column(postgresql.INET)
     error_msg = sqla.Column(postgresql.ENUM(MeasurementError))
@@ -36,7 +36,7 @@ class MeasurementResult(Base):
     measurement_result_type = sqla.Column(sqla.String)
 
     __mapper_args__ = {'polymorphic_on': measurement_result_type,
-                       'polymorphic_identity': 'employee'}
+                       'polymorphic_identity': 'measurement'}
 
     def __init__(self, **kwargs):
         self.rtts = []
@@ -53,7 +53,7 @@ class MeasurementResult(Base):
 
 class RipeMeasurementResult(MeasurementResult):
     __mapper_args__ = {
-        'polymorphic_identity': 'manager'
+        'polymorphic_identity': 'ripe_measurement'
     }
 
     class RipeMeasurementResultKey(enum.Enum):
@@ -61,7 +61,7 @@ class RipeMeasurementResult(MeasurementResult):
         source_addr = 'src_addr'
         rtt_dicts = 'result'
         rtt = 'rtt'
-        execution_time = 'timestamp'
+        timestamp = 'timestamp'
         measurement_id = 'msm_id'
 
     ripe_measurement_id = sqla.Column(sqla.Integer)
@@ -95,11 +95,12 @@ class RipeMeasurementResult(MeasurementResult):
         if not rtts:
             measurement_result.error_msg = MeasurementError.not_reachable
 
-        measurement_result.execution_time = datetime.datetime.fromtimestamp(
-            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.execution_time.value])
+        measurement_result.timestamp = datetime.datetime.fromtimestamp(
+            ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.timestamp.value])
 
         return measurement_result
 
 
-__all__ = ['MeasurementResult'
+__all__ = ['MeasurementResult',
+           'RipeMeasurementResult',
            ]

@@ -75,6 +75,16 @@ def probe_for_id(probe_id: int, db_session: Session) -> Probe:
     return db_session.query(Probe).filter(Probe.probe_id == probe_id).first()
 
 
+def domain_by_id(domain_id: int, db_session: Session) -> Domain:
+    """
+    return the domain with the id
+    :param domain_id: the id of the domain
+    :param db_session:  a data base session on which the queries are executed
+    :return (Domain): the Domain for the searched id
+    """
+    return db_session.query(Domain).filter(Domain.id == domain_id).first()
+
+
 def get_measurements_for_domain(domain: Domain,
                                 ip_version: str,
                                 db_session: Session) -> [MeasurementResult]:
@@ -112,3 +122,23 @@ def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int,
         for domain in domains:
             yield domain
         domains = make_db_request(offset, domain_types)
+
+
+def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
+                             domain_types: typing.List[DomainType], db_session: Session) \
+        -> typing.Generator[int, None, None]:
+    def make_db_request(offset, d_types):
+        if d_types:
+            return db_session.query(Domain.id).filter(Domain.classification_type.in_(d_types))\
+                .limit(block_limit).offset(offset)
+        else:
+            return db_session.query(Domain.id).limit(block_limit).offset(offset)
+
+    offset = index * block_limit
+
+    domain_ids = make_db_request(offset, domain_types)
+    while domain_ids.count():
+        offset += nr_processes * block_limit
+        for domain_id in domain_ids:
+            yield domain_id
+        domain_ids = make_db_request(offset, domain_types)

@@ -10,13 +10,15 @@ import threading
 import collections
 import random
 import typing
-import operator
+import queue
+import datetime
 
 import ripe.atlas.cousteau as ripe_atlas
 
 from hloc import util, constants
 from hloc.models import *
-from hloc.db_utils import probe_for_id, get_measurements_for_domain, create_session_for_process
+from hloc.db_utils import get_measurements_for_domain, create_session_for_process, \
+    get_all_domain_ids_splitted, domain_by_id
 from hloc.exceptions import ProbeError
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes
@@ -32,6 +34,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-v', '--ip-version', type=str, default=constants.IPV4_IDENTIFIER,
                         choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
+    parser.add_argument('-n', '--domain-block-limit', type=int, default=10,
+                        help='The number of domains taken per block to process them')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
                         help='How many request should normally be allowed per second '
                              'to the ripe server', default=25)
@@ -104,13 +108,12 @@ def main():
 
     processes = []
 
-    # Eventually in future we could adapt it so more processes can be used
-    process_count = 1
+    process_count = args.number_processes
 
     if args.log_level == 'DEBUG':
         process_count = 1
     for pid in range(0, process_count):
-        process = mp.Process(target=ripe_check_for_list,
+        process = mp.Process(target=ripe_check_process,
                              args=(pid,
                                    ripe_create_sema,
                                    ripe_slow_down_sema,
@@ -118,7 +121,9 @@ def main():
                                    args.bill_to,
                                    args.wo_measurements,
                                    args.allowed_measurement_age,
-                                   args.api_key),
+                                   args.api_key,
+                                   args.domain_block_limit,
+                                   process_count),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -167,19 +172,22 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
     logger.debug('generate thread stoopped')
 
 
-def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
-                        ripe_slow_down_sema: mp.Semaphore,
-                        ip_version: str,
-                        bill_to_address: str,
-                        wo_measurements: bool,
-                        allowed_measurement_age: int,
-                        api_key: str):
+def ripe_check_process(pid: int,
+                       ripe_create_sema: mp.Semaphore,
+                       ripe_slow_down_sema: mp.Semaphore,
+                       ip_version: str,
+                       bill_to_address: str,
+                       wo_measurements: bool,
+                       allowed_measurement_age: int,
+                       api_key: str,
+                       domain_block_limit: int,
+                       nr_processes: int,
+                       include_ip_encoded: bool):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
-    # chair_server_locks = {'m': threading.Lock(), 's': threading.Lock(), 'd': threading.Lock()}
-
     domain_type_count = collections.defaultdict(int)
+    Session = create_session_for_process()
     db_session = Session()
 
     def increment_count_for_type(ctype: LocationCodeType):
@@ -192,22 +200,24 @@ def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
     threads = []
     count_entries = 0
 
+    domain_types = [DomainType.valid]
+    if include_ip_encoded:
+        domain_types.append(DomainType.ip_encoded)
+
     try:
-        def next_domain():
-            nonlocal count_entries
 
-            # TODO get lazy next domain
-            n_domain = None
-            count_entries += 1
-            if count_entries % 10000 == 0:
-                logger.info('count {} correct_count {}'.format(count_entries,
-                                                               correct_type_count))
+        domain_id_queue = queue.Queue(MAX_THREADS)
+        def next_domain_id():
+            domain_ids = get_all_domain_ids_splitted(pid, domain_block_limit, nr_processes,
+                                                     domain_types,
+                                                     db_session)
 
-            return n_domain
+            for domain_id in domain_ids:
+                domain_id_queue.put(domain_id)
 
         for _ in range(0, MAX_THREADS):
             thread = threading.Thread(target=domain_check_threading_manage,
-                                      args=(next_domain,
+                                      args=(domain_id_queue,
                                             increment_domain_type_count,
                                             increment_count_for_type,
                                             ripe_create_sema,
@@ -237,8 +247,9 @@ def ripe_check_for_list(ripe_create_sema: mp.Semaphore,
     logger.info('correct_count {}'.format(correct_type_count))
 
 
-def domain_check_threading_manage(nextdomain: typing.Callable[[], Domain],
-                                  increment_domain_type_count: typing.Callable[[DomainLocationType, ],],
+def domain_check_threading_manage(domain_id_queue: queue.Queue,
+                                  increment_domain_type_count: typing.Callable[
+                                      [DomainLocationType, ], ],
                                   increment_count_for_type: typing.Callable[[LocationCodeType], ],
                                   ripe_create_sema: mp.Semaphore,
                                   ripe_slow_down_sema: mp.Semaphore,
@@ -247,20 +258,29 @@ def domain_check_threading_manage(nextdomain: typing.Callable[[], Domain],
                                   wo_measurements: bool,
                                   allowed_measurement_age: int,
                                   api_key: str,
-                                  db_session: Session):
+                                  Session: typing.Callable[[], Session]):
     """The method called to create a thread and manage the domain checks"""
-    next_domain_tuple = nextdomain()
-    while next_domain_tuple:
+    db_session = Session()
+
+    def get_domains() -> typing.Generator[Domain, None, None]:
+        try:
+            while True:
+                domain_id = domain_id_queue.get(timeout=2)
+                domain = domain_by_id(domain_id, db_session)
+                yield domain
+        except queue.Empty:
+            pass
+
+    for domain in get_domains():
         try:
             # logger.debug('next domain')
-            check_domain_location_ripe(next_domain_tuple, increment_domain_type_count,
+            check_domain_location_ripe(domain, increment_domain_type_count,
                                        increment_count_for_type, ripe_create_sema,
                                        ripe_slow_down_sema, ip_version, bill_to_address,
                                        wo_measurements, allowed_measurement_age, api_key, db_session)
         except Exception:
             logger.exception('Check Domain Error')
 
-        next_domain_tuple = nextdomain()
     logger.debug('Thread finished')
 
 
@@ -278,6 +298,14 @@ def check_domain_location_ripe(domain: Domain,
     """checks if ip is at location"""
     matched = False
     results = get_measurements_for_domain(domain, ip_version, db_session)
+
+    allowed_age = allowed_measurement_age
+    if results:
+        newest_restult_timestamp = max([result.timestamp for result in results])
+        time_since_last_result = (datetime.datetime.now() - newest_restult_timestamp).seconds
+
+        if time_since_last_result < allowed_measurement_age:
+            allowed_age = time_since_last_result
 
     eliminate_duplicate_results(results)
 
@@ -322,7 +350,7 @@ def check_domain_location_ripe(domain: Domain,
 
     if next_match is not None:
         measurement_ids = get_measurement_ids(str(domain.ip_for_version(ip_version)),
-                                              ripe_slow_down_sema, allowed_measurement_age)
+                                              ripe_slow_down_sema, allowed_age)
     else:
         measurement_ids = []
 
@@ -341,7 +369,7 @@ def check_domain_location_ripe(domain: Domain,
                                                           near_nodes,
                                                           results,
                                                           ripe_slow_down_sema,
-                                                          allowed_measurement_age)
+                                                          allowed_age)
         logger.debug('checked for measurement results')
 
         def add_new_result(new_result: MeasurementResult):

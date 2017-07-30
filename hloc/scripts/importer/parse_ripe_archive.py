@@ -91,7 +91,7 @@ class MeasurementKey(enum.Enum):
     ttl = 'ttl'
     min_rtt = 'min'
     type = 'type'
-    execution_time = 'timestamp'
+    timestamp = 'timestamp'
 
 
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, debugging: bool):
@@ -147,8 +147,8 @@ def parse_measurement(measurement_result: dict, db_session: Session):
     ripe_probe = ripe_atlas.Probe(id=probe_id)
 
     probe = parse_probe(ripe_probe, db_session)
-    execution_time = datetime.datetime.fromtimestamp(
-        measurement_result[MeasurementKey.execution_time.value])
+    timestamp = datetime.datetime.fromtimestamp(
+        measurement_result[MeasurementKey.timestamp.value])
 
     destination = measurement_result[MeasurementKey.destination.value]
 
@@ -177,7 +177,7 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
         result = RipeMeasurementResult()
         result.probe = probe
-        result.execution_time = execution_time
+        result.timestamp = timestamp
         result.destination_address = destination
         result.source_address = source
         result.behind_nat = behind_nat
@@ -198,7 +198,7 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
             result = RipeMeasurementResult()
             result.probe = probe
-            result.execution_time = execution_time
+            result.timestamp = timestamp
             result.destination_address = destination
             result.source_address = source
             result.behind_nat = behind_nat
