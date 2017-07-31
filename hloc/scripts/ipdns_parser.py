@@ -92,7 +92,7 @@ def main():
     parsed_ips = set()
     parsed_ips_lock = mp.Lock()
 
-    line_queue = mp.Queue(args.number_processes * 10)
+    line_queue = mp.Queue(args.number_processes * 30)
     line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue))
     line_thread.start()
 
@@ -178,6 +178,8 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
                 count_isp_lines += n_ip_lines_count
 
                 db_session.commit()
+            else:
+                logger.info('finished no more lines')
         except queue.Empty:
             logger.info('finished no more lines')
 
