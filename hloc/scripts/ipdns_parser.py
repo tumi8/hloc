@@ -46,6 +46,8 @@ def __create_parser_arguments(parser):
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-d', '--database-recreate', action='store_true',
                         help='Recreates the database structure. Attention deletes all data!')
+    parser.add_argument('-b', '--buffer-lines-per-process', type=int, default=1000,
+                        help='Number of lines buffered for each process')
     # parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
     #                     is_config_file=True, help='The path to a config file')
 
@@ -92,9 +94,10 @@ def main():
     parsed_ips = set()
     parsed_ips_lock = mp.Lock()
 
-    line_queue = mp.Queue(args.number_processes * 30)
+    line_queue = mp.Queue(args.number_processes * args.buffer_lines_per_process)
     line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue))
     line_thread.start()
+    time.sleep(1)
 
     for i in range(0, args.number_processes):
         process = mp.Process(target=preprocess_file_part,
