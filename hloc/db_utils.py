@@ -9,7 +9,7 @@ import sqlalchemy.exc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, \
-    DomainType, engine
+    DomainType, Location, engine
 
 
 def create_session_for_process():
@@ -65,6 +65,17 @@ def label_for_name(label_name: str, db_session: Session):
     return label
 
 
+def location_for_coordinates(lat: float, lon: float, db_session: Session) -> Location:
+    location = db_session.query(Location).filter_by(lat=lat, lon=lon).first()
+
+    if location:
+        return location
+
+    location = Location(lat, lon)
+    db_session.add(location)
+    return location
+
+
 def probe_for_id(probe_id: int, db_session: Session) -> Probe:
     """
     searches for a probe with the probe_id
@@ -72,7 +83,7 @@ def probe_for_id(probe_id: int, db_session: Session) -> Probe:
     :param db_session: a data base session on which the queries are executed
     :return (Probe): the Probe with the corresponding id or None
     """
-    return db_session.query(Probe).filter(Probe.probe_id == probe_id).first()
+    return db_session.query(Probe).filter_by(probe_id=str(probe_id)).first()
 
 
 def domain_by_id(domain_id: int, db_session: Session) -> Domain:

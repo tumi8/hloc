@@ -12,13 +12,15 @@ import random
 import typing
 import queue
 import datetime
+import operator
 
 import ripe.atlas.cousteau as ripe_atlas
+import ripe.atlas.cousteau.exceptions as ripe_exceptions
 
 from hloc import util, constants
 from hloc.models import *
 from hloc.db_utils import get_measurements_for_domain, create_session_for_process, \
-    get_all_domain_ids_splitted, domain_by_id
+    get_all_domain_ids_splitted, domain_by_id, probe_for_id, location_for_coordinates
 from hloc.exceptions import ProbeError
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes
@@ -78,8 +80,8 @@ def main():
     Session = create_session_for_process()
     db_session = Session()
 
-    ripe_slow_down_sema = mp.BoundedSemaphore(args.ripeRequestBurstLimit)
-    ripe_create_sema = mp.Semaphore(args.ripe_measurement_limit)
+    ripe_slow_down_sema = mp.BoundedSemaphore(args.ripe_request_burst_limit)
+    ripe_create_sema = mp.Semaphore(args.measurement_limit)
     global MAX_THREADS
 
     if args.log_level == 'DEBUG':
@@ -89,14 +91,16 @@ def main():
 
     finish_event = threading.Event()
     generator_thread = threading.Thread(target=generate_ripe_request_tokens,
-                                        args=(ripe_slow_down_sema, args.ripeRequestLimit,
+                                        args=(ripe_slow_down_sema, args.ripe_request_limit,
                                               finish_event))
 
-    if not args.dry_run and not args.disable_probe_fetching:
+    if not args.disable_probe_fetching:
+        db_session.query(RipeAtlasProbe).delete()
         locations = db_session.query(LocationInfo)
 
         probes = get_ripe_probes(db_session)
         assign_location_probes(locations, probes)
+        db_session.commit()
 
         null_locations = [location for location in locations if not location.available_nodes]
 
@@ -119,7 +123,7 @@ def main():
                                    ripe_slow_down_sema,
                                    args.ip_version,
                                    args.bill_to,
-                                   args.wo_measurements,
+                                   args.without_new_measurements,
                                    args.allowed_measurement_age,
                                    args.api_key,
                                    args.domain_block_limit,
@@ -249,8 +253,9 @@ def ripe_check_process(pid: int,
 
 def domain_check_threading_manage(domain_id_queue: queue.Queue,
                                   increment_domain_type_count: typing.Callable[
-                                      [DomainLocationType, ], ],
-                                  increment_count_for_type: typing.Callable[[LocationCodeType], ],
+                                      [DomainLocationType], None],
+                                  increment_count_for_type: typing.Callable[
+                                      [LocationCodeType], None],
                                   ripe_create_sema: mp.Semaphore,
                                   ripe_slow_down_sema: mp.Semaphore,
                                   ip_version: str,
@@ -266,8 +271,8 @@ def domain_check_threading_manage(domain_id_queue: queue.Queue,
         try:
             while True:
                 domain_id = domain_id_queue.get(timeout=2)
-                domain = domain_by_id(domain_id, db_session)
-                yield domain
+                t_domain = domain_by_id(domain_id, db_session)
+                yield t_domain
         except queue.Empty:
             pass
 
@@ -277,7 +282,9 @@ def domain_check_threading_manage(domain_id_queue: queue.Queue,
             check_domain_location_ripe(domain, increment_domain_type_count,
                                        increment_count_for_type, ripe_create_sema,
                                        ripe_slow_down_sema, ip_version, bill_to_address,
-                                       wo_measurements, allowed_measurement_age, api_key, db_session)
+                                       wo_measurements, allowed_measurement_age, api_key,
+                                       db_session)
+            db_session.commit()
         except Exception:
             logger.exception('Check Domain Error')
 
@@ -285,8 +292,10 @@ def domain_check_threading_manage(domain_id_queue: queue.Queue,
 
 
 def check_domain_location_ripe(domain: Domain,
-                               increment_domain_type_count: typing.Callable[[DomainLocationType],],
-                               increment_count_for_type: typing.Callable[[LocationCodeType], ],
+                               increment_domain_type_count: typing.Callable[
+                                   [DomainLocationType], None],
+                               increment_count_for_type: typing.Callable[
+                                   [LocationCodeType], None],
                                ripe_create_sema: mp.Semaphore,
                                ripe_slow_down_sema: mp.Semaphore,
                                ip_version: str,
@@ -472,7 +481,7 @@ def eliminate_duplicate_results(results: [MeasurementResult]):
 
 
 def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) \
-        -> typing.Union[bool, (float, CodeMatch)]:
+        -> typing.Union[bool, typing.Tuple[float, CodeMatch]]:
     """
     Sort the matches after their most probable location
     :returns if there are any matches left
@@ -599,8 +608,15 @@ def get_ripe_probes(db_session: Session) -> typing.List[RipeAtlasProbe]:
 
     ripe_probes = ripe_atlas.ProbeRequest(return_objects=True)
 
-    for probe in ripe_probes:
-        probes.append(parse_probe(probe, db_session))
+    while True:
+        try:
+            for probe in ripe_probes:
+                if not probe.geometry:
+                    continue
+                probes.append(parse_probe(probe, db_session))
+            break
+        except ripe_exceptions.APIResponseError as e:
+            logger.warning(str(e))
 
     db_session.commit()
 
@@ -608,15 +624,17 @@ def get_ripe_probes(db_session: Session) -> typing.List[RipeAtlasProbe]:
 
 
 def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
-    probe_db_obj = db_session.query(RipeAtlasProbe).filter_by(probe_id=probe.id).first()
+    probe_db_obj = probe_for_id(probe.id, db_session)
 
     if probe_db_obj:
         if probe_db_obj.update():
             return probe_db_obj
 
-    location = Location(probe.geometry['coordinates'][1], probe.geometry['coordinates'][0])
+    location = location_for_coordinates(probe.geometry['coordinates'][1],
+                                        probe.geometry['coordinates'][0],
+                                        db_session)
 
-    probe_db_obj = RipeAtlasProbe(id=probe.id, location=location)
+    probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
     db_session.add(probe_db_obj)
     return probe_db_obj
 
@@ -627,11 +645,12 @@ def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe]):
         for probe in probes:
             dist = probe.location.gps_distance_haversine(location)
             if dist < 1000000:
-                near_probes.append((near_probes, dist))
+                near_probes.append((probe, dist))
 
-        # near_probes.sort(key=operator.itemgetter(1))
+        near_probes.sort(key=operator.itemgetter(1))
 
-        location.probes = near_probes
+        location.probes.clear()
+        location.probes.extend([probe[0] for probe in near_probes])
 
 
 if __name__ == '__main__':

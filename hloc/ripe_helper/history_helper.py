@@ -17,7 +17,7 @@ def __get_measurements_for_nodes(measurement_ids: [int],
                                  ripe_slow_down_sema: mp.Semaphore,
                                  near_nodes: [RipeAtlasProbe],
                                  allowed_measurement_age: int) \
-        -> typing.Generator[(int, [RipeMeasurementResult])]:
+        -> typing.Generator[typing.Tuple[int, typing.List[RipeMeasurementResult]], None, None]:
     """Loads all results for all measurements if they are less than a year ago"""
 
     node_dct = {}
