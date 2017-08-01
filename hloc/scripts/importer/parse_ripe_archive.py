@@ -55,8 +55,8 @@ def main():
     processes = []
 
     for i in range(args.number_processes):
-        process = mp.Process(target=parse_ripe_data, args=(filenames, args.debug,
-                                                           not args.plaintext),
+        process = mp.Process(target=parse_ripe_data, args=(filenames,not args.plaintext,
+                                                           args.debug),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
         process.start()
