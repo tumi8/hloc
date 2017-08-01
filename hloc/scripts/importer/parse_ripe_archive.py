@@ -18,10 +18,15 @@ import bz2
 import re
 
 import ripe.atlas.cousteau as ripe_atlas
+import ripe.atlas.cousteau.exceptions as ripe_exceptions
 
-from hloc.db_utils import create_session_for_process
+from hloc import util
+from hloc.db_utils import create_session_for_process, probe_for_id
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Location, Session, \
     MeasurementProtocol
+
+
+logger = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -46,6 +51,9 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
+    global logger
+    logger = util.setup_logger(args.logging_file, 'parse_ripe_archive')
+
     if not os.path.isdir(args.archive_path):
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
@@ -55,7 +63,7 @@ def main():
     processes = []
 
     for i in range(args.number_processes):
-        process = mp.Process(target=parse_ripe_data, args=(filenames,not args.plaintext,
+        process = mp.Process(target=parse_ripe_data, args=(filenames, not args.plaintext,
                                                            args.debug),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
@@ -106,7 +114,10 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, debugging: bool):
                     for line in ripe_archive_file:
                         measurement_result = json.loads(line)
 
-                        parse_measurement(measurement_result, db_session)
+                        try:
+                            parse_measurement(measurement_result, db_session)
+                        except ripe_exceptions.APIResponseError:
+                            logger.exception()
             else:
                 with open(filename) as ripe_archive_filedesc, \
                     mmap.mmap(ripe_archive_filedesc.fileno(), 0,
@@ -116,7 +127,10 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, debugging: bool):
                     while len(line) > 0:
                         measurement_result = json.loads(line)
 
-                        parse_measurement(measurement_result, db_session)
+                        try:
+                            parse_measurement(measurement_result, db_session)
+                        except ripe_exceptions.APIResponseError:
+                            logger.exception()
 
                         line = ripe_archive_file.readline().decode('utf-8')
 
@@ -128,7 +142,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, debugging: bool):
 
 
 def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
-    probe_db_obj = db_session.query(RipeAtlasProbe).filter_by(probe_id=probe.id).first()
+    probe_db_obj = probe_for_id(probe.id, db_session)
 
     if probe_db_obj:
         if probe_db_obj.update():
@@ -138,6 +152,7 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
 
     probe_db_obj = RipeAtlasProbe(id=probe.id, location=location)
     db_session.add(probe_db_obj)
+    db_session.commit()
     return probe_db_obj
 
 
