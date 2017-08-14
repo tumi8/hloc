@@ -17,10 +17,11 @@ import configargparse
 
 import hloc.constants as constants
 from hloc import util
-from hloc.db_utils import add_labels_to_domain, recreate_db, create_session_for_process
-from hloc.models import Domain, DomainType
+from hloc.db_utils import recreate_db, create_session_for_process
+from hloc.models import Domain, DomainType, DomainLabel
 from hloc.domain_processing_helper.domain_name_preprocessing import RegexStrategy, \
     preprocess_domains
+from hloc.models.domain import domain_to_label_table
 
 logger = None
 BLOCK_SIZE = 10
@@ -95,21 +96,30 @@ def main():
     parsed_ips_lock = mp.Lock()
 
     line_queue = mp.Queue(args.number_processes * args.buffer_lines_per_process)
-    line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue))
+    line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue),
+                                   name='file-reader')
     line_thread.start()
     time.sleep(1)
+
+    stop_event = threading.Event()
+    domain_label_queue = mp.Queue()
+    domain_label_handle_thread = threading.Thread(target=handle_labels,
+                                                  args=(domain_label_queue, stop_event),
+                                                  name='domain-label-handler')
+    domain_label_handle_thread.start()
 
     for i in range(0, args.number_processes):
         process = mp.Process(target=preprocess_file_part,
                              args=(args.filepath, i, line_queue, args.ip_version,
                                    args.isp_ip_filter, regex_strategy, tlds, whitelist, parsed_ips,
-                                   parsed_ips_lock),
+                                   parsed_ips_lock, domain_label_queue),
                              name='preprocessing_{}'.format(i))
         processes.append(process)
         process.start()
 
     line_thread.join()
     line_queue.join_thread()
+
     alive = len(processes)
     while alive > 0:
         try:
@@ -121,6 +131,10 @@ def main():
                 alive = process_sts.count(True)
         except KeyboardInterrupt:
             pass
+
+    stop_event.set()
+    domain_label_handle_thread.join()
+    # domain_label_queue.join_thread()
 
     whitelisted_not_parsed_as_correct = set(parsed_ips) - parsed_ips
 
@@ -140,10 +154,84 @@ def read_file(filepath: str, line_queue: mp.Queue):
     line_queue.close()
 
 
+def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
+    """Handels the label results and saves them to the database not blocking the other db queries"""
+
+    class DomainLabelHolder:
+        def __init__(self, label):
+            self.label = label
+            self.label_id = 0
+            self.domain_ids = []
+            self._handled_domain_ids = []
+
+        def add_domain_id(self, domain_id):
+            if domain_id not in self.domain_ids and domain_id not in self._handled_domain_ids:
+                self.domain_ids.append(domain_id)
+
+        def get_insert_values(self):
+            values = [{'domain_id': domain_id, 'domain_label_id': self.label_id}
+                      for domain_id in self.domain_ids]
+            return values
+
+        def handled_domain_ids(self):
+            self._handled_domain_ids.extend(self.domain_ids)
+            self.domain_ids.clear()
+
+    def save_labels(domain_labels_dct, new_labels, db_sess):
+        if new_labels:
+            db_session.commit()
+            for label_obj in new_labels:
+                domain_labels_dct[label_obj.name].label_id = label_obj.id
+
+            new_labels.clear()
+
+        values_to_insert = []
+        for label_obj in domain_labels_dct.values():
+            if label_obj.domain_ids:
+                values_to_insert.extend(label_obj.get_insert_values())
+                label_obj.handled_domain_ids()
+
+        insert_expr = domain_to_label_table.insert().values(values_to_insert)
+        db_sess.execute(insert_expr)
+        db_sess.commit()
+
+    Session = create_session_for_process()
+    db_session = Session()
+
+    new_labels = []
+    domain_labels = {}
+    counter = 0
+
+    while not stop_event.is_set() or not labels_queue.empty():
+        try:
+            label_name, domain_id = labels_queue.get(timeout=1)
+
+            if label_name not in domain_labels:
+                label_obj = DomainLabel(label_name)
+                db_session.add(label_obj)
+                new_labels.append(label_obj)
+                domain_labels[label_name] = DomainLabelHolder(label_obj)
+
+            domain_labels[label_name].add_domain_id(domain_id)
+
+            counter += 1
+            if counter >= 10**4:
+                logger.debug('saving')
+                save_labels(domain_labels, new_labels, db_session)
+                counter = 0
+
+        except queue.Empty:
+            pass
+
+    logger.info('stopped')
+    save_labels(domain_labels, new_labels, db_session)
+
+
 def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_version: str,
                          ip_encoding_filter: bool, regex_strategy: RegexStrategy,
                          tlds: typing.Set[str], whitelist: typing.Set[str],
-                         parsed_ips: typing.Set[str], parsed_ips_lock: mp.Lock):
+                         parsed_ips: typing.Set[str], parsed_ips_lock: mp.Lock,
+                         domain_label_queue: mp.Queue):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -176,7 +264,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
 
                 n_good_lines_count, n_ip_lines_count = classify_domain(
                     ip, domain, ip_version, ip_encoding_filter, regex_strategy, tlds,
-                    whitelist, db_session)
+                    whitelist, db_session, domain_label_queue)
                 count_good_lines += n_good_lines_count
                 count_isp_lines += n_ip_lines_count
 
@@ -204,13 +292,16 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
 
 def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: bool,
                     regex_strategy: RegexStrategy, tlds: typing.Set[str],
-                    whitelist: typing.Set[str], db_session) -> (int, int):
+                    whitelist: typing.Set[str], db_session,
+                    domain_labels_queue: mp.Queue) -> (int, int):
     is_ipv6 = ip_version == constants.IPV6_IDENTIFIER
 
     (good_lines, bad_lines, bad_tld_lines, ip_encoded_lines, custom_filter_lines,
      bad_characters_part) = preprocess_domains([(ip, domain)], tlds, whitelist,
                                                ip_version, regex_strategy,
                                                ip_encoding_filter)
+
+    domain = None
 
     if good_lines:
         ip_address, domain_address = good_lines[0]
@@ -220,8 +311,6 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
             domain = Domain(domain_address, ipv4_address=ip_address)
 
         domain.classification_type = DomainType.valid
-        add_labels_to_domain(domain, db_session)
-        db_session.add(domain)
 
     if bad_lines:
         ip_address, domain_address = bad_lines[0]
@@ -231,8 +320,6 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
             domain = Domain(domain_address, ipv4_address=ip_address)
 
         domain.classification_type = DomainType.invalid_characters
-        add_labels_to_domain(domain, db_session)
-        db_session.add(domain)
 
     if bad_tld_lines:
         ip_address, domain_address = bad_tld_lines[0]
@@ -242,8 +329,6 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
             domain = Domain(domain_address, ipv4_address=ip_address)
 
         domain.classification_type = DomainType.bad_tld
-        add_labels_to_domain(domain, db_session)
-        db_session.add(domain)
 
     if ip_encoded_lines:
         ip_address, domain_address = ip_encoded_lines[0]
@@ -253,8 +338,6 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
             domain = Domain(domain_address, ipv4_address=ip_address)
 
         domain.classification_type = DomainType.ip_encoded
-        add_labels_to_domain(domain, db_session)
-        db_session.add(domain)
 
     if custom_filter_lines:
         ip_address, domain_address = custom_filter_lines[0]
@@ -264,10 +347,17 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
             domain = Domain(domain_address, ipv4_address=ip_address)
 
         domain.classification_type = DomainType.blacklisted
-        add_labels_to_domain(domain, db_session)
-        db_session.add(domain)
+
+    db_session.add(domain)
+    db_session.commit()
+    add_lables_to_domain(domain, domain_labels_queue)
 
     return len(good_lines), len(ip_encoded_lines)
+
+
+def add_lables_to_domain(domain: Domain, domain_labels_queue: mp.Queue):
+    for label in domain.name.split('.')[::-1]:
+        domain_labels_queue.put((label, domain.id))
 
 
 if __name__ == '__main__':
