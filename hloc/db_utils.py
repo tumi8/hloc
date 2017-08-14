@@ -96,6 +96,16 @@ def domain_by_id(domain_id: int, db_session: Session) -> Domain:
     return db_session.query(Domain).filter(Domain.id == domain_id).first()
 
 
+def domains_for_ids(domain_ids: [int], db_session: Session) -> [Domain]:
+    """
+    return all domains with an id in domain_ids
+    :param domain_ids: the ids of the domains
+    :param db_session:  a data base session on which the queries are executed
+    :return ([Domain]): the matching domains for the domain_ids
+    """
+    return db_session.query(Domain).filter(Domain.id.in_(domain_ids))
+
+
 def get_measurements_for_domain(domain: Domain,
                                 ip_version: str,
                                 db_session: Session) -> [MeasurementResult]:
@@ -107,12 +117,6 @@ def get_measurements_for_domain(domain: Domain,
     """
     return db_session.query(MeasurementResult).filter(
         MeasurementResult.destination_address == domain.ip_for_version(ip_version))
-
-
-def add_labels_to_domain(domain: Domain, db_session: Session):
-    for label in domain.name.split('.')[::-1]:
-        label_obj = label_for_name(label, db_session)
-        domain.labels.append(label_obj)
 
 
 def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int,

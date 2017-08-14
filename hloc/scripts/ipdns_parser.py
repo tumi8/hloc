@@ -95,8 +95,11 @@ def main():
     parsed_ips = set()
     parsed_ips_lock = mp.Lock()
 
+    finished_reading_event = mp.Event()
+
     line_queue = mp.Queue(args.number_processes * args.buffer_lines_per_process)
-    line_thread = threading.Thread(target=read_file, args=(args.filepath, line_queue),
+    line_thread = threading.Thread(target=read_file,
+                                   args=(args.filepath, line_queue, finished_reading_event),
                                    name='file-reader')
     line_thread.start()
     time.sleep(1)
@@ -112,7 +115,7 @@ def main():
         process = mp.Process(target=preprocess_file_part,
                              args=(args.filepath, i, line_queue, args.ip_version,
                                    args.isp_ip_filter, regex_strategy, tlds, whitelist, parsed_ips,
-                                   parsed_ips_lock, domain_label_queue),
+                                   parsed_ips_lock, domain_label_queue, finished_reading_event),
                              name='preprocessing_{}'.format(i))
         processes.append(process)
         process.start()
@@ -134,7 +137,7 @@ def main():
 
     stop_event.set()
     domain_label_handle_thread.join()
-    # domain_label_queue.join_thread()
+    domain_label_queue.join_thread()
 
     whitelisted_not_parsed_as_correct = set(parsed_ips) - parsed_ips
 
@@ -146,12 +149,13 @@ def main():
     logger.info('Running time: {0}'.format((end - start)))
 
 
-def read_file(filepath: str, line_queue: mp.Queue):
+def read_file(filepath: str, line_queue: mp.Queue, finished_reading_event: mp.Event):
     with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
         for line in rdns_file_handle:
             line_queue.put(line)
 
     line_queue.close()
+    finished_reading_event.set()
 
 
 def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
@@ -223,6 +227,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         except queue.Empty:
             pass
 
+    labels_queue.close()
     logger.info('stopped')
     save_labels(domain_labels, new_labels, db_session)
 
@@ -231,7 +236,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
                          ip_encoding_filter: bool, regex_strategy: RegexStrategy,
                          tlds: typing.Set[str], whitelist: typing.Set[str],
                          parsed_ips: typing.Set[str], parsed_ips_lock: mp.Lock,
-                         domain_label_queue: mp.Queue):
+                         domain_label_queue: mp.Queue, finished_reading_event: mp.Event):
     """
     Sanitize filepart from start to end
     pnr is a number to recognize the process
@@ -247,31 +252,33 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
         count_good_lines = 0
         count_isp_lines = 0
 
-        try:
-            while not line_queue.empty():
+        while not finished_reading_event.is_set() and line_queue.empty():
+            try:
                 line = line_queue.get(timeout=2)
-                if len(line) == 0:
-                    continue
-                line = line.strip()
-                ip, domain = line.split(',', 1)
+            except queue.Empty:
+                time.sleep(1)
+                continue
 
-                if not domain:
-                    logger.info('Warning found empty domain for IP {} skipping'.format(ip))
-                    continue
+            if len(line) == 0:
+                continue
+            line = line.strip()
+            ip, domain = line.split(',', 1)
 
-                with parsed_ips_lock:
-                    parsed_ips.add(ip)
+            if not domain:
+                logger.info('Warning found empty domain for IP {} skipping'.format(ip))
+                continue
 
-                n_good_lines_count, n_ip_lines_count = classify_domain(
-                    ip, domain, ip_version, ip_encoding_filter, regex_strategy, tlds,
-                    whitelist, db_session, domain_label_queue)
-                count_good_lines += n_good_lines_count
-                count_isp_lines += n_ip_lines_count
+            with parsed_ips_lock:
+                parsed_ips.add(ip)
 
-                db_session.commit()
-            else:
-                logger.info('finished no more lines')
-        except queue.Empty:
+            n_good_lines_count, n_ip_lines_count = classify_domain(
+                ip, domain, ip_version, ip_encoding_filter, regex_strategy, tlds,
+                whitelist, db_session, domain_label_queue)
+            count_good_lines += n_good_lines_count
+            count_isp_lines += n_ip_lines_count
+
+            db_session.commit()
+        else:
             logger.info('finished no more lines')
 
         directory = os.path.dirname(filepath)
