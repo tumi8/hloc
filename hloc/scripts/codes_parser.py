@@ -704,7 +704,20 @@ def parse_codes(args):
 
         locations = merge_location_codes(args.merge_radius, db_session)
 
-        db_session.bulk_save_objects(locations, return_defaults=True)
+
+        airport_infos = []
+        locode_infos = []
+
+        for loc in locations:
+            if loc.airport_info:
+                airport_infos.append(loc.airport_info)
+            if loc.locode_info:
+                locode_infos.append(loc.locode_info)
+
+        logger.info('number of airport info object {}'.format(len(airport_infos)))
+
+        db_session.bulk_save_objects(locations + airport_infos + locode_infos + STATES,
+                                     return_defaults=True)
 
         db_session.commit()
     finally:
