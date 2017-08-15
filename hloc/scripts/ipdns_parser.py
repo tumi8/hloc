@@ -152,7 +152,10 @@ def main():
 def read_file(filepath: str, line_queue: mp.Queue, finished_reading_event: mp.Event):
     with open(filepath, encoding='ISO-8859-1') as rdns_file_handle:
         for line in rdns_file_handle:
-            line_queue.put(line)
+            try:
+                line_queue.put(line)
+            except queue.Full:
+                time.sleep(0.5)
 
     line_queue.close()
     finished_reading_event.set()
@@ -252,7 +255,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
         count_good_lines = 0
         count_isp_lines = 0
 
-        while not finished_reading_event.is_set() and line_queue.empty():
+        while not finished_reading_event.is_set() or not line_queue.empty():
             try:
                 line = line_queue.get(timeout=2)
             except queue.Empty:
