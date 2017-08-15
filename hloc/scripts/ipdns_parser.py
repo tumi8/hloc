@@ -188,17 +188,17 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         if new_labels:
             db_session.commit()
             for label_obj in new_labels:
-                domain_labels_dct[label_obj.name].label_id = label_obj.id
+                label_obj.label_id = label_obj.label.id
 
-            new_labels.clear()
 
         values_to_insert = []
-        for label_obj in domain_labels_dct.values():
+        for label_obj in new_labels:
             if label_obj.domain_ids:
                 values_to_insert.extend(label_obj.get_insert_values())
                 label_obj.handled_domain_ids()
 
         insert_expr = domain_to_label_table.insert().values(values_to_insert)
+        new_labels.clear()
         db_sess.execute(insert_expr)
         db_sess.commit()
 
@@ -212,14 +212,16 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
     while not stop_event.is_set() or not labels_queue.empty():
         try:
             label_name, domain_id = labels_queue.get(timeout=1)
-
-            if label_name not in domain_labels:
+            try:
+                label = domain_labels[label_name]
+            except KeyError:
                 label_obj = DomainLabel(label_name)
                 db_session.add(label_obj)
-                new_labels.append(label_obj)
-                domain_labels[label_name] = DomainLabelHolder(label_obj)
+                label = DomainLabelHolder(label_obj)
+                domain_labels[label_name] = label
 
-            domain_labels[label_name].add_domain_id(domain_id)
+            new_labels.append(label)
+            label.add_domain_id(domain_id)
 
             counter += 1
             if counter >= 10**4:
