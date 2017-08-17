@@ -46,7 +46,7 @@ class DomainLabel(Base):
     __tablename__ = 'domain_labels'
 
     id = sqla.Column(sqla.Integer, primary_key=True)
-    name = sqla.Column(sqla.String(100), nullable=False)
+    name = sqla.Column(sqla.String(100), unique=True, index=True, nullable=False)
     last_searched = sqla.Column(sqla.DateTime)
 
 
