@@ -216,28 +216,29 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
 
     while not stop_event.is_set() or not labels_queue.empty():
         try:
-            label_name, domain_id = labels_queue.get(timeout=1)
-            try:
-                label = domain_labels[label_name]
-            except KeyError:
-                label_obj = DomainLabel(label_name)
-                label = DomainLabelHolder(label_obj)
-                domain_labels[label_name] = label
-                new_labels.append(label)
+            domain_label_tuples = labels_queue.get(timeout=1)
+            for label_name, domain_id in domain_label_tuples:
+                try:
+                    label = domain_labels[label_name]
+                except KeyError:
+                    label_obj = DomainLabel(label_name)
+                    label = DomainLabelHolder(label_obj)
+                    domain_labels[label_name] = label
+                    new_labels.append(label)
 
-            labels_to_save.add(label)
-            label.add_domain_id(domain_id)
+                labels_to_save.add(label)
+                label.add_domain_id(domain_id)
 
-            counter += 1
-            if counter >= 10**4:
-                logger.debug('saving')
-                save_labels(domain_labels, labels_to_save, new_labels, db_session)
-                counter = 0
-                ccounter +=1
+                counter += 1
+                if counter >= 10**4:
+                    logger.debug('saving')
+                    save_labels(domain_labels, labels_to_save, new_labels, db_session)
+                    counter = 0
+                    ccounter +=1
 
-                if ccounter >= 10:
-                    db_session.commit()
-                    ccounter = 0
+                    if ccounter >= 10:
+                        db_session.commit()
+                        ccounter = 0
 
         except queue.Empty:
             pass
@@ -374,14 +375,17 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
 
     db_session.add(domain)
     db_session.commit()
-    add_lables_to_domain(domain, domain_labels_queue)
+    domain_label_tuples = get_domain_label_tuples(domain, domain_labels_queue)
+    domain_labels_queue.put(domain_label_tuples)
 
     return len(good_lines), len(ip_encoded_lines)
 
 
-def add_lables_to_domain(domain: Domain, domain_labels_queue: mp.Queue):
+def get_domain_label_tuples(domain: Domain, domain_labels_queue: mp.Queue):
+    domain_labels = set()
     for label in domain.name.split('.')[::-1]:
-        domain_labels_queue.put((label, domain.id))
+        domain_labels.add((label, domain.id))
+    return domain_labels
 
 
 if __name__ == '__main__':
