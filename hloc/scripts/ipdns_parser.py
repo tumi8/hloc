@@ -190,7 +190,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
 
     def save_labels(domain_labels_dct, labels_to_save, new_labels, db_sess):
         if new_labels:
-            db_sess.commit()
+            db_sess.bulk_save_objects([label.label for label in new_labels], return_defaults=True)
             for label_obj in new_labels:
                 label_obj.label_id = label_obj.label.id
 
@@ -204,7 +204,6 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         new_labels.clear()
         labels_to_save.clear()
         db_sess.execute(insert_expr)
-        db_sess.commit()
 
     Session = create_session_for_process()
     db_session = Session()
@@ -213,6 +212,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
     labels_to_save = set()
     domain_labels = {}
     counter = 0
+    ccounter = 0
 
     while not stop_event.is_set() or not labels_queue.empty():
         try:
@@ -221,7 +221,6 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
                 label = domain_labels[label_name]
             except KeyError:
                 label_obj = DomainLabel(label_name)
-                db_session.add(label_obj)
                 label = DomainLabelHolder(label_obj)
                 domain_labels[label_name] = label
                 new_labels.append(label)
@@ -234,11 +233,17 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
                 logger.debug('saving')
                 save_labels(domain_labels, labels_to_save, new_labels, db_session)
                 counter = 0
+                ccounter +=1
+
+                if ccounter >= 10:
+                    db_session.commit()
+                    ccounter = 0
 
         except queue.Empty:
             pass
 
     save_labels(domain_labels, labels_to_save, new_labels, db_session)
+    db_session.commit()
     logger.info('stopped')
     labels_queue.close()
 
