@@ -140,7 +140,7 @@ def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int,
 
 
 def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
-                             domain_types: typing.List[DomainType], db_session: Session) \
+                                domain_types: typing.List[DomainType], db_session: Session) \
         -> typing.Generator[int, None, None]:
     def make_db_request(offset, d_types):
         if d_types:
@@ -157,3 +157,12 @@ def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
         for domain_id in domain_ids:
             yield domain_id
         domain_ids = make_db_request(offset, domain_types)
+
+
+def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processes: int,
+                                       domain_types: typing.List[DomainType], db_session: Session) \
+        -> typing.Generator[Domain, None, None]:
+    for domain in db_session.query(Domain).filter(
+            sqla.and_(Domain.id % nr_processes == index,
+                      Domain.classification_type.in_(domain_types))):
+        yield domain

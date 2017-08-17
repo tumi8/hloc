@@ -69,7 +69,7 @@ def setup_logger(filename: str, loggername: str, loglevel: str = 'DEBUG') -> log
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: {}'.format(loglevel))
     logging.basicConfig(filename=filename, level=numeric_level,
-                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s] '
+                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s][%(threadName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
                         datefmt='%d.%m %H:%M:%S')
     logging.getLogger("requests").setLevel(logging.ERROR)

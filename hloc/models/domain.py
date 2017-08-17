@@ -29,7 +29,8 @@ class CodeMatch(LocationHint):
         self.location_id = location_id
         self.code_type = code_type
         self.code = code
-        self.labels.append(domain_label)
+        if domain_label:
+            self.labels.append(domain_label)
 
 
 domain_to_label_table = sqla.Table('domain_to_labels', Base.metadata,
