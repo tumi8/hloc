@@ -161,6 +161,7 @@ def read_file(filepath: str, line_queue: mp.Queue, finished_reading_event: mp.Ev
     finished_reading_event.set()
 
 
+@util.cprofile('handle.profile')
 def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
     """Handels the label results and saves them to the database not blocking the other db queries"""
 
@@ -168,12 +169,12 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         def __init__(self, label):
             self.label = label
             self.label_id = 0
-            self.domain_ids = []
-            self._handled_domain_ids = []
+            self.domain_ids = set()
+            self._handled_domain_ids = set()
 
         def add_domain_id(self, domain_id):
             if domain_id not in self.domain_ids and domain_id not in self._handled_domain_ids:
-                self.domain_ids.append(domain_id)
+                self.domain_ids.add(domain_id)
 
         def get_insert_values(self):
             values = [{'domain_id': domain_id, 'domain_label_id': self.label_id}
@@ -181,7 +182,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
             return values
 
         def handled_domain_ids(self):
-            self._handled_domain_ids.extend(self.domain_ids)
+            self._handled_domain_ids = self._handled_domain_ids.union(self.domain_ids)
             self.domain_ids.clear()
 
         def __hash__(self):
@@ -192,7 +193,6 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
             db_sess.commit()
             for label_obj in new_labels:
                 label_obj.label_id = label_obj.label.id
-
 
         values_to_insert = []
         for label_obj in labels_to_save:
@@ -238,9 +238,9 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         except queue.Empty:
             pass
 
-    labels_queue.close()
     save_labels(domain_labels, labels_to_save, new_labels, db_session)
     logger.info('stopped')
+    labels_queue.close()
 
 
 def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_version: str,
@@ -306,6 +306,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
     finally:
         db_session.close()
         Session.remove()
+        domain_label_queue.close()
 
 
 def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: bool,

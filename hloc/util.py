@@ -8,6 +8,7 @@ import os
 import socket
 import subprocess
 import ipaddress
+import cProfile
 
 from hloc import constants
 
@@ -145,6 +146,21 @@ def is_ipv6_address_encoded(ipv6_address, domain):
 def get_class_properties(subj_class) -> [str]:
     properties = inspect.getmembers(subj_class, lambda a: not (inspect.isroutine(a)))
     return [prop for (prop, _) in properties if not (prop.startswith('__') and prop.endswith('__'))]
+
+
+def cprofile(file_name):
+    def cprofile_decorator(func):
+        def profiled_func(*args, **kwargs):
+            profile = cProfile.Profile()
+            try:
+                profile.enable()
+                result = func(*args, **kwargs)
+                profile.disable()
+                return result
+            finally:
+                profile.dump_stats(file_name)
+        return profiled_func
+    return cprofile_decorator
 
 
 __all__ = ['count_lines',
