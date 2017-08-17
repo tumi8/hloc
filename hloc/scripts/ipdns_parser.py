@@ -190,6 +190,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
 
     def save_labels(domain_labels_dct, labels_to_save, new_labels, db_sess):
         if new_labels:
+            db_sess.add_all([label.label for label in new_labels])
             db_sess.commit()
             for label_obj in new_labels:
                 label_obj.label_id = label_obj.label.id
@@ -221,7 +222,6 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
                 label = domain_labels[label_name]
             except KeyError:
                 label_obj = DomainLabel(label_name)
-                db_session.add(label_obj)
                 label = DomainLabelHolder(label_obj)
                 domain_labels[label_name] = label
                 new_labels.append(label)
