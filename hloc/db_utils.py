@@ -164,5 +164,5 @@ def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processe
         -> typing.Generator[Domain, None, None]:
     for domain in db_session.query(Domain).filter(
             sqla.and_(Domain.id % nr_processes == index,
-                      Domain.classification_type.in_(domain_types))):
+                      Domain.classification_type.in_(domain_types))).yield_per(block_limit):
         yield domain

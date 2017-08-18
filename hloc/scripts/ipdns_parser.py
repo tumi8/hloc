@@ -62,7 +62,7 @@ def main():
     start = time.time()
 
     global logger
-    logger = util.setup_logger(args.logging_file, 'process')
+    logger = util.setup_logger(args.logging_file, 'domain-processing')
 
     if args.database_recreate:
         inp = input('Do you really want to recreate the database structure? (y)')
@@ -161,7 +161,7 @@ def read_file(filepath: str, line_queue: mp.Queue, finished_reading_event: mp.Ev
     finished_reading_event.set()
 
 
-@util.cprofile('handle.profile')
+# @util.cprofile('handle.profile')
 def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
     """Handels the label results and saves them to the database not blocking the other db queries"""
 
