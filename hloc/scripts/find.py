@@ -158,10 +158,11 @@ def create_trie_obj(location_list: [Location], code_blacklist: {str}, word_black
 
 def handle_location_matches(location_match_queue: mp.Queue, stop_event: threading.Event):
     class LocationMatch:
-        def __init__(self, location_id, location_code, location_code_type):
+        def __init__(self, location_hint):
             self.id = 0
-            self.location_code = location_code
-            self.location_code_type = location_code_type
+            self.location_hint = location_hint
+            self.location_code = location_hint.code
+            self.location_code_type = location_hint.code_type
             self.location_id = location_hint.location_id
             self.domain_label_ids = set()
             self.old_domain_label_ids = set()
@@ -189,9 +190,10 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
 
     def save(matches_to_save, new_matches, db_sess):
         if new_matches:
-            db_sess.commit()
-            for new_match, location_hint in new_matches:
-                new_match.id = location_hint.id
+            db_sess.bulk_save_objects([match.location_hint for match in new_matches],
+                                      return_defaults=True)
+            for new_match in new_matches:
+                new_match.id = new_match.location_hint.id
 
         insert_values = []
         for match in matches_to_save:
@@ -202,7 +204,6 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
         matches_to_save.clear()
         insert_expr = location_hint_label_table.insert().values(insert_values)
         db_sess.execute(insert_expr)
-        db_sess.commit()
 
     Session = create_session_for_process()
     db_session = Session()
@@ -211,37 +212,44 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
     matches_to_save = set()
     location_hints = {}
     counter = 0
+    ccounter = 0
 
     while not (stop_event.is_set() and location_match_queue.empty()):
         try:
-            location_id, location_code, location_code_type, domain_label_id = \
-                location_match_queue.get(timeout=1)
-            location_hint_key = make_location_hint_key(location_id, location_code,
-                                                       location_code_type)
-            try:
-                location_hint = location_hints[location_hint_key]
-            except KeyError:
-                location_hint_obj = CodeMatch(location_id, code_type=location_code_type,
-                                              domain_label=None, code=location_code)
-                db_session.add(location_hint_obj)
-                location_hint = LocationMatch(location_id, location_code, location_code_type)
-                location_hints[location_hint_key] = location_hint
-                new_matches.append((location_hint, location_hint_obj))
+            location_matches_tuples = location_match_queue.get(timeout=1)
+            for location_id, location_code, location_code_type, domain_label_id in \
+                    location_matches_tuples:
+                location_hint_key = make_location_hint_key(location_id, location_code,
+                                                           location_code_type)
+                try:
+                    location_hint = location_hints[location_hint_key]
+                except KeyError:
+                    location_hint_obj = CodeMatch(location_id, code_type=location_code_type,
+                                                  domain_label=None, code=location_code)
+                    db_session.add(location_hint_obj)
+                    location_hint = LocationMatch(location_hint_obj)
+                    location_hints[location_hint_key] = location_hint
+                    new_matches.append(location_hint)
 
-            matches_to_save.add(location_hint)
-            location_hint.add_domain_id(domain_label_id)
+                matches_to_save.add(location_hint)
+                location_hint.add_domain_id(domain_label_id)
 
-            counter += 1
-            if counter >= 10 ** 4:
-                logger.debug('saving')
-                save(matches_to_save, new_matches, db_session)
-                counter = 0
+                counter += 1
+                if counter >= 10 ** 4:
+                    logger.debug('saving')
+                    save(matches_to_save, new_matches, db_session)
+                    counter = 0
+
+                    ccounter += 1
+                    if ccounter >= 10:
+                        db_session.commit()
+                        ccounter = 0
 
         except queue.Empty:
             pass
 
-    location_match_queue.close()
     save(matches_to_save, new_matches, db_session)
+    db_session.commit()
     logger.info('stopped')
 
 
@@ -337,12 +345,13 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
         stats_string += '\n\tentries with location found: {}'.format(entries_wl_count)
         stats_string += '\n\tlabel with location found: {}'.format(label_wl_count)
         stats_string += '\n\tmatches: {}'.format(sum(match_count.values()))
-        stats_string += '\n\tmatch count:\n{}'.format(match_count)
+        stats_string += '\n\tmatch count:\n\t\t{}'.format(match_count)
         return stats_string
 
     logger.info(build_stat_string_for_logger())
     db_session.close()
     Session.remove()
+    location_match_queue.close()
 
 
 def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, special_filter,
@@ -351,6 +360,8 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
     """returns all matches for this label"""
     ids = set()
     type_count = collections.defaultdict(int)
+
+    location_hint_tuples = []
 
     for o_label in label_obj.sub_labels:
         label = o_label[:]
@@ -379,11 +390,12 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
                     if location_id in ids:
                         continue
 
-                    location_match_queue.put((location_id, key, real_code_type, label_obj.id))
+                    location_hint_tuples.append((location_id.decoded(), key, real_code_type, label_obj.id))
                     type_count[real_code_type] += 1
 
             label = label[1:]
 
+    location_match_queue.put(location_hint_tuples)
     label_obj.last_searched = datetime.datetime.now()
     db_session.commit()
 
