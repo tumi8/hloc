@@ -716,9 +716,7 @@ def parse_codes(args):
 
         logger.info('number of airport info object {}'.format(len(airport_infos)))
 
-        db_session.bulk_save_objects(locations + airport_infos + locode_infos + STATES,
-                                     return_defaults=True)
-
+        db_session.add_all(locations)
         db_session.commit()
     finally:
         db_session.close()

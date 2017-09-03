@@ -17,7 +17,7 @@ import queue
 import configargparse
 
 from hloc import util
-from hloc.models import CodeMatch, Location, LocationCodeType, Session, DomainLabel, \
+from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, \
     DomainType, LocationInfo
 from hloc.models.location import location_hint_label_table
 from hloc.db_utils import get_all_domains_splitted_efficient, create_session_for_process
@@ -78,12 +78,18 @@ def main():
                                                       args=(location_match_queue, stop_event))
     handle_location_matches_thread.start()
 
+    update_label_queue = mp.Queue()
+    update_label_thread = threading.Thread(target=update_labels, name='update-label-search-date',
+                                           args=(update_label_queue, stop_event))
+    update_label_thread.start()
+
     processes = []
     for index in range(0, args.number_processes):
         process = mp.Process(target=search_process,
                              args=(index, trie, code_to_location_blacklist, args.exclude_sld,
                                    args.domain_block_limit, args.number_processes,
-                                   args.include_ip_encoded, location_match_queue),
+                                   args.include_ip_encoded, location_match_queue,
+                                   update_label_queue),
                              kwargs={'amount': args.amount, 'debug': args.log_level == 'DEBUG'},
                              name='find_locations_{}'.format(index))
         process.start()
@@ -93,6 +99,8 @@ def main():
         process.join()
 
     stop_event.set()
+    update_label_thread.join()
+    update_label_queue.join_thread()
     handle_location_matches_thread.join()
     location_match_queue.join_thread()
 
@@ -186,7 +194,7 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
                                                self.location_code_type))
 
     def make_location_hint_key(location_id, code, code_type):
-        return '{},{},{}'.format(location_id, code, code_type.value())
+        return '{},{},{}'.format(location_id, code, code_type)
 
     def save(matches_to_save, new_matches, db_sess):
         if new_matches:
@@ -202,8 +210,10 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
 
         new_matches.clear()
         matches_to_save.clear()
-        insert_expr = location_hint_label_table.insert().values(insert_values)
-        db_sess.execute(insert_expr)
+
+        if insert_values:
+            insert_expr = location_hint_label_table.insert().values(insert_values)
+            db_sess.execute(insert_expr)
 
     Session = create_session_for_process()
     db_session = Session()
@@ -217,44 +227,84 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
     while not (stop_event.is_set() and location_match_queue.empty()):
         try:
             location_matches_tuples = location_match_queue.get(timeout=1)
-            for location_id, location_code, location_code_type, domain_label_id in \
-                    location_matches_tuples:
-                location_hint_key = make_location_hint_key(location_id, location_code,
-                                                           location_code_type)
-                try:
-                    location_hint = location_hints[location_hint_key]
-                except KeyError:
-                    location_hint_obj = CodeMatch(location_id, code_type=location_code_type,
-                                                  domain_label=None, code=location_code)
-                    db_session.add(location_hint_obj)
-                    location_hint = LocationMatch(location_hint_obj)
-                    location_hints[location_hint_key] = location_hint
-                    new_matches.append(location_hint)
+            if isinstance(location_matches_tuples, int):
+                delete_expr = location_hint_label_table.delete().where(
+                    'location_hint_labels.domain_label_id' == location_matches_tuples)
+                db_session.execute(delete_expr)
+                logger.debug('saving for {}'.format(location_matches_tuples))
+            else:
+                for location_id, location_code, location_code_type, domain_label_id in \
+                        location_matches_tuples:
+                    logger.debug('inserting elem for {}'.format(domain_label_id))
+                    location_hint_key = make_location_hint_key(location_id, location_code,
+                                                               location_code_type)
+                    try:
+                        location_hint = location_hints[location_hint_key]
+                    except KeyError:
+                        real_code_type = LocationCodeType(location_code_type)
+                        location_hint_obj = CodeMatch(location_id, code_type=real_code_type,
+                                                      domain_label=None, code=location_code)
+                        db_session.add(location_hint_obj)
+                        location_hint = LocationMatch(location_hint_obj)
+                        location_hints[location_hint_key] = location_hint
+                        new_matches.append(location_hint)
 
-                matches_to_save.add(location_hint)
-                location_hint.add_domain_id(domain_label_id)
+                    matches_to_save.add(location_hint)
+                    location_hint.add_domain_label_id(domain_label_id)
 
-                counter += 1
-                if counter >= 10 ** 4:
-                    logger.debug('saving')
-                    save(matches_to_save, new_matches, db_session)
-                    counter = 0
+                    counter += 1
+                    if counter >= 10 ** 4:
+                        logger.debug('saving')
+                        save(matches_to_save, new_matches, db_session)
+                        counter = 0
 
-                    ccounter += 1
-                    if ccounter >= 10:
-                        db_session.commit()
-                        ccounter = 0
+                        ccounter += 1
+                        if ccounter >= 10:
+                            db_session.commit()
+                            ccounter = 0
 
         except queue.Empty:
             pass
 
     save(matches_to_save, new_matches, db_session)
     db_session.commit()
+    db_session.close()
+    Session.remove()
+    location_match_queue.close()
     logger.info('stopped')
 
 
+def update_labels(label_queue: mp.Queue, stop_event: threading.Event):
+    Session = create_session_for_process()
+    db_session = Session()
+    deleted_ids = set()
+
+    while not (stop_event.is_set() and label_queue.empty()):
+        try:
+            label_id = label_queue.get(timeout=1)
+
+            if label_id in deleted_ids:
+                continue
+
+            deleted_ids.add(label_id)
+            label = db_session.query(DomainLabel).filter_by(id=label_id).first()
+            if label:
+                label.last_searched = datetime.datetime.now()
+                db_session.commit()
+            else:
+                logger.error('label id {} received but could not be found in database'.format(
+                    label_id))
+        except queue.Empty:
+            pass
+
+    db_session.close()
+    Session.remove()
+    label_queue.close()
+
+
 def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, nr_processes,
-                   include_ip_encoded, location_match_queue, amount=1000, debug: bool=False):
+                   include_ip_encoded, location_match_queue, update_label_queue,
+                   amount=1000, debug: bool=False):
     """
     for all amount=0
     """
@@ -272,6 +322,11 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
     if include_ip_encoded:
         domain_types.append(DomainType.ip_encoded)
 
+    if debug:
+        last_search = datetime.datetime.now() - datetime.timedelta(minutes=1)
+    else:
+        last_search = datetime.datetime.now() - datetime.timedelta(days=7)
+
     for domain in get_all_domains_splitted_efficient(index,
                                                      block_limit=limit,
                                                      nr_processes=nr_processes,
@@ -287,28 +342,23 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
                 # test for skipping the second level domain
                 continue
 
-            if debug:
-                last_search = datetime.datetime.now() - datetime.timedelta(minutes=5)
-            else:
-                last_search = datetime.datetime.now() - datetime.timedelta(days=7)
-
             label_count += 1
             label_loc_found = False
             label_length += len(domain_label.name)
 
-            if domain_label.last_searched and domain_label.last_searched > last_search:
-                if domain_label.hints:
-                    label_wl_count += 1
+            if domain_label.last_searched:
+                if domain_label.last_searched > last_search:
+                    if domain_label.hints:
+                        label_wl_count += 1
 
-                continue
+                    continue
+                else:
+                    location_match_queue.put(domain_label.id)
 
             pm_count = collections.defaultdict(int)
 
-            domain_label.hints.clear()
-            db_session.commit()
-
             temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
-                                            location_match_queue, db_session)
+                                            location_match_queue, update_label_queue)
 
             for key, value in temp_gr_count.items():
                 match_count[key] += value
@@ -324,7 +374,6 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
         if loc_found:
             entries_wl_count += 1
 
-        db_session.commit()
         entries_count += 1
 
         if entries_count == amount:
@@ -351,11 +400,12 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
     logger.info(build_stat_string_for_logger())
     db_session.close()
     Session.remove()
+    update_label_queue.close()
     location_match_queue.close()
 
 
 def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, special_filter,
-                    location_match_queue: mp.Queue, db_session: Session) \
+                    location_match_queue: mp.Queue, update_label_queue: mp.Queue) \
         -> typing.DefaultDict[LocationCodeType, int]:
     """returns all matches for this label"""
     ids = set()
@@ -390,14 +440,14 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
                     if location_id in ids:
                         continue
 
-                    location_hint_tuples.append((location_id.decoded(), key, real_code_type, label_obj.id))
+                    location_hint_tuples.append((location_id.decode(), key, code_type,
+                                                 label_obj.id))
                     type_count[real_code_type] += 1
 
             label = label[1:]
 
     location_match_queue.put(location_hint_tuples)
-    label_obj.last_searched = datetime.datetime.now()
-    db_session.commit()
+    update_label_queue.put(label_obj.id)
 
     return type_count
 
