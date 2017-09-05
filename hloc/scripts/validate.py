@@ -10,7 +10,7 @@ import threading
 import collections
 import random
 import typing
-import queue
+import enum
 import datetime
 import operator
 
@@ -29,6 +29,21 @@ logger = None
 MAX_THREADS = 10
 
 
+@enum.unique
+class MeasurementStrategy(enum.Enum):
+    classic = 'classic'
+    anticipated = 'anticipated'
+    aggressive = 'aggressive'
+
+    def aliases(self):
+        if self == MeasurementStrategy.classic:
+            return ['classic', 'cl']
+        elif self == MeasurementStrategy.anticipated:
+            return ['anticipated', 'an']
+        elif self == MeasurementStrategy.aggressive:
+            return ['aggressive', 'ag']
+
+
 def __create_parser_arguments(parser: argparse.ArgumentParser):
     """Creates the arguments for the parser"""
     parser.add_argument('-p', '--number-processes', type=int, default=4,
@@ -36,6 +51,15 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-v', '--ip-version', type=str, default=constants.IPV4_IDENTIFIER,
                         choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
                         help='specify the ipVersion')
+    parser.add_argument('-s', '--measurement-strategy', type=str,
+                        default=MeasurementStrategy.classic.value,
+                        choices=(MeasurementStrategy.classic.aliases() +
+                                 MeasurementStrategy.anticipated.aliases() +
+                                 MeasurementStrategy.aggressive.aliases()),
+                        help='The used measurement strategy. '
+                             'See IDP Documentation for further explanation')
+    parser.add_argument('--number-of-probes-per-measurement', type=int, default=1,
+                        help='The number of probes used per measurement')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=10,
                         help='The number of domains taken per block to process them')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
@@ -57,13 +81,15 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                              'locally and remote')
     parser.add_argument('-ma', '--allowed-measurement-age', type=int,
                         help='The allowed measurement age in seconds')
+    parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
+                        help='Debug argument to prevent getting ripe probes')
+    parser.add_argument('--include-ip-encoded', action='store_true',
+                        help='Search also domains of type IP encoded')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
-    parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
-                        help='Debug argument to prevent getting ripe probes')
 
 
 def main():
@@ -106,8 +132,8 @@ def main():
 
         logger.info('{} locations without nodes'.format(len(null_locations)))
 
-    # logger.debug('Size of locations: {}'.format(pympler.asizeof.asizeof(locations)))
-    # logger.debug('Size of zmap results: {}'.format(pympler.asizeof.asizeof(zmap_results)))
+    measurement_strategy = MeasurementStrategy(args.measurement_strategy)
+
     logger.debug('finished ripe')
 
     processes = []
@@ -116,6 +142,7 @@ def main():
 
     if args.log_level == 'DEBUG':
         process_count = 1
+
     for pid in range(0, process_count):
         process = mp.Process(target=ripe_check_process,
                              args=(pid,
@@ -127,7 +154,10 @@ def main():
                                    args.allowed_measurement_age,
                                    args.api_key,
                                    args.domain_block_limit,
-                                   process_count),
+                                   process_count,
+                                   args.include_ip_encoded,
+                                   measurement_strategy,
+                                   args.number_of_probes_per_measurement),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -186,7 +216,9 @@ def ripe_check_process(pid: int,
                        api_key: str,
                        domain_block_limit: int,
                        nr_processes: int,
-                       include_ip_encoded: bool):
+                       include_ip_encoded: bool,
+                       measurement_strategy: MeasurementStrategy,
+                       number_of_probes_per_measurement: int):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -209,19 +241,19 @@ def ripe_check_process(pid: int,
         domain_types.append(DomainType.ip_encoded)
 
     try:
+        domain_id_generator = get_all_domain_ids_splitted(pid, domain_block_limit, nr_processes,
+                                                          domain_types,
+                                                          db_session)
 
-        domain_id_queue = queue.Queue(MAX_THREADS)
         def next_domain_id():
-            domain_ids = get_all_domain_ids_splitted(pid, domain_block_limit, nr_processes,
-                                                     domain_types,
-                                                     db_session)
-
-            for domain_id in domain_ids:
-                domain_id_queue.put(domain_id)
+            try:
+                return domain_id_generator.__next__()
+            except StopIteration:
+                return None
 
         for _ in range(0, MAX_THREADS):
             thread = threading.Thread(target=domain_check_threading_manage,
-                                      args=(domain_id_queue,
+                                      args=(next_domain_id,
                                             increment_domain_type_count,
                                             increment_count_for_type,
                                             ripe_create_sema,
@@ -231,6 +263,8 @@ def ripe_check_process(pid: int,
                                             wo_measurements,
                                             allowed_measurement_age,
                                             api_key,
+                                            measurement_strategy,
+                                            number_of_probes_per_measurement,
                                             db_session))
 
             threads.append(thread)
@@ -251,7 +285,7 @@ def ripe_check_process(pid: int,
     logger.info('correct_count {}'.format(correct_type_count))
 
 
-def domain_check_threading_manage(domain_id_queue: queue.Queue,
+def domain_check_threading_manage(next_domain_id: typing.Callable[[], int],
                                   increment_domain_type_count: typing.Callable[
                                       [DomainLocationType], None],
                                   increment_count_for_type: typing.Callable[
@@ -263,18 +297,20 @@ def domain_check_threading_manage(domain_id_queue: queue.Queue,
                                   wo_measurements: bool,
                                   allowed_measurement_age: int,
                                   api_key: str,
+                                  measurement_strategy: MeasurementStrategy,
+                                  number_of_probes_per_measurement: int,
                                   Session: typing.Callable[[], Session]):
     """The method called to create a thread and manage the domain checks"""
     db_session = Session()
 
     def get_domains() -> typing.Generator[Domain, None, None]:
-        try:
-            while True:
-                domain_id = domain_id_queue.get(timeout=2)
+        while True:
+            domain_id = next_domain_id()
+            if domain_id is not None:
                 t_domain = domain_by_id(domain_id, db_session)
                 yield t_domain
-        except queue.Empty:
-            pass
+            else:
+                break
 
     for domain in get_domains():
         try:
@@ -283,6 +319,7 @@ def domain_check_threading_manage(domain_id_queue: queue.Queue,
                                        increment_count_for_type, ripe_create_sema,
                                        ripe_slow_down_sema, ip_version, bill_to_address,
                                        wo_measurements, allowed_measurement_age, api_key,
+                                       measurement_strategy, number_of_probes_per_measurement,
                                        db_session)
             db_session.commit()
         except Exception:
@@ -303,14 +340,17 @@ def check_domain_location_ripe(domain: Domain,
                                wo_measurements: bool,
                                allowed_measurement_age: int,
                                api_key: str,
+                               measurement_strategy: MeasurementStrategy,
+                               number_of_probes_per_measurement: int,
                                db_session: Session):
     """checks if ip is at location"""
     matched = False
-    results = get_measurements_for_domain(domain, ip_version, db_session)
+    results = get_measurements_for_domain(domain, ip_version, allowed_measurement_age,
+                                          sorted_return=True, db_session=db_session)
 
     allowed_age = allowed_measurement_age
     if results:
-        newest_restult_timestamp = max([result.timestamp for result in results])
+        newest_restult_timestamp = results[0].timestamp
         time_since_last_result = (datetime.datetime.now() - newest_restult_timestamp).seconds
 
         if time_since_last_result < allowed_measurement_age:
@@ -364,65 +404,100 @@ def check_domain_location_ripe(domain: Domain,
         measurement_ids = []
 
     while next_match is not None:
-        location = next_match.location_info
-        near_nodes = location.nearby_probes
+        try:
+            location = next_match.location_info
+            near_nodes = location.nearby_probes
 
-        if not near_nodes:
-            matches.remove(next_match)
-            no_verification_matches.append(next_match)
-            next_match = get_next_match()
-            continue
+            if not near_nodes:
+                no_verification_matches.append(next_match)
+                continue
 
-        measurement_result = check_measurements_for_nodes(measurement_ids,
-                                                          location,
-                                                          near_nodes,
-                                                          results,
-                                                          ripe_slow_down_sema,
-                                                          allowed_age)
-        logger.debug('checked for measurement results')
+            measurement_results = check_measurements_for_nodes(measurement_ids,
+                                                               near_nodes,
+                                                               ripe_slow_down_sema,
+                                                               allowed_age)
+            db_session.add_all(measurement_results)
 
-        def add_new_result(new_result: MeasurementResult):
-            remove_obj = None
-            for iter_result in results:
-                if str(iter_result.location_id) == str(new_result.location_id):
-                    if iter_result.rtt <= new_result.rtt:
-                        return
-                    else:
-                        remove_obj = iter_result
-                        break
-            if remove_obj:
-                results.remove(remove_obj)
-            results.append(new_result)
+            measurement_result = measurement_results[0]
+            results.append(measurement_result)
 
-        if measurement_result is None:
+            logger.debug('checked for measurement results')
+
+            def add_new_result(new_result: MeasurementResult):
+                remove_obj = None
+                for iter_result in results:
+                    if str(iter_result.location_id) == str(new_result.location_id):
+                        if iter_result.rtt <= new_result.rtt:
+                            return
+                        else:
+                            remove_obj = iter_result
+                            break
+                if remove_obj:
+                    results.remove(remove_obj)
+                results.append(new_result)
+
+            make_measurement = measurement_result is None
             if not wo_measurements:
-                # only if no old measurement exists
-                logger.debug('creating measurement')
-                available_nodes = location.available_nodes
-                if not available_nodes:
-                    matches.remove(next_match)
-                    no_verification_matches.append(next_match)
-                    next_match = get_next_match()
-                    continue
+                make_measurement = make_measurement or (measurement_result.min_rtt is None and
+                                                        measurement_strategy in [
+                                                            MeasurementStrategy.anticipated,
+                                                            MeasurementStrategy.aggressive])
+                if not make_measurement:
+                    node_location_dist = location.gps_distance_haversine(
+                        measurement_result.probe.location)
 
-                measurement_result = create_and_check_measurement(
-                    str(domain.ip_for_version(ip_version)), ip_version, location, available_nodes,
-                    ripe_create_sema, ripe_slow_down_sema, api_key, bill_to_address=bill_to_address)
-                if measurement_result is None:
-                    matches.remove(next_match)
-                    next_match = get_next_match()
-                    continue
+                    make_measurement = measurement_result.min_rtt >= (
+                        constants.DEFAULT_BUFFER_TIME + node_location_dist / 100)
 
+            if make_measurement:
+                if not wo_measurements:
+                    # only if no old measurement exists
+                    logger.debug('creating measurement')
+                    available_nodes = location.available_probes([ip_version])
+
+                    if not available_nodes:
+                        no_verification_matches.append(next_match)
+                        continue
+
+                    measurement_results = create_and_check_measurement(
+                        str(domain.ip_for_version(ip_version)), ip_version, location,
+                        available_nodes, ripe_create_sema, ripe_slow_down_sema, api_key,
+                        bill_to_address=bill_to_address,
+                        number_of_probes=number_of_probes_per_measurement)
+
+                    if not measurement_results:
+                        continue
+
+                    measurement_result = min(measurement_results, key=lambda result: result.min_rtt)
+
+                    db_session.add_all(measurement_results)
+
+                    node_location_dist = location.gps_distance_haversine(
+                        measurement_result.probe_id.location)
+
+                    logger.debug('finished measurement')
+
+                    if measurement_result.min_rtt is None:
+                        increment_domain_type_count(DomainLocationType.not_reachable)
+                        return
+                    elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
+                                                       node_location_dist / 100):
+                        increment_count_for_type(next_match.code_type)
+                        matched = True
+                        increment_domain_type_count(DomainLocationType.verified)
+                        break
+                    else:
+                        add_new_result(measurement_result)
+
+            elif measurement_result.min_rtt is None:
+                increment_domain_type_count(DomainLocationType.not_reachable)
+                return
+            else:
                 node_location_dist = location.gps_distance_haversine(
-                    measurement_result.probe_id.location)
+                    measurement_result.probe.location)
 
-                logger.debug('finished measurement')
-
-                if measurement_result.min_rtt is None:
-                    increment_domain_type_count(DomainLocationType.not_reachable)
-                    return
-                elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
-                                                   node_location_dist / 100):
+                if measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
+                                                 node_location_dist / 100):
                     increment_count_for_type(next_match.code_type)
                     matched = True
                     increment_domain_type_count(DomainLocationType.verified)
@@ -430,25 +505,14 @@ def check_domain_location_ripe(domain: Domain,
                 else:
                     add_new_result(measurement_result)
 
-        elif measurement_result.min_rtt is None:
-            increment_domain_type_count(DomainLocationType.not_reachable)
-            return
-        else:
-            node_location_dist = location.gps_distance_haversine(measurement_result.probe.location)
+            no_verification_matches.append(next_match)
+            logger.debug('next match')
+        finally:
+            if not matched:
+                matches.remove(next_match)
+                next_match = get_next_match()
 
-            if measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
-                                             node_location_dist / 100):
-                increment_count_for_type(next_match.code_type)
-                matched = True
-                increment_domain_type_count(DomainLocationType.verified)
-                break
-            else:
-                add_new_result(measurement_result)
-
-        matches.remove(next_match)
-        no_verification_matches.append(next_match)
-        logger.debug('next match')
-        next_match = get_next_match()
+            db_session.commit()
 
     if not matched:
         still_matches = filter_possible_matches(no_verification_matches, results)
@@ -519,10 +583,6 @@ def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) 
 
             near_matches[min_res.probe.location].append(match)
 
-        # len_near_matches = 0
-        # for matches_arr in near_matches.values():
-        #     len_near_matches += len(matches_arr)
-
         if f_results[0].rtt > 75:
             def match_in_near_matches(m_match):
                 for near_match_arr in near_matches.values():
@@ -551,8 +611,7 @@ def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) 
     return len(matches) > 0
 
 
-NON_WORKING_PROBES = []
-NON_WORKING_PROBES_LOCK = threading.Lock()
+NON_WORKING_PROBES = set()
 
 
 def create_and_check_measurement(ip_addr: str, ip_version: str,
@@ -560,20 +619,22 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                                  ripe_create_sema: mp.Semaphore,
                                  ripe_slow_down_sema: mp.Semaphore,
                                  api_key: str,
-                                 bill_to_address: str=None) \
-        -> typing.Optional[RipeMeasurementResult]:
+                                 bill_to_address: str=None,
+                                 number_of_probes: int=1,
+                                 number_of_packets: int=1) \
+        -> typing.Optional[typing.List[RipeMeasurementResult]]:
     """creates a measurement for the parameters and checks for the created measurement"""
-    near_nodes = [node for node in nodes if node not in NON_WORKING_PROBES]
+    near_nodes_all = [node for node in nodes if node not in NON_WORKING_PROBES]
 
-    def new_near_node():
-        """Get a node from the near_nodes and return it"""
-        if len(near_nodes) > 0:
-            return near_nodes[random.randint(0, len(near_nodes) - 1)]
-        else:
-            return None
+    near_nodes = near_nodes_all[:]
 
-    near_node = new_near_node()
-    if near_node is None:
+    if number_of_probes <= 0:
+        raise ValueError('number_of_probes must be larger than 0')
+
+    while len(near_nodes) > number_of_probes:
+        del near_nodes[random.randint(0, len(near_nodes) - 1)]
+
+    if not near_nodes:
         return None
 
     with ripe_create_sema:
@@ -584,20 +645,25 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                         '{} test for location {}'.format(ip_addr, location.name),
                     RipeAtlasProbe.MeasurementKeys.ip_version.value: ip_version,
                     RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
-                    RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema
+                    RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema,
+                    RipeAtlasProbe.MeasurementKeys.num_packets.value: number_of_packets
                 }
                 if bill_to_address:
                     params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
 
-                measurement_result = near_node.measure_rtt(ip_addr, **params)
-                return measurement_result
-            except ProbeError:
-                with NON_WORKING_PROBES_LOCK:
-                    NON_WORKING_PROBES.append(near_node)
+                # TODO change code for multiple nodes emasurements
+                measurement_results = [near_nodes[0].measure_rtt(ip_addr, **params)]
 
-                near_nodes.remove(near_node)
-                near_node = new_near_node()
-                if near_node is None:
+                return measurement_results
+            except ProbeError:
+                NON_WORKING_PROBES.add(near_nodes[0])
+                for node in near_nodes:
+                    near_nodes_all.remove(node)
+
+                while len(near_nodes) > number_of_probes:
+                    del near_nodes[random.randint(0, len(near_nodes) - 1)]
+
+                if not near_nodes:
                     return None
 
 

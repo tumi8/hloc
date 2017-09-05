@@ -10,7 +10,7 @@ from sqlalchemy.dialects import postgresql
 
 from hloc import constants
 from .sql_alchemy_base import Base
-from .enums import LocationCodeType
+from .enums import LocationCodeType, AvailableType
 
 
 class AirportInfo(Base):
@@ -84,14 +84,23 @@ class Location(Base):
         self.lon = lon
         self._idfy_location()
 
-    def available_probes(self):
+    def available_probes(self, ip_versions: [str]):
         """
+        :return: the available probes for this location
+        """
+        ip_versions_needed = []
+        if constants.IPV4_IDENTIFIER in ip_versions and constants.IPV6_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.both_available)
+        elif constants.IPV4_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.ipv4_available)
+        elif constants.IPV6_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.ipv6_available)
+        else:
+            raise ValueError('no valid ip version in ip versions list')
 
-        :return:
-        """
         sorted_prbs = sorted(self.probes,
                              key=lambda probe: self.gps_distance_haversine(probe.location))
-        return [probe for probe in sorted_prbs if probe.available()][:25]
+        return [probe for probe in sorted_prbs if probe.available() in ip_versions_needed][:25]
 
     def _idfy_location(self):
         """
@@ -198,6 +207,21 @@ class LocationInfo(Location):
             setattr(self, name, value)
 
         super().__init__(lat, lon)
+
+    def available_probes(self, ip_versions: [str]):
+        ip_versions_needed = []
+        if constants.IPV4_IDENTIFIER in ip_versions and constants.IPV6_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.both_available)
+        elif constants.IPV4_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.ipv4_available)
+        elif constants.IPV6_IDENTIFIER in ip_versions:
+            ip_versions_needed.append(AvailableType.ipv6_available)
+        else:
+            raise ValueError('no valid ip version in ip versions list')
+
+        sorted_prbs = sorted(self.nearby_probes,
+                             key=lambda probe: self.gps_distance_haversine(probe.location))
+        return [probe for probe in sorted_prbs if probe.available() in ip_versions_needed][:25]
 
     def add_airport_info(self):
         """Creates and sets a new empty AirportInfo object"""

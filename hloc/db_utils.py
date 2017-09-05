@@ -4,6 +4,7 @@ A collection of queries connected to the location object
 """
 
 import typing
+import datetime
 import sqlalchemy as sqla
 import sqlalchemy.exc
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -108,55 +109,37 @@ def domains_for_ids(domain_ids: [int], db_session: Session) -> [Domain]:
 
 def get_measurements_for_domain(domain: Domain,
                                 ip_version: str,
+                                max_measurement_age: int,
+                                sorted_return: bool,
                                 db_session: Session) -> [MeasurementResult]:
     """
     :param domain: the domain for which measurements should be returned
     :param ip_version: ipv4 or ipv6
+    :param max_measurement_age: the maximal age of the measurements in seconds
+    :param sorted_return: if the returned values should be ordered by the rtt set to True
     :param db_session: a data base session on which the queries are executed
     :return: all measurements related to this domain
     """
-    return db_session.query(MeasurementResult).filter(
-        MeasurementResult.destination_address == domain.ip_for_version(ip_version))
-
-
-def get_all_domains_splitted(index: int, block_limit: int, nr_processes: int,
-                             domain_types: typing.List[DomainType], db_session: Session) \
-        -> typing.Generator[Domain, None, None]:
-    def make_db_request(offset, d_types):
-        if d_types:
-            return db_session.query(Domain).filter(Domain.classification_type.in_(d_types))\
-                .limit(block_limit).offset(offset)
-        else:
-            return db_session.query(Domain).limit(block_limit).offset(offset)
-
-    offset = index * block_limit
-
-    domains = make_db_request(offset, domain_types)
-    while domains.count():
-        offset += nr_processes * block_limit
-        for domain in domains:
-            yield domain
-        domains = make_db_request(offset, domain_types)
+    if not sorted_return:
+        return db_session.query(MeasurementResult).filter(
+            sqla.and_(MeasurementResult.destination_address == domain.ip_for_version(ip_version),
+                      MeasurementResult.timestamp >= datetime.datetime.now() - datetime.timedelta(
+                          seconds=max_measurement_age)))
+    else:
+        return db_session.query(MeasurementResult).filter(
+            sqla.and_(MeasurementResult.destination_address == domain.ip_for_version(ip_version),
+                      MeasurementResult.timestamp >= datetime.datetime.now() - datetime.timedelta(
+                          seconds=max_measurement_age)))\
+            .order_by(MeasurementResult.timestamp.desc())
 
 
 def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
                                 domain_types: typing.List[DomainType], db_session: Session) \
         -> typing.Generator[int, None, None]:
-    def make_db_request(offset, d_types):
-        if d_types:
-            return db_session.query(Domain.id).filter(Domain.classification_type.in_(d_types))\
-                .limit(block_limit).offset(offset)
-        else:
-            return db_session.query(Domain.id).limit(block_limit).offset(offset)
-
-    offset = index * block_limit
-
-    domain_ids = make_db_request(offset, domain_types)
-    while domain_ids.count():
-        offset += nr_processes * block_limit
-        for domain_id in domain_ids:
-            yield domain_id
-        domain_ids = make_db_request(offset, domain_types)
+    for domain_id in db_session.query(Domain.id).filter(
+            sqla.and_(Domain.id % nr_processes == index,
+                      Domain.classification_type.in_(domain_types))).yield_per(block_limit):
+        yield domain_id
 
 
 def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processes: int,

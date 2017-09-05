@@ -59,12 +59,10 @@ def __get_measurements_for_nodes(measurement_ids: [int],
 
 
 def check_measurements_for_nodes(measurement_ids: [int],
-                                 location: LocationInfo,
                                  nodes: [RipeAtlasProbe],
-                                 results: [MeasurementResult],
                                  ripe_slow_down_sema: mp.Semaphore,
                                  allowed_measurement_age: int) \
-        -> typing.Optional[MeasurementResult]:
+        -> typing.Optional[typing.List[MeasurementResult]]:
     """
     Check the measurements list for measurements from near_nodes
     :rtype: (float, dict)
@@ -79,6 +77,8 @@ def check_measurements_for_nodes(measurement_ids: [int],
     logging.debug('got measurement results')
     temp_result = None
     date_n = None
+
+    measurement_objs = []
     # near_node_ids = [node['id'] for node in nodes]
     for measurement_id, measurements in measurement_results:
         logging.debug('next result {}'.format(len(measurements)))
@@ -87,6 +87,7 @@ def check_measurements_for_nodes(measurement_ids: [int],
             if measurement.timestamp < oldest_allowed_time:
                 continue
 
+            measurement_objs.append(measurement)
             result_rtt = measurement.min_rtt
 
             if result_rtt is None:
@@ -100,6 +101,8 @@ def check_measurements_for_nodes(measurement_ids: [int],
 
             elif temp_result is None or result_rtt.min_rtt < temp_result.min_rtt:
                 temp_result = measurement
-                results.append(measurement)
+
+    measurement_objs.remove(temp_result)
+    measurement_objs.insert(0, temp_result)
 
     return temp_result
