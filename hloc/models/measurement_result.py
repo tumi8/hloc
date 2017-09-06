@@ -57,7 +57,7 @@ class RipeMeasurementResult(MeasurementResult):
     }
 
     class RipeMeasurementResultKey(enum.Enum):
-        destination_addr = 'dest_addr'
+        destination_addr = 'dst_addr'
         source_addr = 'src_addr'
         rtt_dicts = 'result'
         rtt = 'rtt'

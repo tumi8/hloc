@@ -297,7 +297,8 @@ class RipeAtlasProbe(Probe):
     def ipv6_capable(self) -> bool:
         """Should return if the probe is capable of performing ipv6 measurements"""
         if not self._probe_obj:
-            self._update()
+            if not self._update():
+                raise ProbeError('probe could not be fetched')
         return 'system-ipv6-capable' in [tag['slug'] for tag in self._probe_obj.tags]
 
     def update(self) -> bool:
@@ -311,6 +312,12 @@ class RipeAtlasProbe(Probe):
         return self._probe_obj.geometry and \
             self._probe_obj.geometry['coordinates'] == [self.location.lon, self.location.lat]
 
+    def is_rfc_1918(self) -> bool:
+        """Returns if the probe is behind a NAT according to RFC 1918"""
+        if not self._probe_obj:
+            if not self._update():
+                raise ProbeError('probe could not be fetched')
+        return 'system-ipv4-rfc1918' in [tag['slug'] for tag in self._probe_obj.tags]
 
 
 __all__ = ['Probe',
