@@ -60,7 +60,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                              'See IDP Documentation for further explanation')
     parser.add_argument('--number-of-probes-per-measurement', type=int, default=1,
                         help='The number of probes used per measurement')
-    parser.add_argument('-n', '--domain-block-limit', type=int, default=10,
+    parser.add_argument('-n', '--domain-block-limit', type=int, default=1000,
                         help='The number of domains taken per block to process them')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
                         help='How many request should normally be allowed per second '

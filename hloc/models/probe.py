@@ -100,10 +100,10 @@ class RipeAtlasProbe(Probe):
         ripe_slowdown_sema = 'ripe_slowdown_sema'
 
         @staticmethod
-        def get_default_for(property_key) -> typing.Any:
-            if property_key == RipeAtlasProbe.MeasurementKeys.Num_packets:
+        def get_default_for(property_key: str) -> typing.Any:
+            if property_key == RipeAtlasProbe.MeasurementKeys.num_packets.value:
                 return 1
-            elif property_key == RipeAtlasProbe.MeasurementKeys.Bill_to_address:
+            elif property_key == RipeAtlasProbe.MeasurementKeys.bill_to_address.value:
                 return None
             raise ValueError('Property ' + property_key + ' has no default value')
 
@@ -145,15 +145,19 @@ class RipeAtlasProbe(Probe):
             raise ProbeError('Probe currently not available')
 
         for prop_key in util.get_class_properties(RipeAtlasProbe.MeasurementKeys):
-            key = RipeAtlasProbe.MeasurementKeys().__getattribute__(prop_key)
+            if prop_key in ['name', 'value']:
+                continue
+
+            key = RipeAtlasProbe.MeasurementKeys(prop_key).value
             if key not in kwargs:
                 if key in self.required_keys:
-                    raise ValueError('Could not find required argument ' + key +
+                    raise ValueError('Could not find required argument ' +
+                                     RipeAtlasProbe.MeasurementKeys(key).value +
                                      ' for creating a Ripe Atlas measurement')
                 else:
                     kwargs[key] = RipeAtlasProbe.MeasurementKeys.get_default_for(key)
 
-        ripe_slowdown_sema = kwargs.pop(RipeAtlasProbe.MeasurementKeys().Ripe_Slowdown_Sema)
+        ripe_slowdown_sema = kwargs.pop(RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value)
 
         atlas_request = self._create_request(dest_address, kwargs)
 
@@ -183,26 +187,27 @@ class RipeAtlasProbe(Probe):
 
     def _create_request(self, dest_address, kwargs):
         """Creates a Ripe atlas request out of the arguments"""
-        if kwargs[RipeAtlasProbe.MeasurementKeys.IP_version] == constants.IPV4_IDENTIFIER:
+        if kwargs[RipeAtlasProbe.MeasurementKeys.ip_version.value] == constants.IPV4_IDENTIFIER:
             af = 4
         else:
             af = 6
 
-        packets = kwargs[RipeAtlasProbe.MeasurementKeys.Num_packets]
-        measurement_description = kwargs[RipeAtlasProbe.MeasurementKeys.Measurement_name]
+        packets = kwargs[RipeAtlasProbe.MeasurementKeys.num_packets.value]
+        measurement_description = kwargs[RipeAtlasProbe.MeasurementKeys.measurement_name.value]
 
         ping = ripe_atlas.Ping(af=af, packets=packets, target=dest_address,
                                description=measurement_description)
-        source = ripe_atlas.AtlasSource(value=self._id, requested=1, type='probes')
+        source = ripe_atlas.AtlasSource(value=self.probe_id, requested=1, type='probes')
 
         atlas_request_args = {
-            'key': kwargs[RipeAtlasProbe.MeasurementKeys.Api_key],
+            'key': kwargs[RipeAtlasProbe.MeasurementKeys.api_key.value],
             'measurements': [ping],
             'sources': [source],
             'is_oneoff': True
         }
-        if RipeAtlasProbe.MeasurementKeys.Bill_to_address in kwargs:
-            atlas_request_args['bill_to'] = kwargs[RipeAtlasProbe.MeasurementKeys.Bill_to_address]
+        if RipeAtlasProbe.MeasurementKeys.bill_to_address.value in kwargs:
+            atlas_request_args['bill_to'] = kwargs[
+                RipeAtlasProbe.MeasurementKeys.bill_to_address.value]
 
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
 
@@ -250,9 +255,11 @@ class RipeAtlasProbe(Probe):
         Should return if the probe is available for measurements
         :param max_age: :datetime.timedelta: the maximum age of the info
         """
-        if datetime.datetime.now() - max_age >= self._last_update:
+        if not self._last_update or datetime.datetime.now() - max_age >= self._last_update:
             if not self._update():
-                return None
+                if self._probe_obj:
+                    raise ValueError('Probes location changed')
+                raise ProbeError('Probe object could not be fetched')
 
         if not self._probe_obj:
             return AvailableType.unknown
@@ -298,11 +305,12 @@ class RipeAtlasProbe(Probe):
 
     def _update(self) -> bool:
         """Updates the probes status"""
-        self._probe_obj = ripe_atlas.Probe(id=self._id)
+        self._probe_obj = ripe_atlas.Probe(id=self.probe_id)
         self._last_update = datetime.datetime.now()
 
         return self._probe_obj.geometry and \
-            self._probe_obj.geometry['coordinates'] == (self.location.lon, self.location.lat)
+            self._probe_obj.geometry['coordinates'] == [self.location.lon, self.location.lat]
+
 
 
 __all__ = ['Probe',
