@@ -17,9 +17,13 @@ import collections
 import bz2
 import re
 import ipaddress
+import threading
+import queue
 
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
+
+import sqlalchemy.exc as sqla_exceptions
 
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
@@ -28,7 +32,6 @@ from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, Measurem
 
 
 logger = None
-probe_lock = mp.Lock()
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -120,14 +123,33 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                 continue
 
             if bz2_compressed:
-                with bz2.open(filename, 'rt') as ripe_archive_file:
-                    for line in ripe_archive_file:
-                        measurement_result = json.loads(line)
+                line_queue = queue.Queue(10**5)
+                finished_reading = threading.Event()
+                read_thread = threading.Thread(target=read_bz2_file_queued,
+                                               args=(line_queue, filename, finished_reading),
+                                               name='bz2 read thread')
+                read_thread.start()
 
-                        try:
-                            parse_measurement(measurement_result, db_session, days_in_past)
-                        except ripe_exceptions.APIResponseError:
-                            logger.exception()
+                def line_generator():
+                    try:
+                        rline = line_queue.get(2)
+                    except queue.Empty:
+                        return
+                    while True:
+                        yield rline
+                        if finished_reading.is_set() and line_queue.empty():
+                            return
+                        rline = line_queue.get()
+
+                for line in line_generator():
+                    measurement_result = json.loads(line)
+
+                    try:
+                        parse_measurement(measurement_result, db_session, days_in_past)
+                    except ripe_exceptions.APIResponseError:
+                        logger.exception()
+
+                read_thread.join()
             else:
                 with open(filename) as ripe_archive_filedesc, \
                     mmap.mmap(ripe_archive_filedesc.fileno(), 0,
@@ -153,22 +175,45 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     db_session.commit()
 
 
+def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
+    with bz2.open(filename, 'rt') as ripe_archive_file:
+        for line in ripe_archive_file:
+            line_queue.put(line)
+
+    finished_reading.set()
+
+
 def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
-    with probe_lock:
-        probe_db_obj = probe_for_id(probe.id, db_session)
+    probe_db_obj = probe_for_id(probe.id, db_session)
 
-        if probe_db_obj:
-            if probe_db_obj.update():
-                return probe_db_obj
+    if probe_db_obj:
+        if probe_db_obj.update():
+            return probe_db_obj
 
+    location = location_for_coordinates(probe.geometry['coordinates'][1],
+                                        probe.geometry['coordinates'][0],
+                                        db_session)
+    try:
+        db_session.commit()
+    except sqla_exceptions.IntegrityError:
+        db_session.rollback()
         location = location_for_coordinates(probe.geometry['coordinates'][1],
                                             probe.geometry['coordinates'][0],
-                                            db_session)
+                                            db_session,
+                                            create_new=False)
+        if not location:
+            raise
 
-        probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
-        db_session.add(probe_db_obj)
+    probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
+    db_session.add(probe_db_obj)
+    try:
         db_session.commit()
-        return probe_db_obj
+    except sqla_exceptions.IntegrityError:
+        probe_db_obj = probe_for_id(probe.id, db_session)
+        if not probe_db_obj:
+            raise
+
+    return probe_db_obj
 
 
 def parse_measurement(measurement_result: dict, db_session: Session, max_age: int):

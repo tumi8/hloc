@@ -66,10 +66,11 @@ def label_for_name(label_name: str, db_session: Session):
     return label
 
 
-def location_for_coordinates(lat: float, lon: float, db_session: Session) -> Location:
+def location_for_coordinates(lat: float, lon: float, db_session: Session, create_new: bool=True) \
+        -> Location:
     location = db_session.query(Location).filter_by(lat=lat, lon=lon).first()
 
-    if location:
+    if location or not create_new:
         return location
 
     location = Location(lat, lon)
