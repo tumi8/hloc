@@ -183,13 +183,14 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     finished_reading.set()
 
 
-def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
-    probe_db_obj = probe_for_id(probe.id, db_session)
+def parse_probe(probe_id: int, db_session: Session) -> RipeAtlasProbe:
+    probe_db_obj = probe_for_id(str(probe_id), db_session)
 
     if probe_db_obj:
         if probe_db_obj.update():
             return probe_db_obj
 
+    probe = ripe_atlas.Probe(id=probe_id)
     location = location_for_coordinates(probe.geometry['coordinates'][1],
                                         probe.geometry['coordinates'][0],
                                         db_session)
@@ -217,11 +218,6 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
 
 
 def parse_measurement(measurement_result: dict, db_session: Session, max_age: int):
-    probe_id = int(measurement_result[MeasurementKey.probe_id.value])
-
-    ripe_probe = ripe_atlas.Probe(id=probe_id)
-
-    probe = parse_probe(ripe_probe, db_session)
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
@@ -230,6 +226,10 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
 
     if MeasurementKey.destination.value not in measurement_result:
         return
+
+    probe_id = int(measurement_result[MeasurementKey.probe_id.value])
+
+    probe = parse_probe(probe_id, db_session)
 
     destination = measurement_result[MeasurementKey.destination.value]
 

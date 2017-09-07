@@ -78,14 +78,14 @@ def location_for_coordinates(lat: float, lon: float, db_session: Session, create
     return location
 
 
-def probe_for_id(probe_id: int, db_session: Session) -> Probe:
+def probe_for_id(probe_id: str, db_session: Session) -> Probe:
     """
     searches for a probe with the probe_id
     :param probe_id: the id of the probe
     :param db_session: a data base session on which the queries are executed
     :return (Probe): the Probe with the corresponding id or None
     """
-    return db_session.query(Probe).filter_by(probe_id=str(probe_id)).first()
+    return db_session.query(Probe).filter_by(probe_id=probe_id).first()
 
 
 def domain_by_id(domain_id: int, db_session: Session) -> Domain:
