@@ -160,6 +160,7 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
     location = location_for_coordinates(probe.geometry['coordinates'][1],
                                         probe.geometry['coordinates'][0],
                                         db_session)
+    db_session.commit()
 
     probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
     db_session.add(probe_db_obj)
