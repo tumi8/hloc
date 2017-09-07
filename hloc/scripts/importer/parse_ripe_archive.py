@@ -150,6 +150,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     except queue.Empty:
         pass
 
+    db_session.commit()
+
 
 def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
     with probe_lock:

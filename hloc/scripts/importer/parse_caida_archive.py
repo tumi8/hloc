@@ -124,6 +124,8 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     except queue.Empty:
         pass
 
+    db_session.commit()
+
 
 def probe_for_id(probe_id: str, lat: float, lon: float, db_session: Session):
     with probe_lock:
