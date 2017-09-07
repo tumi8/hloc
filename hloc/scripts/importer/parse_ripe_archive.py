@@ -16,6 +16,7 @@ import datetime
 import collections
 import bz2
 import re
+import ipaddress
 
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
@@ -102,6 +103,7 @@ class MeasurementKey(enum.Enum):
     min_rtt = 'min'
     type = 'type'
     timestamp = 'timestamp'
+    error = 'err'
 
 
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool):
@@ -219,9 +221,17 @@ def parse_measurement(measurement_result: dict, db_session: Session):
         for dest, rtt_ttl_tuples in destination_rtts.items():
             rtts = []
             ttls = []
+            found_ttls = False
             for rtt, ttl in rtt_ttl_tuples:
                 rtts.append(rtt)
-                ttls.append(ttl)
+                if ttl:
+                    found_ttls = True
+                    ttls.append(ttl)
+                else:
+                    ttls.append(-1)
+
+            if not found_ttls:
+                ttls.clear()
 
             result = RipeMeasurementResult()
             result.probe = probe
@@ -262,9 +272,16 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
         for result in measurement_result[MeasurementKey.result.value]:
             if MeasurementKey.result.value in result:
                 for inner_result in result[MeasurementKey.result.value]:
+                    if MeasurementKey.source.value not in inner_result or \
+                            MeasurementKey.rtt.value not in inner_result or \
+                            MeasurementKey.error.value in inner_result:
+                        continue
+
+                    if ipaddress.ip_address(MeasurementKey.source.value).is_private:
+                        continue
                     rtts[inner_result[MeasurementKey.source.value]].append((
                         inner_result[MeasurementKey.rtt.value],
-                        inner_result[MeasurementKey.ttl.value]))
+                        inner_result.get(MeasurementKey.ttl.value, None)))
     else:
         raise ValueError('No rtt found')
 
