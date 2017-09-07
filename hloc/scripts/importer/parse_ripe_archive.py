@@ -189,7 +189,7 @@ def parse_measurement(measurement_result: dict, db_session: Session):
 
     protocol = None
     if MeasurementKey.protocol.value in measurement_result:
-        protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol.value])
+        protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol.value].lower())
 
     measurement_id = measurement_result[MeasurementKey.measurement_id.value]
 
