@@ -23,7 +23,7 @@ import ripe.atlas.cousteau.exceptions as ripe_exceptions
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Location, Session, \
-    MeasurementProtocol
+    MeasurementProtocol, MeasurementError
 
 
 logger = None
@@ -172,6 +172,9 @@ def parse_measurement(measurement_result: dict, db_session: Session):
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
+    if MeasurementKey.destination.value not in measurement_result:
+        return
+
     destination = measurement_result[MeasurementKey.destination.value]
 
     behind_nat = False
@@ -206,6 +209,9 @@ def parse_measurement(measurement_result: dict, db_session: Session):
         result.protocol = protocol
         result.ripe_measurement_id = measurement_id
 
+        if not rtts:
+            result.error_msg = MeasurementError.not_reachable
+
         db_session.add(result)
         db_session.commit()
     elif measurement_result[MeasurementKey.type.value] == 'traceroute':
@@ -228,6 +234,9 @@ def parse_measurement(measurement_result: dict, db_session: Session):
             result.protocol = protocol
             result.ripe_measurement_id = measurement_id
 
+            if not rtts:
+                result.error_msg = MeasurementError.not_reachable
+
             db_session.add(result)
             db_session.commit()
 
@@ -236,7 +245,8 @@ def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [flo
     rtts = []
     if MeasurementKey.result.value in measurement_result:
         for result in measurement_result[MeasurementKey.result.value]:
-            rtts.append(result[MeasurementKey.rtt.value])
+            if MeasurementKey.rtt.value in result:
+                rtts.append(result[MeasurementKey.rtt.value])
     elif MeasurementKey.min_rtt.value in measurement_result:
         rtts.append(measurement_result[MeasurementKey.min_rtt.value])
     else:
@@ -250,10 +260,11 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
     rtts = collections.defaultdict(list)
     if MeasurementKey.result.value in measurement_result:
         for result in measurement_result[MeasurementKey.result.value]:
-            for inner_result in result[MeasurementKey.result.value]:
-                rtts[inner_result[MeasurementKey.source.value]].append((
-                    inner_result[MeasurementKey.rtt.value],
-                    inner_result[MeasurementKey.ttl.value]))
+            if MeasurementKey.result.value in result:
+                for inner_result in result[MeasurementKey.result.value]:
+                    rtts[inner_result[MeasurementKey.source.value]].append((
+                        inner_result[MeasurementKey.rtt.value],
+                        inner_result[MeasurementKey.ttl.value]))
     else:
         raise ValueError('No rtt found')
 
