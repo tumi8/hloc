@@ -277,7 +277,7 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
                             MeasurementKey.error.value in inner_result:
                         continue
 
-                    if ipaddress.ip_address(MeasurementKey.source.value).is_private:
+                    if ipaddress.ip_address(inner_result[MeasurementKey.source.value]).is_private:
                         continue
                     rtts[inner_result[MeasurementKey.source.value]].append((
                         inner_result[MeasurementKey.rtt.value],
