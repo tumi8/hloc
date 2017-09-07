@@ -38,9 +38,9 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-r', '--file-regex', type=str, default=r'(ping|traceroute).*\.bz2$')
     parser.add_argument('-t', '--plaintext', action='store_true', help='Use plaintext filereading')
     parser.add_argument('-d', '--debug', action='store_true')
-    parser.add_argument('-h', '--days-in-past', type=int, default=30,
+    parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
-    parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
+    parser.add_argument('-l', '--log-file', type=str, default='ripe-archive-import.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
