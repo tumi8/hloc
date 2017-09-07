@@ -28,6 +28,7 @@ from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, Measurem
 
 
 logger = None
+probe_lock = mp.Lock()
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -151,21 +152,21 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
 
 
 def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
-    probe_db_obj = probe_for_id(probe.id, db_session)
+    with probe_lock:
+        probe_db_obj = probe_for_id(probe.id, db_session)
 
-    if probe_db_obj:
-        if probe_db_obj.update():
-            return probe_db_obj
+        if probe_db_obj:
+            if probe_db_obj.update():
+                return probe_db_obj
 
-    location = location_for_coordinates(probe.geometry['coordinates'][1],
-                                        probe.geometry['coordinates'][0],
-                                        db_session)
-    db_session.commit()
+        location = location_for_coordinates(probe.geometry['coordinates'][1],
+                                            probe.geometry['coordinates'][0],
+                                            db_session)
 
-    probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
-    db_session.add(probe_db_obj)
-    db_session.commit()
-    return probe_db_obj
+        probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
+        db_session.add(probe_db_obj)
+        db_session.commit()
+        return probe_db_obj
 
 
 def parse_measurement(measurement_result: dict, db_session: Session, max_age: int):
@@ -223,7 +224,8 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
         db_session.add(result)
         db_session.commit()
     elif measurement_result[MeasurementKey.type.value] == 'traceroute':
-        destination_rtts = parse_traceroute_results(measurement_result)
+        destination_rtts, second_hop_latency = parse_traceroute_results(measurement_result)
+
         for dest, rtt_ttl_tuples in destination_rtts.items():
             rtts = []
             ttls = []
@@ -250,6 +252,10 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
             result.protocol = protocol
             result.ripe_measurement_id = measurement_id
 
+            if second_hop_latency and (not probe.second_hop_latency
+                                       or probe.second_hop_latency > second_hop_latency):
+                probe.second_hop_latency = second_hop_latency
+
             if not rtts:
                 result.error_msg = MeasurementError.not_reachable
 
@@ -272,10 +278,13 @@ def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [flo
 
 
 def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
-        -> typing.DefaultDict[str, typing.Tuple[float, int]]:
+        -> typing.Tuple[typing.DefaultDict[str, typing.Tuple[float, int]], typing.Optional[float]]:
     rtts = collections.defaultdict(list)
+    second_hop_latency = None
+
     if MeasurementKey.result.value in measurement_result:
         for result in measurement_result[MeasurementKey.result.value]:
+            hop_count = 0
             if MeasurementKey.result.value in result:
                 for inner_result in result[MeasurementKey.result.value]:
                     if MeasurementKey.source.value not in inner_result or \
@@ -285,13 +294,20 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
 
                     if ipaddress.ip_address(inner_result[MeasurementKey.source.value]).is_private:
                         continue
+
+                    hop_count += 1
+                    if hop_count == 2 and \
+                            (not second_hop_latency or
+                             inner_result[MeasurementKey.rtt.value] < second_hop_latency):
+                        second_hop_latency = inner_result[MeasurementKey.rtt.value]
+
                     rtts[inner_result[MeasurementKey.source.value]].append((
                         inner_result[MeasurementKey.rtt.value],
                         inner_result.get(MeasurementKey.ttl.value, None)))
     else:
         raise ValueError('No rtt found')
 
-    return rtts
+    return rtts, second_hop_latency
 
 
 if __name__ == '__main__':

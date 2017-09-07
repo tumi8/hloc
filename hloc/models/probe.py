@@ -87,6 +87,8 @@ class Probe(Base):
 class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
 
+    second_hop_latency = sqla.Column(sqla.Float)
+
     __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
 
     required_keys = ['measurement_name', 'ip_version', 'api_key', 'ripe_slowdown_sema']
@@ -133,7 +135,7 @@ class RipeAtlasProbe(Probe):
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
         probe = RipeAtlasProbe()
-        probe.id = _id
+        probe.probe_id = _id
         probe.location = _location
         probe._update()
 

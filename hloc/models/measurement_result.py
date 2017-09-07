@@ -67,7 +67,7 @@ class RipeMeasurementResult(MeasurementResult):
     ripe_measurement_id = sqla.Column(sqla.Integer)
 
     @staticmethod
-    def create_from_dict(ripe_result_dict):
+    def create_from_dict(ripe_result_dict) -> 'RipeMeasurementResult':
         """
         
         :param ripe_result_dict: the measurement dict from ripe.atlas.cousteau.AtlasResultsRequest  
