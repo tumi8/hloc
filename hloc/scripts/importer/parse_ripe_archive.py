@@ -40,7 +40,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
-    parser.add_argument('-l', '--log-file', type=str, default='ripe-archive-import.log',
+    parser.add_argument('-l', '--logging-file', type=str, default='ripe-archive-import.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
