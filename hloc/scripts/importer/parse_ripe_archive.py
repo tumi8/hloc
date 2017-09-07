@@ -22,9 +22,9 @@ import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
 
 from hloc import util
-from hloc.db_utils import create_session_for_process, probe_for_id
-from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Location, Session, \
-    MeasurementProtocol, MeasurementError
+from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
+from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, MeasurementProtocol, \
+    MeasurementError
 
 
 logger = None
@@ -124,7 +124,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result = json.loads(line)
 
                         try:
-                            parse_measurement(measurement_result, db_session)
+                            parse_measurement(measurement_result, db_session, days_in_past)
                         except ripe_exceptions.APIResponseError:
                             logger.exception()
             else:
@@ -137,7 +137,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result = json.loads(line)
 
                         try:
-                            parse_measurement(measurement_result, db_session)
+                            parse_measurement(measurement_result, db_session, days_in_past)
                         except ripe_exceptions.APIResponseError:
                             logger.exception()
 
@@ -157,7 +157,9 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
         if probe_db_obj.update():
             return probe_db_obj
 
-    location = Location(probe.geometry['coordinates'][1], probe.geometry['coordinates'][0])
+    location = location_for_coordinates(probe.geometry['coordinates'][1],
+                                        probe.geometry['coordinates'][0],
+                                        db_session)
 
     probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
     db_session.add(probe_db_obj)
@@ -165,7 +167,7 @@ def parse_probe(probe: ripe_atlas.Probe, db_session: Session) -> RipeAtlasProbe:
     return probe_db_obj
 
 
-def parse_measurement(measurement_result: dict, db_session: Session):
+def parse_measurement(measurement_result: dict, db_session: Session, max_age: int):
     probe_id = int(measurement_result[MeasurementKey.probe_id.value])
 
     ripe_probe = ripe_atlas.Probe(id=probe_id)
@@ -173,6 +175,9 @@ def parse_measurement(measurement_result: dict, db_session: Session):
     probe = parse_probe(ripe_probe, db_session)
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
+
+    if (datetime.datetime.now() - timestamp).days >= max_age:
+        return
 
     if MeasurementKey.destination.value not in measurement_result:
         return
