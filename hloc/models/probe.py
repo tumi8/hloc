@@ -322,6 +322,33 @@ class RipeAtlasProbe(Probe):
         return 'system-ipv4-rfc1918' in [tag['slug'] for tag in self._probe_obj.tags]
 
 
+class CaidaArkProbe(Probe):
+
+    __mapper_args__ = {'polymorphic_identity': 'caida_ark'}
+
+    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
+        raise NotImplementedError('Caida Results are only gathered passively')
+
+    @property
+    def last_update(self) -> datetime.datetime:
+        raise NotImplementedError("Caida Probes are passive")
+
+    def available(self, max_age: datetime.timedelta) -> AvailableType:
+        return AvailableType.unknown
+
+    def is_available(self, max_age: datetime.timedelta) -> bool:
+        return False
+
+    @property
+    def ipv6_capable(self) -> bool:
+        return False
+
+    @staticmethod
+    def parse_from_json(json_dict) -> typing.Optional['CaidaArkProbe']:
+        return None
+
+
 __all__ = ['Probe',
            'RipeAtlasProbe',
+           'CaidaArkProbe'
            ]

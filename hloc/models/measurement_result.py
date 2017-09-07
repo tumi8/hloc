@@ -5,6 +5,7 @@
 
 import enum
 import datetime
+import typing
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
 from sqlalchemy.dialects import postgresql
@@ -101,6 +102,31 @@ class RipeMeasurementResult(MeasurementResult):
         return measurement_result
 
 
-__all__ = ['MeasurementResult',
-           'RipeMeasurementResult',
-           ]
+class CaidaArkMeasurementResult(MeasurementResult):
+    __mapper_args__ = {
+        'polymorphic_identity': 'caida_ark_measurement'
+    }
+
+    @staticmethod
+    def create_from_archive_line(archive_line: str, caida_probe_id: str) \
+            -> 'CaidaArkMeasurementResult':
+        timestamp_str, src, dst, rtt_str = archive_line.split(';')
+        timestamp = datetime.datetime.fromtimestamp(int(timestamp_str))
+        rtt = float(rtt_str)
+
+        measurement_result = CaidaArkMeasurementResult(probe_id=caida_probe_id,
+                                                       timestamp=timestamp,
+                                                       source_address=src,
+                                                       destination_address=dst,
+                                                       rtts=[rtt],
+                                                       measurement_protocol=MeasurementProtocol.icmp
+                                                       )
+
+        return measurement_result
+
+
+__all__ = [
+    'MeasurementResult',
+    'RipeMeasurementResult',
+    'CaidaArkMeasurementResult',
+   ]
