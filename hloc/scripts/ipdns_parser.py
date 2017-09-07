@@ -231,7 +231,6 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
 
                 counter += 1
                 if counter >= 10**4:
-                    logger.debug('saving')
                     save_labels(domain_labels, labels_to_save, new_labels, db_session)
                     counter = 0
                     ccounter +=1
