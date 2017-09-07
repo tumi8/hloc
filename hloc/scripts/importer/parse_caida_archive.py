@@ -141,6 +141,9 @@ def probe_for_id(probe_id: str, lat: float, lon: float, db_session: Session):
 
 
 def parse_measurement(archive_line: str, probe_id: str, db_session: Session, days_in_past: int):
+    if archive_line.startswith('timestamp'):
+        return
+
     measurement = CaidaArkMeasurementResult.create_from_archive_line(archive_line, probe_id)
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
