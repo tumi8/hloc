@@ -180,9 +180,9 @@ def parse_measurement(measurement_result: dict, db_session: Session):
             MeasurementKey.source_alt.value in measurement_result:
         behind_nat = probe.is_rfc_1918()
 
-    if MeasurementKey.source in measurement_result:
+    if MeasurementKey.source.value in measurement_result:
         source = measurement_result[MeasurementKey.source.value]
-    elif MeasurementKey.source_alt in measurement_result:
+    elif MeasurementKey.source_alt.value in measurement_result:
         source = measurement_result[MeasurementKey.source_alt.value]
     else:
         raise ValueError('source not found {}'.format(str(measurement_result)))
@@ -191,7 +191,7 @@ def parse_measurement(measurement_result: dict, db_session: Session):
     if MeasurementKey.protocol.value in measurement_result:
         protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol.value])
 
-    measurement_id = measurement_result[MeasurementKey.measurement_id]
+    measurement_id = measurement_result[MeasurementKey.measurement_id.value]
 
     if measurement_result[MeasurementKey.type.value] == 'ping':
         rtts = parse_ping_results(measurement_result)
@@ -248,10 +248,10 @@ def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [flo
 def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
         -> typing.DefaultDict[str, typing.Tuple[float, int]]:
     rtts = collections.defaultdict(list)
-    if MeasurementKey.result in measurement_result:
+    if MeasurementKey.result.value in measurement_result:
         for result in measurement_result[MeasurementKey.result.value]:
             for inner_result in result[MeasurementKey.result.value]:
-                rtts[inner_result[MeasurementKey.source]].append((
+                rtts[inner_result[MeasurementKey.source.value]].append((
                     inner_result[MeasurementKey.rtt.value],
                     inner_result[MeasurementKey.ttl.value]))
     else:
