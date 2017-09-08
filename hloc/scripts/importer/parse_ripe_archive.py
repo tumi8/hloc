@@ -246,6 +246,9 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
     else:
         raise ValueError('source not found {}'.format(str(measurement_result)))
 
+    if not source:
+        source = None
+
     protocol = None
     if MeasurementKey.protocol.value in measurement_result:
         protocol = MeasurementProtocol(measurement_result[MeasurementKey.protocol.value].lower())
@@ -289,6 +292,7 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
                 ttls.clear()
 
             result = RipeMeasurementResult()
+            result.from_traceroute = True
             result.probe = probe
             result.timestamp = timestamp
             result.destination_address = destination
