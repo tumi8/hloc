@@ -113,6 +113,8 @@ class MeasurementKey(enum.Enum):
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool):
     Session = create_session_for_process()
     db_session = Session()
+
+    probe_dct = {}
     try:
         while True:
             filename = filenames.get(timeout=1)
@@ -145,7 +147,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     measurement_result = json.loads(line)
 
                     try:
-                        parse_measurement(measurement_result, db_session, days_in_past)
+                        parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
                     except ripe_exceptions.APIResponseError:
                         logger.exception()
 
@@ -160,7 +162,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result = json.loads(line)
 
                         try:
-                            parse_measurement(measurement_result, db_session, days_in_past)
+                            parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
                         except ripe_exceptions.APIResponseError:
                             logger.exception()
 
@@ -217,7 +219,8 @@ def parse_probe(probe_id: int, db_session: Session) -> RipeAtlasProbe:
     return probe_db_obj
 
 
-def parse_measurement(measurement_result: dict, db_session: Session, max_age: int):
+def parse_measurement(measurement_result: dict, db_session: Session, max_age: int,
+                      probe_dct: [int, ripe_atlas.Probe]):
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
@@ -229,7 +232,11 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
 
     probe_id = int(measurement_result[MeasurementKey.probe_id.value])
 
-    probe = parse_probe(probe_id, db_session)
+    if probe_id in probe_dct:
+        probe = probe_dct[probe_id]
+    else:
+        probe = parse_probe(probe_id, db_session)
+        probe_dct[probe_id] = probe
 
     destination = measurement_result[MeasurementKey.destination.value]
 
