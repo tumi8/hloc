@@ -10,7 +10,7 @@ import sqlalchemy.exc
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, \
-    DomainType, Location, engine
+    DomainType, Location, LocationInfo, AirportInfo, engine
 
 
 def create_session_for_process():
@@ -75,6 +75,16 @@ def location_for_coordinates(lat: float, lon: float, db_session: Session, create
 
     location = Location(lat, lon)
     db_session.add(location)
+    return location
+
+
+def location_for_iata_code(iata_code: str, db_session: Session) -> LocationInfo:
+    location = db_session.query(LocationInfo).join(AirportInfo).filter(
+        iata_code == sqla.any_(AirportInfo.iata_codes)).first()
+    # location = db_session.query(LocationInfo).from_statement(sqla.text("""
+    #     SELECT loc_info.*
+    #     FROM locations loc_info join airport_infos air_infos on(loc_info.airport_info_id = air_infos.id)
+    #     WHERE :iata_code = ANY (air_infos.iata_codes)""")).params(iata_code=iata_code).first()
     return location
 
 
