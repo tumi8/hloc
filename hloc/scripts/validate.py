@@ -74,13 +74,15 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-ak', '--api-key', type=str,
                         help='The RIPE Atlas Api key',
                         default='1dc0b3c2-5e97-4a87-8864-0e5a19374e60')
-    parser.add_argument('-bt', '--bill-to', type=str,
+    parser.add_argument('--bill-to', type=str,
                         help='The RIPE Atlas Bill to address')
     parser.add_argument('-o', '--without-new-measurements', action='store_true',
                         help='Evaluate the matches using only data/measurements already available '
                              'locally and remote')
     parser.add_argument('-ma', '--allowed-measurement-age', type=int,
                         help='The allowed measurement age in seconds')
+    parser.add_argument('-bt', '--buffer-time', type=float, default=constants.DEFAULT_BUFFER_TIME,
+                        help='The assumed amount of time spent in router buffers')
     parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
                         help='Debug argument to prevent getting ripe probes')
     parser.add_argument('--include-ip-encoded', action='store_true',
@@ -157,7 +159,8 @@ def main():
                                    process_count,
                                    args.include_ip_encoded,
                                    measurement_strategy,
-                                   args.number_of_probes_per_measurement),
+                                   args.number_of_probes_per_measurement,
+                                   args.buffer_time),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -218,7 +221,8 @@ def ripe_check_process(pid: int,
                        nr_processes: int,
                        include_ip_encoded: bool,
                        measurement_strategy: MeasurementStrategy,
-                       number_of_probes_per_measurement: int):
+                       number_of_probes_per_measurement: int,
+                       buffer_time: float):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -265,6 +269,7 @@ def ripe_check_process(pid: int,
                                             api_key,
                                             measurement_strategy,
                                             number_of_probes_per_measurement,
+                                            buffer_time,
                                             db_session))
 
             threads.append(thread)
@@ -276,6 +281,9 @@ def ripe_check_process(pid: int,
     except KeyboardInterrupt:
         logger.warning('SIGINT recognized stopping Process')
         pass
+    finally:
+        db_session.close()
+        Session.remove()
 
     count_alive = 0
     for thread in threads:
@@ -299,6 +307,7 @@ def domain_check_threading_manage(next_domain_id: typing.Callable[[], int],
                                   api_key: str,
                                   measurement_strategy: MeasurementStrategy,
                                   number_of_probes_per_measurement: int,
+                                  buffer_time: float,
                                   Session: typing.Callable[[], Session]):
     """The method called to create a thread and manage the domain checks"""
     db_session = Session()
@@ -320,7 +329,7 @@ def domain_check_threading_manage(next_domain_id: typing.Callable[[], int],
                                        ripe_slow_down_sema, ip_version, bill_to_address,
                                        wo_measurements, allowed_measurement_age, api_key,
                                        measurement_strategy, number_of_probes_per_measurement,
-                                       db_session)
+                                       buffer_time, db_session)
             db_session.commit()
         except Exception:
             logger.exception('Check Domain Error')
@@ -342,6 +351,7 @@ def check_domain_location_ripe(domain: Domain,
                                api_key: str,
                                measurement_strategy: MeasurementStrategy,
                                number_of_probes_per_measurement: int,
+                               buffer_time: float,
                                db_session: Session):
     """checks if ip is at location"""
     matched = False
@@ -371,7 +381,7 @@ def check_domain_location_ripe(domain: Domain,
         """
         nonlocal matches, matched
         logger.debug('{} matches before filter'.format(len(matches)))
-        return_val = filter_possible_matches(matches, results)
+        return_val = filter_possible_matches(matches, results, buffer_time)
         logger.debug('{} matches after filter ret val {}'.format(len(matches), return_val))
 
         if not return_val:
@@ -447,7 +457,7 @@ def check_domain_location_ripe(domain: Domain,
                         measurement_result.probe.location)
 
                     make_measurement = measurement_result.min_rtt >= (
-                        constants.DEFAULT_BUFFER_TIME + node_location_dist / 100)
+                        buffer_time + node_location_dist / 100)
 
             if make_measurement:
                 if not wo_measurements:
@@ -480,7 +490,7 @@ def check_domain_location_ripe(domain: Domain,
                     if measurement_result.min_rtt is None:
                         increment_domain_type_count(DomainLocationType.not_reachable)
                         return
-                    elif measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
+                    elif measurement_result.min_rtt < (buffer_time +
                                                        node_location_dist / 100):
                         increment_count_for_type(next_match.code_type)
                         matched = True
@@ -496,8 +506,7 @@ def check_domain_location_ripe(domain: Domain,
                 node_location_dist = location.gps_distance_haversine(
                     measurement_result.probe.location)
 
-                if measurement_result.min_rtt < (constants.DEFAULT_BUFFER_TIME +
-                                                 node_location_dist / 100):
+                if measurement_result.min_rtt < (buffer_time + node_location_dist / 100):
                     increment_count_for_type(next_match.code_type)
                     matched = True
                     increment_domain_type_count(DomainLocationType.verified)
@@ -515,7 +524,7 @@ def check_domain_location_ripe(domain: Domain,
             db_session.commit()
 
     if not matched:
-        still_matches = filter_possible_matches(no_verification_matches, results)
+        still_matches = filter_possible_matches(no_verification_matches, results, buffer_time)
         if still_matches:
             increment_domain_type_count(DomainLocationType.verification_not_possible)
         else:
@@ -544,7 +553,7 @@ def eliminate_duplicate_results(results: [MeasurementResult]):
         results.remove(obj)
 
 
-def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) \
+def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult], buffer_time:float) \
         -> typing.Union[bool, typing.Tuple[float, CodeMatch]]:
     """
     Sort the matches after their most probable location
@@ -571,7 +580,7 @@ def filter_possible_matches(matches: [CodeMatch], results: [MeasurementResult]) 
 
                 # Only verify location if there is also a match
                 if distance < 100 and \
-                        result.min_rtt < constants.DEFAULT_BUFFER_TIME + distance / 100:
+                        result.min_rtt < buffer_time + distance / 100:
                     return result.rtt, match
 
                 location_distances.append((result, distance))

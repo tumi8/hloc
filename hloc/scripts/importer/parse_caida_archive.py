@@ -199,7 +199,11 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     except queue.Empty:
         pass
 
+
     db_session.commit()
+
+    db_session.close()
+    Session.remove()
 
 
 def parse_measurement(archive_line: str, probe: CaidaArkProbe, db_session: Session, days_in_past: int):

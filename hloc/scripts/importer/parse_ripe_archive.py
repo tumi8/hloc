@@ -176,6 +176,9 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
 
     db_session.commit()
 
+    db_session.close()
+    Session.remove()
+
 
 def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
     with bz2.open(filename, 'rt') as ripe_archive_file:

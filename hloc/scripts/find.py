@@ -398,6 +398,7 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
         return stats_string
 
     logger.info(build_stat_string_for_logger())
+
     db_session.close()
     Session.remove()
     update_label_queue.close()
