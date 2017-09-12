@@ -149,7 +149,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     try:
                         parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
                     except ripe_exceptions.APIResponseError:
-                        logger.exception()
+                        logger.exception("API Response Error")
 
                 read_thread.join()
             else:
@@ -164,7 +164,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         try:
                             parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
                         except ripe_exceptions.APIResponseError:
-                            logger.exception()
+                            logger.exception("API Response Error")
 
                         line = ripe_archive_file.readline().decode('utf-8')
 
