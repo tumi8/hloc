@@ -1,7 +1,7 @@
 #! /bin/sh
 
 actualDate=`date +%s`
-oldestDateAllowed=`expr ${actualDate} - 24 * 3600 * 30`
+oldestDateAllowed=`expr ${actualDate} - 24 \* 3600 \* 30`
 
 for filename in $@;
 do

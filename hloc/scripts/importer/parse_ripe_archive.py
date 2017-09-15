@@ -119,7 +119,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
         while True:
             filename = filenames.get(timeout=1)
 
-            modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+            file_date_str = filename.split('.')[0][-10:]
+            modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
 
             if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
                 continue
@@ -357,7 +358,7 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
                         continue
 
                     hop_count += 1
-                    if hop_count == 2 and \
+                    if hop_count >= 2 and \
                             (not second_hop_latency or
                              inner_result[MeasurementKey.rtt.value] < second_hop_latency):
                         second_hop_latency = inner_result[MeasurementKey.rtt.value]
