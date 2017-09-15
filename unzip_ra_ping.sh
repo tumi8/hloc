@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/bash
 
 actualDate=`date +%s`
 oldestDateAllowed=`expr ${actualDate} - 24 \* 3600 \* 30`
