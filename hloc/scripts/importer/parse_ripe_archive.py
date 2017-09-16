@@ -188,7 +188,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
               'type: .type, result: [.result[] | select(has("result")) | {result: ' \
               '[.result[] | select(has("rtt") and has("from") and has("err") == false) ' \
               '| {rtt: .rtt, ttl: .ttl, from: .from}], hop: .hop}], proto: .proto, ' \
-              'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}'
+              'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}"'
 
     subprocess_call = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True,
                                        universal_newlines=True)
