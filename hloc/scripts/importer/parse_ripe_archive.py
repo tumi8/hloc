@@ -183,19 +183,19 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
 def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
     oldest_date_allowed = int(datetime.datetime.now().timestamp())
     if 'traceroute' in filename:
-        command = 'bzcat ' + filename + ' | jq -c ". | select(.timestamp >= ' + \
+        command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
                   'type: .type, result: [.result[] | select(has("result")) | {result: ' \
                   '[.result[] | select(has("rtt") and has("from") and has("err") == false) ' \
                   '| {rtt: .rtt, ttl: .ttl, from: .from}], hop: .hop}], proto: .proto, ' \
-                  'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}"'
+                  'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
     else:
-        command = 'bzcat ' + filename + ' | jq -c ". | select(.timestamp >= ' + \
+        command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
                   'type: .type, result: [.result[] | select(has("rtt")) | {rtt: .rtt}], ' \
-                  'proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}"'
+                  'proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
 
     subprocess_call = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True,
                                        universal_newlines=True)
