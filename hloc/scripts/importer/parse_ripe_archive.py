@@ -197,11 +197,10 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   'type: .type, result: [.result[] | select(has("rtt")) | {rtt: .rtt}], ' \
                   'proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
 
-    subprocess_call = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True,
-                                       universal_newlines=True)
-
-    for line in iter(subprocess_call.stdout.readline, ''):
-        line_queue.put(line)
+    with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
+                          bufsize=1) as subprocess_call:
+        for line in subprocess_call.stdout:
+            line_queue.put(line)
 
     finished_reading.set()
 
