@@ -4,32 +4,30 @@ Parse data from the ripe archive files
 """
 
 import argparse
-import os
-import sys
-import multiprocessing as mp
-import mmap
-import json
-import enum
-import queue
-import typing
-import datetime
-import collections
 import bz2
-import re
+import collections
+import datetime
+import enum
 import ipaddress
-import threading
+import json
+import mmap
+import multiprocessing as mp
+import os
 import queue
+import re
+import subprocess
+import sys
+import threading
+import typing
 
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
-
 import sqlalchemy.exc as sqla_exceptions
 
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, MeasurementProtocol, \
     MeasurementError
-
 
 logger = None
 
@@ -163,7 +161,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result = json.loads(line)
 
                         try:
-                            parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
+                            parse_measurement(measurement_result, db_session, days_in_past,
+                                              probe_dct)
                         except ripe_exceptions.APIResponseError:
                             logger.exception("API Response Error")
 
@@ -182,9 +181,20 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
 
 
 def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
-    with bz2.open(filename, 'rt') as ripe_archive_file:
-        for line in ripe_archive_file:
-            line_queue.put(line)
+    oldest_date_allowed = int(datetime.datetime.now().timestamp())
+    command = 'bzcat ' + filename + ' | jq -c ". | select(.timestamp >= ' + \
+              str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
+              'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
+              'type: .type, result: [.result[] | select(has("result")) | {result: ' \
+              '[.result[] | select(has("rtt") and has("from") and has("err") == false) ' \
+              '| {rtt: .rtt, ttl: .ttl, from: .from}], hop: .hop}], proto: .proto, ' \
+              'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}'
+
+    subprocess_call = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True,
+                                       universal_newlines=True)
+
+    for line in iter(subprocess_call.stdout.readline, ''):
+        line_queue.put(line)
 
     finished_reading.set()
 
