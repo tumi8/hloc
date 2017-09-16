@@ -200,7 +200,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
                           bufsize=1) as subprocess_call:
         for line in subprocess_call.stdout:
-            line_queue.put(line)
+            line_queue.put(line.decode('utf-8'))
 
     finished_reading.set()
 
