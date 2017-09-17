@@ -116,8 +116,9 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     try:
         while True:
             filename = filenames.get(timeout=1)
+            logger.info('parsing {}'.format(filename))
 
-            file_date_str = filename.split('.')[0][-10:]
+            file_date_str = str(os.path.basename(filename).split('.')[0][-10:])
             modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
 
             if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
@@ -135,6 +136,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     try:
                         rline = line_queue.get(2)
                     except queue.Empty:
+                        logger.exception('empty queue for {}'.format(filename))
                         return
                     while True:
                         yield rline
@@ -179,9 +181,11 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     db_session.close()
     Session.remove()
 
+    logger.info('finished parsing')
+
 
 def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
-    oldest_date_allowed = int(datetime.datetime.now().timestamp())
+    oldest_date_allowed = int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
     if 'traceroute' in filename:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
@@ -197,11 +201,13 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   'type: .type, result: [.result[] | select(has("rtt")) | {rtt: .rtt}], ' \
                   'proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
 
+    logger.debug('reading bz2 compressed file command:\n{}'.format(command))
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
                           bufsize=1) as subprocess_call:
         for line in subprocess_call.stdout:
-            line_queue.put(line.decode('utf-8'))
+            line_queue.put(line)
 
+    logger.debug('finished reading {}'.format(filename))
     finished_reading.set()
 
 

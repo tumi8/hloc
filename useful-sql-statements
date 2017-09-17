@@ -1,8 +1,15 @@
 CREATE OR REPLACE VIEW valid9msView(domain_id, domain_name, hint_location_id, hint_location_name, location_hint_id, measurement_result_id, probe_id)
 AS SELECT domainsWithLocation(9.0);
 
-CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, newestDateAllowed datetime) RETURNS integer, varchar, varchar, varchar, integer, integer, varchar
-    AS $$ SELECT domains.id, domains.name, hint_location.id, hint_location.name, location_hints.id, measurement_results.id, probes.probe_id
+CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, newestDateAllowed datetime) RETURNS integer, varchar, varchar, varchar, integer, integer, varchar, numeric
+    AS $$ SELECT domain_id, domain_name, hint_location_id, hint_location_name, location_hints_id, measurement_results_id, probe_id, distance
+        FROM domainsWithDistanceRTTs(newestDateAllowed) as temp_table
+        WHERE distance / 100 + buffertime > min_rtt $$
+    LANGUAGE SQL
+    RETURNS NULL on NULL INPUT;
+
+CREATE OR REPLACE FUNCTION domainsWithDistanceRTTs(newestDateAllowed datetime) RETURNS integer, varchar, varchar, varchar, integer, integer, varchar, numeric, numeric
+    AS $$ SELECT domains.id as domain_id, domains.name as domain_name, hint_location.id as hint_location_id, hint_location.name as hint_location_name, location_hints.id as location_hints_id, measurement_results.id as measurement_results_id, probes.probe_id as probe_id, gpsDistance(hint_location.lat, hint_location.lon, measurement_location.lat, measurement_location.lon) as distance, measurement_results.min_rtt as min_rtt
         FROM domains join domain_to_labels d_t_label on (domain.id = d_t_label.domain_id and domains.classification_type = 'valid')
             join domain_labels on (domain_labels.id = d_t_label.domain_label_id)
             join location_hint_labels loc_hint on (domain_labels.id = loc_hint.domain_label_id)
@@ -11,9 +18,9 @@ CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, newestDateAllow
             join measurement_results on (domains.ipv4_address = measurement_results.destination_address and measurement_results.min_rtt < 20 and (measurement_results.timestamp > newestDateAllowed or newestDateAllowed IS NULL)
             join probes on (probes.id = measurement_results.probe_id)
             join locations measurement_location on (measurement_location.id = probes.location_id)
-        WHERE gpsDistance(hint_location.lat, hint_location.lon, measurement_location.lat, measurement_location.lon) / 100 + buffertime > measurement_results.min_rtt $$
+        $$
     LANGUAGE SQL
-    RETURNS NULL on NULL INPUT
+    RETURNS NULL on NULL INPUT;
 
 CREATE OR REPLACE FUNCTION gpsDistance(lat1 float, lon1 float, lat2 float, lon2 float) RETURNS float
     AS 'SELECT gpsDistanceRadians(radians(lat1), radians(lon1), radians(lat2), radians(lon2))'
