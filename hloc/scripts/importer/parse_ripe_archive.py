@@ -108,6 +108,7 @@ class MeasurementKey(enum.Enum):
     error = 'err'
 
 
+@util.cprofile('ripe_parser')
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool):
     Session = create_session_for_process()
     db_session = Session()
@@ -250,12 +251,6 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
-    if (datetime.datetime.now() - timestamp).days >= max_age:
-        return
-
-    if MeasurementKey.destination.value not in measurement_result:
-        return
-
     probe_id = int(measurement_result[MeasurementKey.probe_id.value])
 
     if probe_id in probe_dct:
@@ -305,7 +300,6 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
             result.error_msg = MeasurementError.not_reachable
 
         db_session.add(result)
-        db_session.commit()
     elif measurement_result[MeasurementKey.type.value] == 'traceroute':
         destination_rtts, second_hop_latency = parse_traceroute_results(measurement_result)
 
@@ -344,7 +338,6 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
                 result.error_msg = MeasurementError.not_reachable
 
             db_session.add(result)
-            db_session.commit()
 
 
 def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [float]:
