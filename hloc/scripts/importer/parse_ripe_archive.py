@@ -4,7 +4,6 @@ Parse data from the ripe archive files
 """
 
 import argparse
-import bz2
 import collections
 import datetime
 import enum
@@ -27,7 +26,7 @@ import sqlalchemy.exc as sqla_exceptions
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, MeasurementProtocol, \
-    MeasurementError
+    MeasurementError, MeasurementResult
 
 logger = None
 
@@ -108,7 +107,7 @@ class MeasurementKey(enum.Enum):
     error = 'err'
 
 
-@util.cprofile('ripe_parser')
+# @util.cprofile('ripe_parser')
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool):
     Session = create_session_for_process()
     db_session = Session()
@@ -125,11 +124,15 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
             if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
                 continue
 
+            results = []
+            count = 0
+
             if bz2_compressed:
                 line_queue = queue.Queue(10**5)
                 finished_reading = threading.Event()
                 read_thread = threading.Thread(target=read_bz2_file_queued,
-                                               args=(line_queue, filename, finished_reading),
+                                               args=(line_queue, filename, finished_reading,
+                                                     days_in_past),
                                                name='bz2 read thread')
                 read_thread.start()
 
@@ -146,10 +149,20 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         rline = line_queue.get()
 
                 for line in line_generator():
-                    measurement_result = json.loads(line)
+                    measurement_result_dct = json.loads(line)
 
                     try:
-                        parse_measurement(measurement_result, db_session, days_in_past, probe_dct)
+                        measurement_result = parse_measurement(
+                            measurement_result_dct, db_session, probe_dct)
+                        results.append(measurement_result)
+                        count += 1
+
+                        if count % 10**5 == 0:
+                            db_session.bulk_save_objects(results)
+                            logger.info('parsed and saved {} measurements'.format(count))
+                            db_session.commit()
+                            results.clear()
+
                     except ripe_exceptions.APIResponseError:
                         logger.exception("API Response Error")
 
@@ -161,11 +174,21 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     line = ripe_archive_file.readline().decode('utf-8')
 
                     while len(line) > 0:
-                        measurement_result = json.loads(line)
+                        measurement_result_dct = json.loads(line)
 
                         try:
-                            parse_measurement(measurement_result, db_session, days_in_past,
-                                              probe_dct)
+                            measurement_result = parse_measurement(
+                                measurement_result_dct, db_session, probe_dct)
+
+                            results.append(measurement_result)
+                            count += 1
+
+                            if count % 10 ** 5 == 0:
+                                db_session.bulk_save_objects(results)
+                                db_session.commit()
+                                logger.info('parsed and saved {} measurements'.format(count))
+                                results.clear()
+
                         except ripe_exceptions.APIResponseError:
                             logger.exception("API Response Error")
 
@@ -185,8 +208,10 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     logger.info('finished parsing')
 
 
-def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
-    oldest_date_allowed = int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
+def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event,
+                         days_in_past: int):
+    oldest_date_allowed = int((datetime.datetime.now() - datetime.timedelta(days=days_in_past))
+                              .timestamp())
     if 'traceroute' in filename:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
@@ -246,8 +271,8 @@ def parse_probe(probe_id: int, db_session: Session) -> RipeAtlasProbe:
     return probe_db_obj
 
 
-def parse_measurement(measurement_result: dict, db_session: Session, max_age: int,
-                      probe_dct: [int, ripe_atlas.Probe]):
+def parse_measurement(measurement_result: dict, db_session: Session,
+                      probe_dct: [int, ripe_atlas.Probe]) -> MeasurementResult:
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
@@ -299,7 +324,7 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
         if not rtts:
             result.error_msg = MeasurementError.not_reachable
 
-        db_session.add(result)
+        return result
     elif measurement_result[MeasurementKey.type.value] == 'traceroute':
         destination_rtts, second_hop_latency = parse_traceroute_results(measurement_result)
 
@@ -337,7 +362,7 @@ def parse_measurement(measurement_result: dict, db_session: Session, max_age: in
             if not rtts:
                 result.error_msg = MeasurementError.not_reachable
 
-            db_session.add(result)
+            return result
 
 
 def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [float]:
