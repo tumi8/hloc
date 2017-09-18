@@ -4,16 +4,18 @@ Parse data from the ripe archive files
 """
 
 import argparse
+import bz2
 import collections
 import datetime
 import enum
 import ipaddress
-import json
+import ujson as json
 import mmap
 import multiprocessing as mp
 import os
 import queue
 import re
+import requests
 import subprocess
 import sys
 import threading
@@ -64,17 +66,47 @@ def main():
 
     filenames = get_filenames(args.archive_path, args.file_regex)
 
+    Session = create_session_for_process()
+    db_session = Session()
+    probe_dct = get_probes(db_session)
+
     processes = []
 
     for i in range(args.number_processes):
         process = mp.Process(target=parse_ripe_data, args=(filenames, not args.plaintext,
-                                                           args.days_in_past, args.debug),
+                                                           args.days_in_past, args.debug,
+                                                           probe_dct),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
         process.start()
 
     for process in processes:
         process.join()
+
+
+def get_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
+                        yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
+
+    ripe_response = requests.get(probe_archive_url)
+
+    if ripe_response.status_code != 200:
+        ripe_response.raise_for_status()
+
+    probe_str = bz2.decompress(ripe_response.content)
+    probes_dct_list = json.loads(probe_str)['objects']
+    return_dct = {}
+
+    for probe_dct in probes_dct_list:
+        if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
+            probe = parse_probe(probe_dct, db_session)
+            return_dct[probe.probe_id] = probe
+
+    db_session.add_all(return_dct.values())
+    db_session.commit()
+
+    return return_dct
 
 
 def get_filenames(archive_path: str, file_regex: str) -> mp.Queue:
@@ -108,11 +140,11 @@ class MeasurementKey(enum.Enum):
 
 
 # @util.cprofile('ripe_parser')
-def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool):
+def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
+                    probe_dct: typing.Dict[int, RipeAtlasProbe]):
     Session = create_session_for_process()
     db_session = Session()
 
-    probe_dct = {}
     try:
         while True:
             filename = filenames.get(timeout=1)
@@ -152,16 +184,17 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     measurement_result_dct = json.loads(line)
 
                     try:
-                        measurement_result = parse_measurement(
-                            measurement_result_dct, db_session, probe_dct)
-                        results.append(measurement_result)
-                        count += 1
+                        measurement_result = parse_measurement(measurement_result_dct, probe_dct)
 
-                        if count % 10**5 == 0:
-                            db_session.bulk_save_objects(results)
-                            logger.info('parsed and saved {} measurements'.format(count))
-                            db_session.commit()
-                            results.clear()
+                        if measurement_result:
+                            results.append(measurement_result)
+                            count += 1
+
+                            if count % 10**5 == 0:
+                                db_session.bulk_save_objects(results)
+                                logger.info('parsed and saved {} measurements'.format(count))
+                                db_session.commit()
+                                results.clear()
 
                     except ripe_exceptions.APIResponseError:
                         logger.exception("API Response Error")
@@ -177,22 +210,27 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result_dct = json.loads(line)
 
                         try:
-                            measurement_result = parse_measurement(
-                                measurement_result_dct, db_session, probe_dct)
+                            measurement_result = parse_measurement(measurement_result_dct,
+                                                                   probe_dct)
 
-                            results.append(measurement_result)
-                            count += 1
+                            if measurement_result:
+                                results.append(measurement_result)
+                                count += 1
 
-                            if count % 10 ** 5 == 0:
-                                db_session.bulk_save_objects(results)
-                                db_session.commit()
-                                logger.info('parsed and saved {} measurements'.format(count))
-                                results.clear()
+                                if count % 10 ** 5 == 0:
+                                    db_session.bulk_save_objects(results)
+                                    db_session.commit()
+                                    logger.info('parsed and saved {} measurements'.format(count))
+                                    results.clear()
 
                         except ripe_exceptions.APIResponseError:
                             logger.exception("API Response Error")
 
                         line = ripe_archive_file.readline().decode('utf-8')
+
+            db_session.bulk_save_objects(results)
+            logger.info('parsed and saved {} measurements'.format(count))
+            db_session.commit()
 
             if debugging:
                 break
@@ -237,52 +275,34 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     finished_reading.set()
 
 
-def parse_probe(probe_id: int, db_session: Session) -> RipeAtlasProbe:
+def parse_probe(probe_dct: typing.Dict[str, typing.Any],
+                db_session: Session) -> RipeAtlasProbe:
+    probe_id = probe_dct['id']
     probe_db_obj = probe_for_id(str(probe_id), db_session)
 
-    if probe_db_obj:
-        if probe_db_obj.update():
-            return probe_db_obj
+    if probe_db_obj and probe_db_obj.lat == probe_dct['latitude'] and \
+            probe_db_obj.lon == probe_dct['longitude']:
+        return probe_db_obj
 
-    probe = ripe_atlas.Probe(id=probe_id)
-    location = location_for_coordinates(probe.geometry['coordinates'][1],
-                                        probe.geometry['coordinates'][0],
+    location = location_for_coordinates(probe_dct['latitude'],
+                                        probe_dct['longitude'],
                                         db_session)
-    try:
-        db_session.commit()
-    except sqla_exceptions.IntegrityError:
-        db_session.rollback()
-        location = location_for_coordinates(probe.geometry['coordinates'][1],
-                                            probe.geometry['coordinates'][0],
-                                            db_session,
-                                            create_new=False)
-        if not location:
-            raise
 
-    probe_db_obj = RipeAtlasProbe(probe_id=probe.id, location=location)
-    db_session.add(probe_db_obj)
-    try:
-        db_session.commit()
-    except sqla_exceptions.IntegrityError:
-        probe_db_obj = probe_for_id(probe.id, db_session)
-        if not probe_db_obj:
-            raise
+    probe_db_obj = RipeAtlasProbe(probe_id=probe_id, location=location)
 
     return probe_db_obj
 
 
-def parse_measurement(measurement_result: dict, db_session: Session,
-                      probe_dct: [int, ripe_atlas.Probe]) -> MeasurementResult:
+def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Probe]) \
+        -> typing.Optional[MeasurementResult]:
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
     probe_id = int(measurement_result[MeasurementKey.probe_id.value])
 
-    if probe_id in probe_dct:
-        probe = probe_dct[probe_id]
-    else:
-        probe = parse_probe(probe_id, db_session)
-        probe_dct[probe_id] = probe
+    if probe_id not in probe_dct:
+        return None
+    probe = probe_dct[probe_id]
 
     destination = measurement_result[MeasurementKey.destination.value]
 
@@ -312,7 +332,7 @@ def parse_measurement(measurement_result: dict, db_session: Session,
         rtts = parse_ping_results(measurement_result)
 
         result = RipeMeasurementResult()
-        result.probe = probe
+        result.probe_id = probe.id
         result.timestamp = timestamp
         result.destination_address = destination
         result.source_address = source
@@ -345,7 +365,7 @@ def parse_measurement(measurement_result: dict, db_session: Session,
 
             result = RipeMeasurementResult()
             result.from_traceroute = True
-            result.probe = probe
+            result.probe_id = probe.id
             result.timestamp = timestamp
             result.destination_address = destination
             result.source_address = source
