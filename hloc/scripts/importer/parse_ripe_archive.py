@@ -275,7 +275,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     else:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr") and ([.result[] | ' \
-                  'select(has("rtt")) | {rtt: .rtt}] | min) <= 30)) | {timestamp: .timestamp, ' \
+                  'select(has("rtt")) | {rtt: .rtt}] | min) <= 30) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
                   'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 30) | .rtt] ' \
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
