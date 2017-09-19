@@ -100,7 +100,7 @@ def get_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
     for probe_dct in probes_dct_list:
         if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
             probe = parse_probe(probe_dct, db_session)
-            return_dct[probe.probe_id] = probe
+            return_dct[str(probe.probe_id)] = probe
 
     db_session.add_all(return_dct.values())
     db_session.commit()
@@ -315,10 +315,11 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Prob
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
 
-    probe_id = int(measurement_result[MeasurementKey.probe_id.value])
+    probe_id = str(measurement_result[MeasurementKey.probe_id.value])
 
     if probe_id not in probe_dct:
         return None
+
     probe = probe_dct[probe_id]
 
     destination = measurement_result[MeasurementKey.destination.value]
