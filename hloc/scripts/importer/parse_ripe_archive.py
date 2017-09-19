@@ -23,7 +23,6 @@ import typing
 
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
-import sqlalchemy.exc as sqla_exceptions
 
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
@@ -148,7 +147,6 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     try:
         while True:
             filename = filenames.get(timeout=1)
-            logger.info('parsing {}'.format(filename))
 
             file_date_str = str(os.path.basename(filename).split('.')[0][-10:])
             modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
@@ -156,7 +154,9 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
             if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
                 continue
 
-            results = []
+            logger.info('parsing {}'.format(filename))
+
+            results = collections.defaultdict(dict)
             count = 0
 
             if bz2_compressed:
@@ -187,14 +187,18 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result = parse_measurement(measurement_result_dct, probe_dct)
 
                         if measurement_result:
-                            results.append(measurement_result)
-                            count += 1
+                            if measurement_result.probe_id not in \
+                                    results[measurement_result.destination_address] or \
+                                    results[measurement_result.destination_address][
+                                        measurement_result.probe_id].min_rtt > \
+                                    measurement_result.min_rtt:
+                                results[measurement_result.destination_address][
+                                    measurement_result.probe_id] = measurement_result
 
-                            if count % 10**5 == 0:
-                                db_session.bulk_save_objects(results)
-                                logger.info('parsed and saved {} measurements'.format(count))
-                                db_session.commit()
-                                results.clear()
+                                count += 1
+
+                                if count % 10**5 == 0:
+                                    logger.info('parsed measurements'.format(count))
 
                     except ripe_exceptions.APIResponseError:
                         logger.exception("API Response Error")
@@ -214,21 +218,29 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                                                                    probe_dct)
 
                             if measurement_result:
-                                results.append(measurement_result)
-                                count += 1
+                                if measurement_result.probe_id not in \
+                                        results[measurement_result.destination_address] or \
+                                        results[measurement_result.destination_address][
+                                        measurement_result.probe_id].min_rtt > \
+                                        measurement_result.min_rtt:
+                                    results[measurement_result.destination_address][
+                                        measurement_result.probe_id] = measurement_result
 
-                                if count % 10 ** 5 == 0:
-                                    db_session.bulk_save_objects(results)
-                                    db_session.commit()
-                                    logger.info('parsed and saved {} measurements'.format(count))
-                                    results.clear()
+                                    count += 1
+
+                                    if count % 10 ** 5 == 0:
+                                        logger.info('parsed measurements'.format(count))
 
                         except ripe_exceptions.APIResponseError:
                             logger.exception("API Response Error")
 
                         line = ripe_archive_file.readline().decode('utf-8')
 
-            db_session.bulk_save_objects(results)
+            measurement_results = []
+            for probe_measurement_dct in results.values():
+                measurement_results.extend(probe_measurement_dct.values())
+
+            db_session.bulk_save_objects(measurement_results)
             logger.info('parsed and saved {} measurements'.format(count))
             db_session.commit()
 
@@ -253,17 +265,21 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     if 'traceroute' in filename:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
-                  'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
-                  'type: .type, result: [.result[] | select(has("result")) | {result: ' \
-                  '[.result[] | select(has("rtt") and has("from") and has("err") == false) ' \
-                  '| {rtt: .rtt, ttl: .ttl, from: .from}], hop: .hop}], proto: .proto, ' \
-                  'src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
+                  'dst_addr: .dst_addr, from: .from, msm_id: .msm_id, type: .type, ' \
+                  'result: [.result[] | select(has("result")) | {result: [.result[] | ' \
+                  'select(has("rtt") and has("from") and .rtt < 30) | ' \
+                  '{rtt: .rtt, ttl: .ttl, from: .from}] | group_by(.from) | ' \
+                  'map(min_by(.rtt)), hop: .hop}] | map(select(.result | length > 0)), ' \
+                  'proto: .proto, src_addr: .src_addr, prb_id: .prb_id} | ' \
+                  'select(.result | length > 0)\''
     else:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
-                  str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
+                  str(oldest_date_allowed) + ' and has("dst_addr") and ([.result[] | ' \
+                  'select(has("rtt")) | {rtt: .rtt}] | min) <= 30)) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
-                  'type: .type, result: [.result[] | select(has("rtt")) | {rtt: .rtt}], ' \
-                  'proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id}\''
+                  'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 30) | .rtt] ' \
+                  '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
+                  '| select(.result >= 0)\''
 
     logger.debug('reading bz2 compressed file command:\n{}'.format(command))
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
@@ -280,8 +296,9 @@ def parse_probe(probe_dct: typing.Dict[str, typing.Any],
     probe_id = probe_dct['id']
     probe_db_obj = probe_for_id(str(probe_id), db_session)
 
-    if probe_db_obj and probe_db_obj.lat == probe_dct['latitude'] and \
-            probe_db_obj.lon == probe_dct['longitude']:
+    if probe_db_obj and \
+            probe_db_obj.location.gps_distance_haversine_plain(
+                probe_dct['latitude'], probe_dct['longitude']) < 2:
         return probe_db_obj
 
     location = location_for_coordinates(probe_dct['latitude'],
@@ -329,7 +346,7 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Prob
     measurement_id = measurement_result[MeasurementKey.measurement_id.value]
 
     if measurement_result[MeasurementKey.type.value] == 'ping':
-        rtts = parse_ping_results(measurement_result)
+        rtt = measurement_result[MeasurementKey.result.value]
 
         result = RipeMeasurementResult()
         result.probe_id = probe.id
@@ -337,31 +354,19 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Prob
         result.destination_address = destination
         result.source_address = source
         result.behind_nat = behind_nat
-        result.rtts = rtts
+        result.rtt = rtt
         result.protocol = protocol
         result.ripe_measurement_id = measurement_id
 
-        if not rtts:
+        if not rtt:
             result.error_msg = MeasurementError.not_reachable
 
         return result
     elif measurement_result[MeasurementKey.type.value] == 'traceroute':
         destination_rtts, second_hop_latency = parse_traceroute_results(measurement_result)
 
-        for dest, rtt_ttl_tuples in destination_rtts.items():
-            rtts = []
-            ttls = []
-            found_ttls = False
-            for rtt, ttl in rtt_ttl_tuples:
-                rtts.append(rtt)
-                if ttl:
-                    found_ttls = True
-                    ttls.append(ttl)
-                else:
-                    ttls.append(-1)
-
-            if not found_ttls:
-                ttls.clear()
+        for dest, rtt_ttl_tuple in destination_rtts.items():
+            rtt, ttl = rtt_ttl_tuple
 
             result = RipeMeasurementResult()
             result.from_traceroute = True
@@ -370,8 +375,8 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Prob
             result.destination_address = destination
             result.source_address = source
             result.behind_nat = behind_nat
-            result.rtts = rtts
-            result.ttls = ttls
+            result.rtt = rtt
+            result.ttl = ttl
             result.protocol = protocol
             result.ripe_measurement_id = measurement_id
 
@@ -379,24 +384,10 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Prob
                                        or probe.second_hop_latency > second_hop_latency):
                 probe.second_hop_latency = second_hop_latency
 
-            if not rtts:
+            if not rtt:
                 result.error_msg = MeasurementError.not_reachable
 
             return result
-
-
-def parse_ping_results(measurement_result: typing.Dict[str, typing.Any]) -> [float]:
-    rtts = []
-    if MeasurementKey.result.value in measurement_result:
-        for result in measurement_result[MeasurementKey.result.value]:
-            if MeasurementKey.rtt.value in result:
-                rtts.append(result[MeasurementKey.rtt.value])
-    elif MeasurementKey.min_rtt.value in measurement_result:
-        rtts.append(measurement_result[MeasurementKey.min_rtt.value])
-    else:
-        raise ValueError('No rtt found')
-
-    return rtts
 
 
 def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
@@ -404,30 +395,22 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
     rtts = collections.defaultdict(list)
     second_hop_latency = None
 
-    if MeasurementKey.result.value in measurement_result:
-        for result in measurement_result[MeasurementKey.result.value]:
-            hop_count = 0
-            if MeasurementKey.result.value in result:
-                for inner_result in result[MeasurementKey.result.value]:
-                    if MeasurementKey.source.value not in inner_result or \
-                            MeasurementKey.rtt.value not in inner_result or \
-                            MeasurementKey.error.value in inner_result:
-                        continue
+    for result in measurement_result[MeasurementKey.result.value]:
+        hop_count = 0
 
-                    if ipaddress.ip_address(inner_result[MeasurementKey.source.value]).is_private:
-                        continue
+        for inner_result in result[MeasurementKey.result.value]:
+            if ipaddress.ip_address(inner_result[MeasurementKey.source.value]).is_private:
+                continue
 
-                    hop_count += 1
-                    if hop_count >= 2 and \
-                            (not second_hop_latency or
-                             inner_result[MeasurementKey.rtt.value] < second_hop_latency):
-                        second_hop_latency = inner_result[MeasurementKey.rtt.value]
+            hop_count += 1
+            if hop_count >= 2 and \
+                    (not second_hop_latency or
+                     inner_result[MeasurementKey.rtt.value] < second_hop_latency):
+                second_hop_latency = inner_result[MeasurementKey.rtt.value]
 
-                    rtts[inner_result[MeasurementKey.source.value]].append((
-                        inner_result[MeasurementKey.rtt.value],
-                        inner_result.get(MeasurementKey.ttl.value, None)))
-    else:
-        raise ValueError('No rtt found')
+            rtts[inner_result[MeasurementKey.source.value]].append((
+                inner_result[MeasurementKey.rtt.value],
+                inner_result.get(MeasurementKey.ttl.value, None)))
 
     return rtts, second_hop_latency
 

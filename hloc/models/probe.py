@@ -311,8 +311,10 @@ class RipeAtlasProbe(Probe):
         self._probe_obj = ripe_atlas.Probe(id=self.probe_id)
         self._last_update = datetime.datetime.now()
 
-        return self._probe_obj.geometry and \
-            self._probe_obj.geometry['coordinates'] == [self.location.lon, self.location.lat]
+        delta_dist = self.location.gps_distance_haversine_plain(
+            self._probe_obj.geometry['coordinates'][1], self._probe_obj.geometry['coordinates'][0])
+
+        return self._probe_obj.geometry and abs(delta_dist) < 2
 
     def is_rfc_1918(self) -> bool:
         """Returns if the probe is behind a NAT according to RFC 1918"""

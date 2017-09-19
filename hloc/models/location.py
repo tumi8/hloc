@@ -128,11 +128,14 @@ class Location(Base):
         Calculate the distance (km) between two points
         on the earth (specified in decimal degrees)
         """
+        return self.gps_distance_haversine_plain(location2.lat, location2.lon)
+
+    def gps_distance_haversine_plain(self, lat, lon):
         # convert decimal degrees to radians
         lon1 = math.radians(self.lon)
         lat1 = math.radians(self.lat)
-        lon2 = math.radians(location2.lon)
-        lat2 = math.radians(location2.lat)
+        lon2 = math.radians(lon)
+        lat2 = math.radians(lat)
         # haversine formula
         dlon = lon2 - lon1
         dlat = lat2 - lat1
