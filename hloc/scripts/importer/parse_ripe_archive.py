@@ -175,10 +175,15 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         logger.exception('empty queue for {}'.format(filename))
                         return
                     while True:
-                        yield rline
+                        if rline:
+                            yield rline
                         if finished_reading.is_set() and line_queue.empty():
                             return
-                        rline = line_queue.get()
+                        rline = None
+                        try:
+                            rline = line_queue.get(2)
+                        except queue.Empty:
+                            pass
 
                 for line in line_generator():
                     measurement_result_dct = json.loads(line)
