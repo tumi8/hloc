@@ -78,46 +78,6 @@ def setup_logger(filename: str, loggername: str, loglevel: str = 'DEBUG') -> log
     return logging.getLogger(loggername)
 
 
-def parse_zmap_results(zmap_filename: str, location_name: str, present_results: dict):
-    """Parses a file """
-    zmap_results = {}
-    if present_results:
-        zmap_results = present_results.copy()
-    with open(zmap_filename) as zmap_file:
-        for line in zmap_file:
-            if line[0:5] == 'saddr':
-                continue
-            zmap_result = parse_zmap_line(line)
-            if zmap_result[0] in zmap_results:
-                if location_name:
-                    if location_name in zmap_results[zmap_result[0]]:
-                        if zmap_result[1] < zmap_results[zmap_result[0]][location_name]:
-                            zmap_results[zmap_result[0]][location_name] = zmap_result[1]
-                    else:
-                        zmap_results[zmap_result[0]][location_name] = zmap_result[1]
-                else:
-                    if zmap_result[1] < zmap_results[zmap_result[0]]:
-                        zmap_results[zmap_result[0]] = zmap_result[1]
-            else:
-                if location_name:
-                    zmap_results[zmap_result[0]] = {}
-                    zmap_results[zmap_result[0]][location_name] = zmap_result[1]
-                else:
-                    zmap_results[zmap_result[0]] = zmap_result[1]
-
-    return zmap_results
-
-
-def parse_zmap_line(zmap_line):
-    """Parses one line of an zmap output"""
-    rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
-        zmap_line.split(',')
-    if success:
-        sec_difference = int(rec_ts) - int(sent_ts)
-        u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
-        return rsaddr, (sec_difference + u_sec_diference) * 1000
-
-
 def ip_to_int(ip_addr, ip_version):
     if ip_version == constants.IPV6_IDENTIFIER:
         return int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, ip_addr)), 16)

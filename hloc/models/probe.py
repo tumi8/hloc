@@ -350,7 +350,34 @@ class CaidaArkProbe(Probe):
         return None
 
 
+class ZmapProbe(Probe):
+
+    __mapper_args__ = {'polymorphic_identity': 'zmap'}
+
+    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
+        raise NotImplementedError('Zmap Results are only gathered passively')
+
+    @property
+    def last_update(self) -> datetime.datetime:
+        raise NotImplementedError("Zmap Probes are passive")
+
+    def available(self, max_age: datetime.timedelta) -> AvailableType:
+        return AvailableType.unknown
+
+    def is_available(self, max_age: datetime.timedelta) -> bool:
+        return False
+
+    @property
+    def ipv6_capable(self) -> bool:
+        return False
+
+    @staticmethod
+    def parse_from_json(json_dict) -> typing.Optional['ZmapProbe']:
+        return None
+
+
 __all__ = ['Probe',
            'RipeAtlasProbe',
-           'CaidaArkProbe'
+           'CaidaArkProbe',
+           'ZmapProbe',
            ]

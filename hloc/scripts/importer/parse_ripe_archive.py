@@ -66,6 +66,9 @@ def main():
     db_session = Session()
     probe_dct = get_probes(db_session)
 
+    db_session.close()
+    Session.remove()
+
     processes = []
 
     for i in range(args.number_processes):

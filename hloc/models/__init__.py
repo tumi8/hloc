@@ -7,8 +7,9 @@ Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
 from .enums import LocationCodeType, AvailableType, MeasurementError, DomainLocationType, \
     DomainType, MeasurementProtocol
 from .location import Location, LocationInfo, AirportInfo, LocodeInfo, State, LocationHint
-from .measurement_result import MeasurementResult, RipeMeasurementResult, CaidaArkMeasurementResult
-from .probe import Probe, RipeAtlasProbe, CaidaArkProbe
+from .measurement_result import MeasurementResult, RipeMeasurementResult, \
+    CaidaArkMeasurementResult, ZmapMeasurementResult
+from .probe import Probe, RipeAtlasProbe, CaidaArkProbe, ZmapProbe
 from .json_base import JSONBase
 from .domain import Domain, DomainLabel, CodeMatch
 from .drop_rule import DRoPRule
@@ -38,4 +39,6 @@ __all__ = ['MeasurementResult',
            'MeasurementProtocol',
            'CaidaArkProbe',
            'CaidaArkMeasurementResult',
+           'ZmapProbe',
+           'ZmapMeasurementResult',
            ]

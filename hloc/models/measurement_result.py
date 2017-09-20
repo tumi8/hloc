@@ -108,7 +108,7 @@ class CaidaArkMeasurementResult(MeasurementResult):
     }
 
     @staticmethod
-    def create_from_archive_line(archive_line: str, caida_probe_id: str) \
+    def create_from_archive_line(archive_line: str, caida_probe_id: int) \
             -> 'CaidaArkMeasurementResult':
         timestamp_str, src, dst, rtt_str = archive_line.split(';')
         timestamp = datetime.datetime.fromtimestamp(int(timestamp_str))
@@ -125,8 +125,33 @@ class CaidaArkMeasurementResult(MeasurementResult):
         return measurement_result
 
 
+class ZmapMeasurementResult(MeasurementResult):
+    __mapper_args__ = {
+        'polymorphic_identity': 'zmap_measurement'
+    }
+
+    @staticmethod
+    def create_from_archive_line(zmap_line: str, zmap_probe_id: int) \
+            -> typing.Optional('ZmapMeasurementResult'):
+        rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
+            zmap_line.split(',')
+
+        if success:
+            sec_difference = int(rec_ts) - int(sent_ts)
+            u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
+            rtt = (sec_difference + u_sec_diference) * 1000
+
+            measurement_result = ZmapMeasurementResult(probe_id=zmap_probe_id,
+                                                       timestamp=sent_ts,
+                                                       destination_address=rsaddr,
+                                                       rtt=rtt,
+                                                       measurement_protocol=MeasurementProtocol.icmp
+                                                       )
+            return measurement_result
+
 __all__ = [
     'MeasurementResult',
     'RipeMeasurementResult',
     'CaidaArkMeasurementResult',
+    'ZmapMeasurementResult'
    ]
