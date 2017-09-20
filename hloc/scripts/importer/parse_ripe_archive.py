@@ -186,8 +186,6 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         try:
                             rline = line_queue.get(timeout=2)
                             read_fails = 0
-                            if status_msg:
-                                logger.debug('processing after end of reading: {}'.format(rline))
                         except queue.Empty:
                             logger.debug('failed reading')
                             read_fails += 1
