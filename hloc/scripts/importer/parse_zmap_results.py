@@ -23,12 +23,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Path to the directory with the zmap files')
     parser.add_argument('locations_config_file', type=str,
                         help='a config file with the location keys and their GPS coordinates')
-    parser.add_argument('-p', '--number-processes', type=int, default=4,
-                        help='specify the number of processes used')
-    parser.add_argument('-r', '--file-regex', type=str, default=r'.*$')
-    parser.add_argument('-t', '--plaintext', action='store_true', help='Use plaintext filereading')
-    parser.add_argument('-d', '--debug', action='store_true')
-    parser.add_argument('-l', '--logging-file', type=str, default='zmap-rsults-import.log',
+    parser.add_argument('-r', '--file-regex', type=str, default=r'.*scanned$')
+    parser.add_argument('-l', '--logging-file', type=str, default='zmap-results-import.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
@@ -52,7 +48,7 @@ def main():
 
     config_parser = configparser.ConfigParser()
     if os.path.isfile(args.locations_config_file):
-        config_parser.read(args.config_filename)
+        config_parser.read(args.locations_config_file)
         for filename in filenames:
             location_name = __get_location_name(filename)
             if location_name not in config_parser or \
@@ -71,7 +67,7 @@ def main():
     else:
         raise ValueError('locations_config_file path does not lead to a file')
 
-    parse(args.zmap_results_dir, filenames, locations, db_session)
+    parse(filenames, locations, db_session)
 
     db_session.close()
     Session.remove()
@@ -90,15 +86,15 @@ def get_filenames(archive_path: str, file_regex: str) -> [str]:
 
 
 def __get_location_name(filename):
-    return filename.split('.')[0]
+    return os.path.basename(filename).split('.')[0]
 
 
-def parse(base_dir: str, filenames: [str], location_probe_ids: typing.Dict[str, int],
+def parse(filenames: [str], location_probe_ids: typing.Dict[str, int],
           db_session: Session):
     for filename in filenames:
         location_name = __get_location_name(filename)
         probe_id = location_probe_ids[location_name]
-        parse_zmap_results(os.path.join(base_dir, filename), probe_id, db_session)
+        parse_zmap_results(filename, probe_id, db_session)
 
 
 def parse_zmap_results(zmap_filepath: str, probe_id: int, db_session: Session):
@@ -118,3 +114,8 @@ def parse_zmap_results(zmap_filepath: str, probe_id: int, db_session: Session):
     logger.info('parsed {} unique destination rtts from {}'.format(len(measurements),
                                                                    zmap_filepath))
     db_session.bulk_save_objects(measurements.values())
+    db_session.commit()
+
+
+if __name__ == '__main__':
+    main()

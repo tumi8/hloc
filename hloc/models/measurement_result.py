@@ -92,7 +92,8 @@ class RipeMeasurementResult(MeasurementResult):
                 except ValueError:
                     continue
 
-        measurement_result.rtts = rtts
+        measurement_result.rtt = min(rtts)
+
         if not rtts:
             measurement_result.error_msg = MeasurementError.not_reachable
 
@@ -132,7 +133,7 @@ class ZmapMeasurementResult(MeasurementResult):
 
     @staticmethod
     def create_from_archive_line(zmap_line: str, zmap_probe_id: int) \
-            -> typing.Optional('ZmapMeasurementResult'):
+            -> typing.Optional['ZmapMeasurementResult']:
         rsaddr, _, _, _, _, saddr, sent_ts, sent_ts_us, rec_ts, rec_ts_us, _, _, _, _, success = \
             zmap_line.split(',')
 
@@ -141,8 +142,10 @@ class ZmapMeasurementResult(MeasurementResult):
             u_sec_diference = (int(rec_ts_us) - int(sent_ts_us)) / 10 ** 6
             rtt = (sec_difference + u_sec_diference) * 1000
 
+            timestamp = datetime.datetime.fromtimestamp(int(sent_ts))
+
             measurement_result = ZmapMeasurementResult(probe_id=zmap_probe_id,
-                                                       timestamp=sent_ts,
+                                                       timestamp=timestamp,
                                                        destination_address=rsaddr,
                                                        rtt=rtt,
                                                        measurement_protocol=MeasurementProtocol.icmp
