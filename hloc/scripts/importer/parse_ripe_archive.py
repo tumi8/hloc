@@ -21,9 +21,6 @@ import sys
 import threading
 import typing
 
-import ripe.atlas.cousteau as ripe_atlas
-import ripe.atlas.cousteau.exceptions as ripe_exceptions
-
 from hloc import util
 from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, MeasurementProtocol, \
@@ -174,39 +171,38 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     except queue.Empty:
                         logger.exception('empty queue for {}'.format(filename))
                         return
+
+                    read_fails = 0
                     while True:
                         if rline:
                             yield rline
-                        if finished_reading.is_set() and line_queue.empty():
+                        if finished_reading.is_set() and (line_queue.empty() or read_fails == 5):
                             return
                         rline = None
                         try:
                             rline = line_queue.get(2)
+                            read_fails = 0
                         except queue.Empty:
-                            pass
+                            read_fails += 1
 
                 for line in line_generator():
                     measurement_result_dct = json.loads(line)
 
-                    try:
-                        measurement_result = parse_measurement(measurement_result_dct, probe_dct)
+                    measurement_result = parse_measurement(measurement_result_dct, probe_dct)
 
-                        if measurement_result:
-                            if measurement_result.probe_id not in \
-                                    results[measurement_result.destination_address] or \
-                                    results[measurement_result.destination_address][
-                                        measurement_result.probe_id].min_rtt > \
-                                    measurement_result.min_rtt:
+                    if measurement_result:
+                        if measurement_result.probe_id not in \
+                                results[measurement_result.destination_address] or \
                                 results[measurement_result.destination_address][
-                                    measurement_result.probe_id] = measurement_result
+                                    measurement_result.probe_id].min_rtt > \
+                                measurement_result.min_rtt:
+                            results[measurement_result.destination_address][
+                                measurement_result.probe_id] = measurement_result
 
-                                count += 1
+                            count += 1
 
-                                if count % 10**5 == 0:
-                                    logger.info('parsed measurements'.format(count))
-
-                    except ripe_exceptions.APIResponseError:
-                        logger.exception("API Response Error")
+                            if count % 10**5 == 0:
+                                logger.info('parsed measurements'.format(count))
 
                 read_thread.join()
             else:
@@ -218,26 +214,22 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                     while len(line) > 0:
                         measurement_result_dct = json.loads(line)
 
-                        try:
-                            measurement_result = parse_measurement(measurement_result_dct,
-                                                                   probe_dct)
+                        measurement_result = parse_measurement(measurement_result_dct,
+                                                               probe_dct)
 
-                            if measurement_result:
-                                if measurement_result.probe_id not in \
-                                        results[measurement_result.destination_address] or \
-                                        results[measurement_result.destination_address][
-                                        measurement_result.probe_id].min_rtt > \
-                                        measurement_result.min_rtt:
+                        if measurement_result:
+                            if measurement_result.probe_id not in \
+                                    results[measurement_result.destination_address] or \
                                     results[measurement_result.destination_address][
-                                        measurement_result.probe_id] = measurement_result
+                                    measurement_result.probe_id].min_rtt > \
+                                    measurement_result.min_rtt:
+                                results[measurement_result.destination_address][
+                                    measurement_result.probe_id] = measurement_result
 
-                                    count += 1
+                                count += 1
 
-                                    if count % 10 ** 5 == 0:
-                                        logger.info('parsed measurements'.format(count))
-
-                        except ripe_exceptions.APIResponseError:
-                            logger.exception("API Response Error")
+                                if count % 10 ** 5 == 0:
+                                    logger.info('parsed measurements'.format(count))
 
                         line = ripe_archive_file.readline().decode('utf-8')
 
@@ -286,7 +278,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
                   '| select(.result >= 0)\''
 
-    logger.debug('reading bz2 compressed file command:\n{}'.format(command))
+    logger.debug('reading bz2 compressed file command:\n\n{}\n\n'.format(command))
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
                           bufsize=1) as subprocess_call:
         for line in subprocess_call.stdout:
@@ -315,7 +307,7 @@ def parse_probe(probe_dct: typing.Dict[str, typing.Any],
     return probe_db_obj
 
 
-def parse_measurement(measurement_result: dict, probe_dct: [int, ripe_atlas.Probe]) \
+def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]) \
         -> typing.Optional[MeasurementResult]:
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
