@@ -49,7 +49,7 @@ class MeasurementResult(Base):
 
     @property
     def min_rtt(self):
-        return min(self.rtts) if self.rtts else None
+        return self.rtt
 
 
 class RipeMeasurementResult(MeasurementResult):

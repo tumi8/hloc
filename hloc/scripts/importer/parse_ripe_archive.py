@@ -167,22 +167,29 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
 
                 def line_generator():
                     try:
-                        rline = line_queue.get(2)
+                        rline = line_queue.get(timeout=2)
                     except queue.Empty:
                         logger.exception('empty queue for {}'.format(filename))
                         return
 
+                    status_msg = False
                     read_fails = 0
                     while True:
                         if rline:
                             yield rline
                         if finished_reading.is_set() and (line_queue.empty() or read_fails == 5):
                             return
+                        if finished_reading.is_set() and not status_msg:
+                            logger.debug('reading finished finishing processing')
+                            status_msg = True
                         rline = None
                         try:
-                            rline = line_queue.get(2)
+                            rline = line_queue.get(timeout=2)
                             read_fails = 0
+                            if status_msg:
+                                logger.debug('processing after end of reading: {}'.format(rline))
                         except queue.Empty:
+                            logger.debug('failed reading')
                             read_fails += 1
 
                 for line in line_generator():
@@ -271,8 +278,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   'select(.result | length > 0)\''
     else:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
-                  str(oldest_date_allowed) + ' and has("dst_addr") and ([.result[] | ' \
-                  'select(has("rtt")) | {rtt: .rtt}] | min) <= 30) | {timestamp: .timestamp, ' \
+                  str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
                   'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 30) | .rtt] ' \
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
@@ -390,7 +396,7 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
 
 def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
         -> typing.Tuple[typing.DefaultDict[str, typing.Tuple[float, int]], typing.Optional[float]]:
-    rtts = collections.defaultdict(list)
+    rtts = collections.defaultdict(tuple)
     second_hop_latency = None
 
     for result in measurement_result[MeasurementKey.result.value]:
@@ -406,9 +412,9 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
                      inner_result[MeasurementKey.rtt.value] < second_hop_latency):
                 second_hop_latency = inner_result[MeasurementKey.rtt.value]
 
-            rtts[inner_result[MeasurementKey.source.value]].append((
+            rtts[inner_result[MeasurementKey.source.value]] = (
                 inner_result[MeasurementKey.rtt.value],
-                inner_result.get(MeasurementKey.ttl.value, None)))
+                inner_result.get(MeasurementKey.ttl.value, None))
 
     return rtts, second_hop_latency
 
