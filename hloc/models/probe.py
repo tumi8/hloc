@@ -9,6 +9,7 @@ import logging
 import random
 import time
 import enum
+import operator
 import typing
 import multiprocessing as mp
 
@@ -101,6 +102,8 @@ class RipeAtlasProbe(Probe):
         bill_to_address = 'bill_to_address'
         ripe_slowdown_sema = 'ripe_slowdown_sema'
 
+        additional_probes = 'additional_probes'
+
         @staticmethod
         def get_default_for(property_key: str) -> typing.Any:
             if property_key == RipeAtlasProbe.MeasurementKeys.num_packets.value:
@@ -182,8 +185,10 @@ class RipeAtlasProbe(Probe):
         if measurement_id is None:
             return None
 
+        additional_probes = kwargs.get(RipeAtlasProbe.MeasurementKeys.additional_probes.value, [])
         measurement_result = self._get_measurement_response(measurement_id,
-                                                            ripe_slowdown_sema=ripe_slowdown_sema)
+                                                            ripe_slowdown_sema=ripe_slowdown_sema,
+                                                            additional_probes=additional_probes)
         db_session.add(measurement_result)
         return measurement_result
 
@@ -198,14 +203,26 @@ class RipeAtlasProbe(Probe):
         measurement_description = kwargs[RipeAtlasProbe.MeasurementKeys.measurement_name.value]
 
         ping = ripe_atlas.Ping(af=af, packets=packets, target=dest_address,
-                               description=measurement_description)
-        source = ripe_atlas.AtlasSource(value=self.probe_id, requested=1, type='probes')
+                               description=measurement_description, interval=3600)
+
+
+
+        if RipeAtlasProbe.MeasurementKeys.additional_probes.value in kwargs:
+            probe_ids = [self.probe_id]
+            for probe in kwargs[RipeAtlasProbe.MeasurementKeys.additional_probes.value]:
+                probe_ids.append(probe.probe_id)
+
+            source = ripe_atlas.AtlasSource(value=probe_ids, requested=1, type='probes')
+        else:
+            source = ripe_atlas.AtlasSource(value=self.probe_id, requested=1, type='probes')
+
+        unix_timestamp = int(datetime.datetime.now().timestamp())
 
         atlas_request_args = {
             'key': kwargs[RipeAtlasProbe.MeasurementKeys.api_key.value],
             'measurements': [ping],
             'sources': [source],
-            'is_oneoff': True
+            'stop_time': unix_timestamp + 400
         }
         if RipeAtlasProbe.MeasurementKeys.bill_to_address.value in kwargs:
             atlas_request_args['bill_to'] = kwargs[
@@ -213,9 +230,8 @@ class RipeAtlasProbe(Probe):
 
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
 
-    def _get_measurement_response(self, measurement_id: int, ripe_slowdown_sema: mp.Semaphore) -> \
-            RipeMeasurementResult:
-
+    def _get_measurement_response(self, measurement_id: int, ripe_slowdown_sema: mp.Semaphore,
+                                  additional_probes: ['RipeAtlasProbe']) -> RipeMeasurementResult:
         def sleep_time(amount: float = 10):
             """Sleep for ten seconds"""
             time.sleep(amount)
@@ -243,8 +259,14 @@ class RipeAtlasProbe(Probe):
             success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
 
-        measurement_result = RipeMeasurementResult.create_from_dict(m_results[0])
-        measurement_result.probe = self
+        min_result = min(m_results, key=operator.itemgetter('min'))
+        measurement_result = RipeMeasurementResult.create_from_dict(min_result)
+        if self.probe_id == min_result['prb_id']:
+            measurement_result.probe = self
+        else:
+            probe = [probe for probe in additional_probes if probe.probe_id == min_result['prb_id']]
+            measurement_result.probe = self
+
         return measurement_result
 
     @property

@@ -34,6 +34,7 @@ class MeasurementStrategy(enum.Enum):
     classic = 'classic'
     anticipated = 'anticipated'
     aggressive = 'aggressive'
+    forced = 'forced'
 
     def aliases(self):
         if self == MeasurementStrategy.classic:
@@ -42,6 +43,8 @@ class MeasurementStrategy(enum.Enum):
             return ['anticipated', 'an']
         elif self == MeasurementStrategy.aggressive:
             return ['aggressive', 'ag']
+        elif self == MeasurementStrategy.forced:
+            return ['forced', 'fd']
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -55,11 +58,10 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         default=MeasurementStrategy.classic.value,
                         choices=(MeasurementStrategy.classic.aliases() +
                                  MeasurementStrategy.anticipated.aliases() +
-                                 MeasurementStrategy.aggressive.aliases()),
+                                 MeasurementStrategy.aggressive.aliases() +
+                                 MeasurementStrategy.forced.aliases()),
                         help='The used measurement strategy. '
                              'See IDP Documentation for further explanation')
-    parser.add_argument('--number-of-probes-per-measurement', type=int, default=1,
-                        help='The number of probes used per measurement')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=1000,
                         help='The number of domains taken per block to process them')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
@@ -83,6 +85,12 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='The allowed measurement age in seconds')
     parser.add_argument('-bt', '--buffer-time', type=float, default=constants.DEFAULT_BUFFER_TIME,
                         help='The assumed amount of time spent in router buffers')
+    parser.add_argument('-mp', '--measurement-packets', type=int, default=1,
+                        help='Amount of packets per measurement')
+    parser.add_argument('-e', '--use-efficient-probes', action='store_true',
+                        help='sort probes after second hop latency and use the most efficient ones')
+    parser.add_argument('-mt', '--probes-per-measurement', default=1,
+                        help='Maximum amount of probes used per measurement')
     parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
                         help='Debug argument to prevent getting ripe probes')
     parser.add_argument('--include-ip-encoded', action='store_true',
@@ -123,7 +131,6 @@ def main():
                                               finish_event))
 
     if not args.disable_probe_fetching:
-        db_session.query(RipeAtlasProbe).delete()
         locations = db_session.query(LocationInfo)
 
         probes = get_ripe_probes(db_session)
@@ -159,8 +166,10 @@ def main():
                                    process_count,
                                    args.include_ip_encoded,
                                    measurement_strategy,
-                                   args.number_of_probes_per_measurement,
-                                   args.buffer_time),
+                                   args.probes_per_measurement,
+                                   args.buffer_time,
+                                   args.measurement_packets,
+                                   args.use_efficient_probes),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -222,7 +231,9 @@ def ripe_check_process(pid: int,
                        include_ip_encoded: bool,
                        measurement_strategy: MeasurementStrategy,
                        number_of_probes_per_measurement: int,
-                       buffer_time: float):
+                       buffer_time: float,
+                       packets_per_measurement: int,
+                       use_efficient_probes: bool):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -270,6 +281,8 @@ def ripe_check_process(pid: int,
                                             measurement_strategy,
                                             number_of_probes_per_measurement,
                                             buffer_time,
+                                            packets_per_measurement,
+                                            use_efficient_probes,
                                             db_session))
 
             threads.append(thread)
@@ -308,6 +321,8 @@ def domain_check_threading_manage(next_domain_id: typing.Callable[[], int],
                                   measurement_strategy: MeasurementStrategy,
                                   number_of_probes_per_measurement: int,
                                   buffer_time: float,
+                                  packets_per_measurement: int,
+                                  use_efficient_probes: bool,
                                   Session: typing.Callable[[], Session]):
     """The method called to create a thread and manage the domain checks"""
     db_session = Session()
@@ -329,7 +344,8 @@ def domain_check_threading_manage(next_domain_id: typing.Callable[[], int],
                                        ripe_slow_down_sema, ip_version, bill_to_address,
                                        wo_measurements, allowed_measurement_age, api_key,
                                        measurement_strategy, number_of_probes_per_measurement,
-                                       buffer_time, db_session)
+                                       buffer_time, packets_per_measurement, use_efficient_probes,
+                                       db_session)
             db_session.commit()
         except Exception:
             logger.exception('Check Domain Error')
@@ -352,6 +368,8 @@ def check_domain_location_ripe(domain: Domain,
                                measurement_strategy: MeasurementStrategy,
                                number_of_probes_per_measurement: int,
                                buffer_time: float,
+                               packets_per_measurement: int,
+                               use_efficient_probes: bool,
                                db_session: Session):
     """checks if ip is at location"""
     matched = False
@@ -473,7 +491,10 @@ def check_domain_location_ripe(domain: Domain,
                         str(domain.ip_for_version(ip_version)), ip_version, location,
                         available_nodes, ripe_create_sema, ripe_slow_down_sema, api_key,
                         bill_to_address=bill_to_address,
-                        number_of_probes=number_of_probes_per_measurement)
+                        number_of_probes=number_of_probes_per_measurement,
+                        number_of_packets=packets_per_measurement,
+                        use_efficient_probes=use_efficient_probes
+                    )
 
                     if not measurement_results:
                         continue
@@ -630,18 +651,22 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                                  api_key: str,
                                  bill_to_address: str=None,
                                  number_of_probes: int=1,
-                                 number_of_packets: int=1) \
+                                 number_of_packets: int=1,
+                                 use_efficient_probes: bool=False) \
         -> typing.Optional[typing.List[RipeMeasurementResult]]:
     """creates a measurement for the parameters and checks for the created measurement"""
-    near_nodes_all = [node for node in nodes if node not in NON_WORKING_PROBES]
-
-    near_nodes = near_nodes_all[:]
-
     if number_of_probes <= 0:
         raise ValueError('number_of_probes must be larger than 0')
 
-    while len(near_nodes) > number_of_probes:
-        del near_nodes[random.randint(0, len(near_nodes) - 1)]
+    near_nodes_all = [node for node in nodes if node not in NON_WORKING_PROBES]
+
+    near_nodes = near_nodes_all[:]
+    if use_efficient_probes:
+        near_nodes.sort(key=lambda x: x.second_hop_latency if x.second_hop_latency else 10000)
+        near_nodes = near_nodes[:number_of_probes * 2]
+
+    # while len(near_nodes) > number_of_probes:
+    #     del near_nodes[random.randint(0, len(near_nodes) - 1)]
 
     if not near_nodes:
         return None
@@ -651,7 +676,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
             try:
                 params = {
                     RipeAtlasProbe.MeasurementKeys.measurement_name.value:
-                        '{} test for location {}'.format(ip_addr, location.name),
+                        'HLOC Geolocation Measurement for location {}'.format(ip_addr, location.name),
                     RipeAtlasProbe.MeasurementKeys.ip_version.value: ip_version,
                     RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
                     RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema,
@@ -660,17 +685,13 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                 if bill_to_address:
                     params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
 
-                # TODO change code for multiple nodes emasurements
+                # TODO change code for multiple nodes measurements
                 measurement_results = [near_nodes[0].measure_rtt(ip_addr, **params)]
 
                 return measurement_results
             except ProbeError:
                 NON_WORKING_PROBES.add(near_nodes[0])
-                for node in near_nodes:
-                    near_nodes_all.remove(node)
-
-                while len(near_nodes) > number_of_probes:
-                    del near_nodes[random.randint(0, len(near_nodes) - 1)]
+                near_nodes.remove(near_nodes[0])
 
                 if not near_nodes:
                     return None
@@ -688,7 +709,9 @@ def get_ripe_probes(db_session: Session) -> typing.List[RipeAtlasProbe]:
             for probe in ripe_probes:
                 if not probe.geometry:
                     continue
-                probes.append(parse_probe(probe, db_session))
+                parsed_probe = parse_probe(probe, db_session)
+
+                probes.append(parsed_probe)
             break
         except ripe_exceptions.APIResponseError as e:
             logger.warning(str(e))
