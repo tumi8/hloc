@@ -207,25 +207,27 @@ class RipeAtlasProbe(Probe):
         measurement_description = kwargs[RipeAtlasProbe.MeasurementKeys.measurement_name.value]
 
         ping = ripe_atlas.Ping(af=af, packets=packets, target=dest_address,
-                               description=measurement_description, interval=3600)
+                               description=measurement_description)
 
         if RipeAtlasProbe.MeasurementKeys.additional_probes.value in kwargs:
-            probe_ids = [self.probe_id]
+            probe_ids = [str(self.probe_id)]
             for probe in kwargs[RipeAtlasProbe.MeasurementKeys.additional_probes.value]:
-                probe_ids.append(probe.probe_id)
+                probe_ids.append(str(probe.probe_id))
 
-            source = ripe_atlas.AtlasSource(value=probe_ids, requested=1, type='probes')
+            source = ripe_atlas.AtlasSource(value=','.join(probe_ids), requested=1, type='probes')
         else:
             source = ripe_atlas.AtlasSource(value=self.probe_id, requested=1, type='probes')
 
-        unix_timestamp = int(datetime.datetime.now().timestamp())
+        # unix_timestamp = int(datetime.datetime.now().timestamp())
 
         atlas_request_args = {
             'key': kwargs[RipeAtlasProbe.MeasurementKeys.api_key.value],
             'measurements': [ping],
             'sources': [source],
-            'stop_time': unix_timestamp + 400
+            'is_oneoff': True,
+            'verify': kwargs.get('verify', True)
         }
+
         if RipeAtlasProbe.MeasurementKeys.bill_to_address.value in kwargs:
             atlas_request_args['bill_to'] = kwargs[
                 RipeAtlasProbe.MeasurementKeys.bill_to_address.value]

@@ -79,12 +79,10 @@ def location_for_coordinates(lat: float, lon: float, db_session: Session, create
 
 
 def location_for_iata_code(iata_code: str, db_session: Session) -> LocationInfo:
-    location = db_session.query(LocationInfo).join(AirportInfo).filter(
-        iata_code == sqla.any_(AirportInfo.iata_codes)).first()
-    # location = db_session.query(LocationInfo).from_statement(sqla.text("""
-    #     SELECT loc_info.*
-    #     FROM locations loc_info join airport_infos air_infos on(loc_info.airport_info_id = air_infos.id)
-    #     WHERE :iata_code = ANY (air_infos.iata_codes)""")).params(iata_code=iata_code).first()
+    location = db_session.query(LocationInfo).join(AirportInfo)\
+        .filter(
+            iata_code == sqla.any_(AirportInfo.iata_codes)
+        ).first()
     return location
 
 
@@ -120,36 +118,59 @@ def domains_for_ids(domain_ids: [int], db_session: Session) -> [Domain]:
 
 def get_measurements_for_domain(domain: Domain,
                                 ip_version: str,
-                                max_measurement_age: int,
+                                max_measurement_age: typing.Optional[int],
                                 sorted_return: bool,
-                                db_session: Session) -> [MeasurementResult]:
+                                db_session: Session,
+                                allow_all_zmap_measurements: bool = False) -> [MeasurementResult]:
     """
     :param domain: the domain for which measurements should be returned
     :param ip_version: ipv4 or ipv6
     :param max_measurement_age: the maximal age of the measurements in seconds
     :param sorted_return: if the returned values should be ordered by the rtt set to True
     :param db_session: a data base session on which the queries are executed
+    :param allow_all_zmap_measurements: Allow zmap measurement regardless of their timestamp
     :return: all measurements related to this domain
     """
-    if not sorted_return:
-        return db_session.query(MeasurementResult).filter(
-            sqla.and_(MeasurementResult.destination_address == domain.ip_for_version(ip_version),
-                      MeasurementResult.timestamp >= datetime.datetime.now() - datetime.timedelta(
-                          seconds=max_measurement_age)))
+
+    if max_measurement_age:
+        if allow_all_zmap_measurements:
+            query = db_session.query(MeasurementResult).filter(
+                sqla.and_(
+                    MeasurementResult.destination_address == domain.ip_for_version(ip_version),
+                    sqla.or_(
+                        MeasurementResult.timestamp >= datetime.datetime.now() -
+                        datetime.timedelta(seconds=max_measurement_age),
+                        MeasurementResult.measurement_result_type == 'zmap_measurement'
+                             )
+                )
+            )
+        else:
+            query = db_session.query(MeasurementResult).filter(
+                sqla.and_(
+                    MeasurementResult.destination_address == domain.ip_for_version(ip_version),
+                    MeasurementResult.timestamp >= datetime.datetime.now() - datetime.timedelta(
+                        seconds=max_measurement_age),
+                )
+            )
     else:
-        return db_session.query(MeasurementResult).filter(
-            sqla.and_(MeasurementResult.destination_address == domain.ip_for_version(ip_version),
-                      MeasurementResult.timestamp >= datetime.datetime.now() - datetime.timedelta(
-                          seconds=max_measurement_age)))\
-            .order_by(MeasurementResult.timestamp.desc())
+        query = db_session.query(MeasurementResult).filter(
+            MeasurementResult.destination_address == domain.ip_for_version(ip_version)
+        )
+
+    if sorted_return:
+        query = query.order_by(MeasurementResult.timestamp.desc())
+
+    return query
 
 
 def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
                                 domain_types: typing.List[DomainType], db_session: Session) \
         -> typing.Generator[int, None, None]:
     for domain_id in db_session.query(Domain.id).filter(
-            sqla.and_(Domain.id % nr_processes == index,
-                      Domain.classification_type.in_(domain_types))).yield_per(block_limit):
+            sqla.and_(
+                Domain.id % nr_processes == index,
+                Domain.classification_type.in_(domain_types)
+            )).yield_per(block_limit):
         yield domain_id
 
 
@@ -157,6 +178,8 @@ def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processe
                                        domain_types: typing.List[DomainType], db_session: Session) \
         -> typing.Generator[Domain, None, None]:
     for domain in db_session.query(Domain).filter(
-            sqla.and_(Domain.id % nr_processes == index,
-                      Domain.classification_type.in_(domain_types))).yield_per(block_limit):
+            sqla.and_(
+                Domain.id % nr_processes == index,
+                Domain.classification_type.in_(domain_types)
+            )).yield_per(block_limit):
         yield domain
