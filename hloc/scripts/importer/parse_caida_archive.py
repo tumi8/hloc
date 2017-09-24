@@ -198,6 +198,7 @@ def parse_measurement(archive_line: str, probe_id: int, db_session: Session, day
         return
 
     measurement = CaidaArkMeasurementResult.create_from_archive_line(archive_line, probe_id)
+    measurement.rtt = measurement.rtt + 2
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
         db_session.add(measurement)
