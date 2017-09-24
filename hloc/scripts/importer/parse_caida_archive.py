@@ -6,7 +6,6 @@ Parse Caida icmp ping data
 import argparse
 import bz2
 import datetime
-import json
 import mmap
 import multiprocessing as mp
 import os
@@ -16,12 +15,9 @@ import sys
 import threading
 import typing
 
-import sqlalchemy.exc as sqla_exceptions
-
 from hloc import util
-from hloc.db_utils import create_session_for_process, location_for_coordinates, \
-    location_for_iata_code
-from hloc.models import Session, CaidaArkProbe, CaidaArkMeasurementResult
+from hloc.db_utils import create_session_for_process, location_for_iata_code
+from hloc.models import Session, CaidaArkProbe, CaidaArkMeasurementResult, LocationInfo
 
 
 probe_lock = mp.Lock()
@@ -32,16 +28,14 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     """Creates the arguments for the parser"""
     parser.add_argument('archive_path', type=str,
                         help='Path to the directory with the archive files')
-    parser.add_argument('caida_locations_path', type=str,
-                        help='Path to the JSON file with the Caida probe names')
     parser.add_argument('-p', '--number-processes', type=int, default=4,
                         help='specify the number of processes used')
-    parser.add_argument('-r', '--file-regex', type=str, default=r'(ping|traceroute).*\.bz2$')
+    parser.add_argument('-r', '--file-regex', type=str, default=r'.*\.bz2$')
     parser.add_argument('-t', '--plaintext', action='store_true', help='Use plaintext filereading')
     parser.add_argument('-d', '--debug', action='store_true')
-    parser.add_argument('-h', '--days-in-past', type=int, default=30,
+    parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
-    parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
+    parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
@@ -61,34 +55,18 @@ def main():
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
 
-    if not os.path.isfile(args.caida_locations_path):
-        print('Caida probe locations file not found', file=sys.stderr)
-        return 1
-
-    filenames = get_filenames(args.archive_path, args.file_regex)
-
-    with open(args.caida_locations_path) as caida_probe_locations:
-        probe_names_list = json.load(caida_probe_locations)
-
     Session = create_session_for_process()
     db_session = Session()
-    probe_locations_dct = {}
 
-    for probe_id in probe_names_list:
-        probe = pr
-        location = location_for_iata_code(probe_id[:3], db_session)
-        if location:
-            probe_locations_dct[probe_id] = location.id
-        else:
-            logger.warning('couldn\'t find location for probe id {}'.format(probe_id))
-
+    filenames, probe_dct = get_filenames(args.archive_path, args.file_regex, args.days_in_past,
+                                         db_session)
 
     processes = []
 
     for i in range(args.number_processes):
         process = mp.Process(target=parse_caida_data, args=(filenames, not args.plaintext,
                                                             args.days_in_past, args.debug,
-                                                            probe_locations_dct),
+                                                            probe_dct),
                              name='parse caida data {}'.format(i))
         processes.append(process)
         process.start()
@@ -97,16 +75,41 @@ def main():
         process.join()
 
 
-def get_filenames(archive_path: str, file_regex: str) -> mp.Queue:
+def get_filenames(archive_path: str, file_regex: str, days_in_past: int, db_session) \
+        -> typing.Tuple[mp.Queue, typing.Dict[str, int]]:
     filename_queue = mp.Queue()
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
 
+    probes = set()
+
     for dirname, _, filenames in os.walk(archive_path):
         for filename in filenames:
+            basename = os.path.basename(filename)
+
             if file_regex_obj.match(filename):
+                date_str = str(basename.split('.')[1])
+                date = datetime.datetime.strptime(date_str, '%Y%m%d')
+
+                if datetime.datetime.now() - date > datetime.timedelta(days=days_in_past):
+                    continue
+
+                probe_id = str(basename.split('.')[0])
+
+                location = location_for_iata_code(probe_id[:3], db_session)
+                if not location:
+                    logger.warning('couldn\'t find location for probe id {} filename {}'.format(
+                        probe_id, filename))
+                    continue
+
+                probe = parse_caida_probe(probe_id, location, db_session)
+                probes.add(probe)
                 filename_queue.put(os.path.join(dirname, filename))
 
-    return filename_queue
+    probe_dct = {}
+    for probe in probes:
+        probe_dct[probe.probe_id] = probe.id
+
+    return filename_queue, probe_dct
 
 
 def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_reading: threading.Event):
@@ -117,44 +120,29 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     finished_reading.set()
 
 
-def parse_caida_probe(probe_id: str, probe_location_dct: typing.Dict[str, typing.List[float]],
-                      db_session: Session) \
+def parse_caida_probe(probe_id: str, location: LocationInfo, db_session: Session) \
         -> typing.Optional[CaidaArkProbe]:
     caida_probe = db_session.query(CaidaArkProbe).filter_by(probe_id=probe_id).first()
     if caida_probe:
         return caida_probe
 
-    with probe_lock:
-        caida_probe = db_session.query(CaidaArkProbe).filter_by(probe_id=probe_id).first()
-        if caida_probe:
-            return caida_probe
+    caida_probe = CaidaArkProbe(probe_id=probe_id, location_id=location.id)
+    db_session.add(caida_probe)
+    db_session.commit()
 
-        if probe_id not in probe_location_dct:
-            logger.debug('could not write measurement because probe ({}) has no location'.format(
-                probe_id))
-            return None
-
-        caida_probe = CaidaArkProbe(probe_id=probe_id, location_id=probe_location_dct)
-        db_session.add(caida_probe)
-        db_session.commit()
-        return caida_probe
+    return caida_probe
 
 
 def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
-                     probe_location_dct: typing.Dict[str, typing.List[float]]):
+                     probe_id_dct: typing.Dict[str, int]):
     Session = create_session_for_process()
     db_session = Session()
     try:
         while True:
             filename = filenames.get(timeout=1)
 
-            probe_id = filename.split('.')[0]
-
-            if probe_id not in probe_location_dct:
-                ValueError('location dict does not contain location for Probe with key {}'.format(
-                    probe_id))
-
-            probe = parse_caida_probe(probe_id, probe_location_dct, db_session)
+            probe_id = str(os.path.basename(filename).split('.')[0])
+            probe_db_id = probe_id_dct[probe_id]
 
             modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
 
@@ -181,7 +169,7 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                         rline = line_queue.get()
 
                 for line in line_generator():
-                    parse_measurement(line, probe, db_session, days_in_past)
+                    parse_measurement(line, probe_db_id, db_session, days_in_past)
             else:
                 with open(filename) as caida_archive_filedesc, \
                         mmap.mmap(caida_archive_filedesc.fileno(), 0,
@@ -189,7 +177,7 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                     line = caida_archive_file.readline().decode('utf-8')
 
                     while len(line) > 0:
-                        parse_measurement(line, probe, db_session, days_in_past)
+                        parse_measurement(line, probe_db_id, db_session, days_in_past)
 
                         line = caida_archive_file.readline().decode('utf-8')
 
@@ -199,18 +187,20 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     except queue.Empty:
         pass
 
-
     db_session.commit()
 
     db_session.close()
     Session.remove()
 
 
-def parse_measurement(archive_line: str, probe: CaidaArkProbe, db_session: Session, days_in_past: int):
+def parse_measurement(archive_line: str, probe_id: int, db_session: Session, days_in_past: int):
     if archive_line.startswith('timestamp'):
         return
 
-    measurement = CaidaArkMeasurementResult.create_from_archive_line(archive_line, probe.id)
+    measurement = CaidaArkMeasurementResult.create_from_archive_line(archive_line, probe_id)
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
         db_session.add(measurement)
+
+if __name__ == '__main__':
+    main()

@@ -195,7 +195,6 @@ class LocationInfo(Location):
     alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
 
     state = sqlorm.relationship(State, back_populates='location_infos', cascade="all")
-    matches = sqlorm.relationship('CodeMatch', back_populates='location_info')
     nearby_probes = sqlorm.relationship('Probe',
                                         secondary=probe_location_info_table,
                                         back_populates='location_infos')

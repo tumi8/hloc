@@ -119,7 +119,7 @@ class CaidaArkMeasurementResult(MeasurementResult):
                                                        timestamp=timestamp,
                                                        source_address=src,
                                                        destination_address=dst,
-                                                       rtts=[rtt],
+                                                       rtt=rtt,
                                                        measurement_protocol=MeasurementProtocol.icmp
                                                        )
 

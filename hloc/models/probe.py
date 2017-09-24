@@ -84,6 +84,9 @@ class Probe(Base):
                ", last_seen: " + str(self.last_seen) + ", measurement_type: " + \
                self.measurement_type + ")>"
 
+    def __hash__(self):
+        return hash(self.probe_id)
+
 
 class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
@@ -110,6 +113,8 @@ class RipeAtlasProbe(Probe):
                 return 1
             elif property_key == RipeAtlasProbe.MeasurementKeys.bill_to_address.value:
                 return None
+            elif property_key == RipeAtlasProbe.MeasurementKeys.additional_probes.value:
+                return []
             raise ValueError('Property ' + property_key + ' has no default value')
 
     def __init__(self, **kwargs):
@@ -144,7 +149,7 @@ class RipeAtlasProbe(Probe):
 
         return probe
 
-    def measure_rtt(self, dest_address: str, db_session: Session, **kwargs) \
+    def measure_rtt(self, dest_address: str, **kwargs) \
             -> typing.Optional[RipeMeasurementResult]:
         if not self.available:
             raise ProbeError('Probe currently not available')
@@ -189,7 +194,6 @@ class RipeAtlasProbe(Probe):
         measurement_result = self._get_measurement_response(measurement_id,
                                                             ripe_slowdown_sema=ripe_slowdown_sema,
                                                             additional_probes=additional_probes)
-        db_session.add(measurement_result)
         return measurement_result
 
     def _create_request(self, dest_address, kwargs):
@@ -204,8 +208,6 @@ class RipeAtlasProbe(Probe):
 
         ping = ripe_atlas.Ping(af=af, packets=packets, target=dest_address,
                                description=measurement_description, interval=3600)
-
-
 
         if RipeAtlasProbe.MeasurementKeys.additional_probes.value in kwargs:
             probe_ids = [self.probe_id]
@@ -262,10 +264,11 @@ class RipeAtlasProbe(Probe):
         min_result = min(m_results, key=operator.itemgetter('min'))
         measurement_result = RipeMeasurementResult.create_from_dict(min_result)
         if self.probe_id == min_result['prb_id']:
-            measurement_result.probe = self
+            measurement_result.probe_id = self.probe_id
         else:
-            probe = [probe for probe in additional_probes if probe.probe_id == min_result['prb_id']]
-            measurement_result.probe = self
+            probe = [probe for probe in additional_probes
+                     if probe.probe_id == min_result['prb_id']][0]
+            measurement_result.probe_id = probe.probe_id
 
         return measurement_result
 
@@ -274,7 +277,7 @@ class RipeAtlasProbe(Probe):
         """return timestamp when the probe was last updated"""
         return self._last_update
 
-    def available(self, max_age=datetime.timedelta(hours=12)) -> typing.Optional[AvailableType]:
+    def available(self, max_age=datetime.timedelta(hours=2)) -> typing.Optional[AvailableType]:
         """
         Should return if the probe is available for measurements
         :param max_age: :datetime.timedelta: the maximum age of the info

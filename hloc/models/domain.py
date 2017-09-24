@@ -21,8 +21,6 @@ class CodeMatch(LocationHint):
     code_type = sqla.Column(postgresql.ENUM(LocationCodeType), nullable=False)
     code = sqla.Column(sqla.String(50), nullable=False)
 
-    location_info = sqlorm.relationship('LocationInfo', back_populates='matches')
-
     def __init__(self, location_id, domain_label,
                  code_type: LocationCodeType, code=None):
         """init"""
@@ -118,8 +116,8 @@ class Domain(Base):
         """Returns all matches of the domain"""
         matches = []
         location_ids = set()
-        for label in self.domain_labels[::-1]:
-            for match in label.code_matches:
+        for label in self.labels[::-1]:
+            for match in label.hints:
                 if match.location_id not in location_ids:
                     location_ids.add(match.location_id)
                     matches.append(match)
