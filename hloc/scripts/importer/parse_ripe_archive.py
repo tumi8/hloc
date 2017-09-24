@@ -4,7 +4,6 @@ Parse data from the ripe archive files
 """
 
 import argparse
-import bz2
 import collections
 import datetime
 import enum
@@ -15,16 +14,16 @@ import multiprocessing as mp
 import os
 import queue
 import re
-import requests
 import subprocess
 import sys
 import threading
 import typing
 
 from hloc import util
-from hloc.db_utils import create_session_for_process, probe_for_id, location_for_coordinates
-from hloc.models import RipeMeasurementResult, RipeAtlasProbe, Session, MeasurementProtocol, \
+from hloc.db_utils import create_session_for_process
+from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementProtocol, \
     MeasurementError, MeasurementResult
+from hloc.ripe_helper.history_helper import get_archive_probes
 
 logger = None
 
@@ -64,7 +63,7 @@ def main():
 
     Session = create_session_for_process()
     db_session = Session()
-    probe_dct = get_probes(db_session)
+    probe_dct = get_archive_probes(db_session)
 
     db_session.close()
     Session.remove()
@@ -81,31 +80,6 @@ def main():
 
     for process in processes:
         process.join()
-
-
-def get_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
-                        yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
-
-    ripe_response = requests.get(probe_archive_url)
-
-    if ripe_response.status_code != 200:
-        ripe_response.raise_for_status()
-
-    probe_str = bz2.decompress(ripe_response.content)
-    probes_dct_list = json.loads(probe_str)['objects']
-    return_dct = {}
-
-    for probe_dct in probes_dct_list:
-        if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
-            probe = parse_probe(probe_dct, db_session)
-            return_dct[str(probe.probe_id)] = probe
-
-    db_session.add_all(return_dct.values())
-    db_session.commit()
-
-    return return_dct
 
 
 def get_filenames(archive_path: str, file_regex: str) -> mp.Queue:
@@ -157,7 +131,6 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
             logger.info('parsing {}'.format(filename))
 
             results = collections.defaultdict(dict)
-            count = 0
 
             if bz2_compressed:
                 line_queue = queue.Queue(10**5)
@@ -207,11 +180,6 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                             results[measurement_result.destination_address][
                                 measurement_result.probe_id] = measurement_result
 
-                            count += 1
-
-                            if count % 10**5 == 0:
-                                logger.info('parsed measurements'.format(count))
-
                 read_thread.join()
             else:
                 with open(filename) as ripe_archive_filedesc, \
@@ -234,11 +202,6 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                                 results[measurement_result.destination_address][
                                     measurement_result.probe_id] = measurement_result
 
-                                count += 1
-
-                                if count % 10 ** 5 == 0:
-                                    logger.info('parsed measurements'.format(count))
-
                         line = ripe_archive_file.readline().decode('utf-8')
 
             measurement_results = []
@@ -246,7 +209,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                 measurement_results.extend(probe_measurement_dct.values())
 
             db_session.bulk_save_objects(measurement_results)
-            logger.info('parsed and saved {} measurements'.format(count))
+            logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
             db_session.commit()
 
             if debugging:
@@ -293,25 +256,6 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
 
     logger.debug('finished reading {}'.format(filename))
     finished_reading.set()
-
-
-def parse_probe(probe_dct: typing.Dict[str, typing.Any],
-                db_session: Session) -> RipeAtlasProbe:
-    probe_id = probe_dct['id']
-    probe_db_obj = probe_for_id(str(probe_id), db_session)
-
-    if probe_db_obj and \
-            probe_db_obj.location.gps_distance_haversine_plain(
-                probe_dct['latitude'], probe_dct['longitude']) < 2:
-        return probe_db_obj
-
-    location = location_for_coordinates(probe_dct['latitude'],
-                                        probe_dct['longitude'],
-                                        db_session)
-
-    probe_db_obj = RipeAtlasProbe(probe_id=probe_id, location=location)
-
-    return probe_db_obj
 
 
 def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]) \

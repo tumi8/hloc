@@ -5,6 +5,7 @@ Parse Caida icmp ping data
 
 import argparse
 import bz2
+import collections
 import datetime
 import mmap
 import multiprocessing as mp
@@ -137,6 +138,7 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                      probe_id_dct: typing.Dict[str, int]):
     Session = create_session_for_process()
     db_session = Session()
+
     try:
         while True:
             filename = filenames.get(timeout=1)
@@ -145,6 +147,8 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
             probe_db_id = probe_id_dct[probe_id]
 
             modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+
+            measurements = collections.defaultdict(dict)
 
             if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
                 continue
@@ -169,7 +173,16 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                         rline = line_queue.get()
 
                 for line in line_generator():
-                    parse_measurement(line, probe_db_id, db_session, days_in_past)
+                    measurement = parse_measurement(line, probe_db_id, days_in_past)
+
+                    if measurement:
+                        if measurement.probe_id not in \
+                                measurements[measurement.destination_address] or \
+                                measurements[measurement.destination_address][
+                                    measurement.probe_id].min_rtt > \
+                                measurement.min_rtt:
+                            measurements[measurement.destination_address][measurement.probe_id] = \
+                                measurement
             else:
                 with open(filename) as caida_archive_filedesc, \
                         mmap.mmap(caida_archive_filedesc.fileno(), 0,
@@ -177,9 +190,27 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                     line = caida_archive_file.readline().decode('utf-8')
 
                     while len(line) > 0:
-                        parse_measurement(line, probe_db_id, db_session, days_in_past)
+                        measurement = parse_measurement(line, probe_db_id, days_in_past)
+
+                        if measurement:
+                            if measurement.probe_id not in \
+                                    measurements[measurement.destination_address] or \
+                                    measurements[measurement.destination_address][
+                                        measurement.probe_id].min_rtt > \
+                                    measurement.min_rtt:
+                                measurements[measurement.destination_address][
+                                    measurement.probe_id] = \
+                                    measurement
 
                         line = caida_archive_file.readline().decode('utf-8')
+
+            measurement_results = []
+            for probe_measurement_dct in measurements.values():
+                measurement_results.extend(probe_measurement_dct.values())
+
+            db_session.bulk_save_objects(measurement_results)
+            logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
+            db_session.commit()
 
             if debugging:
                 break
@@ -193,7 +224,7 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     Session.remove()
 
 
-def parse_measurement(archive_line: str, probe_id: int, db_session: Session, days_in_past: int):
+def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
     if archive_line.startswith('timestamp'):
         return
 
@@ -201,7 +232,7 @@ def parse_measurement(archive_line: str, probe_id: int, db_session: Session, day
     measurement.rtt = measurement.rtt + 2
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
-        db_session.add(measurement)
+        return measurement
 
 if __name__ == '__main__':
     main()
