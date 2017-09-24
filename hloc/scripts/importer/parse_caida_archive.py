@@ -36,7 +36,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
-    parser.add_argument('-l', '--logging-file', type=str, default='check_locations.log',
+    parser.add_argument('-l', '--logging-file', type=str, default='caida-archive-parsing.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
@@ -142,6 +142,8 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     try:
         while True:
             filename = filenames.get(timeout=1)
+            
+            logger.debug('parsing {}'.format(filename))
 
             probe_id = str(os.path.basename(filename).split('.')[0])
             probe_db_id = probe_id_dct[probe_id]
