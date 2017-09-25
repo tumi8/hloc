@@ -83,7 +83,7 @@ class RipeMeasurementResult(MeasurementResult):
         measurement_result.ripe_measurement_id = \
             ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.measurement_id.value]
         rtts = []
-        for ping in measurement_result[
+        for ping in ripe_result_dict[
                            RipeMeasurementResult.RipeMeasurementResultKey.rtt_dicts.value]:
             rtt_value = ping.get(RipeMeasurementResult.RipeMeasurementResultKey.rtt.value, None)
             if rtt_value:
@@ -92,10 +92,10 @@ class RipeMeasurementResult(MeasurementResult):
                 except ValueError:
                     continue
 
-        measurement_result.rtt = min(rtts)
-
         if not rtts:
             measurement_result.error_msg = MeasurementError.not_reachable
+        else:
+            measurement_result.rtt = min(rtts)
 
         measurement_result.timestamp = datetime.datetime.fromtimestamp(
             ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.timestamp.value])

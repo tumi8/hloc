@@ -28,7 +28,7 @@ def __get_measurements_for_nodes(measurement_ids: [int],
 
     node_dct = {}
     for node in near_nodes:
-        node_dct[node.probe_id] = node
+        node_dct[node.probe_id] = node.id
 
     for measurement_id in measurement_ids:
         allowed_start_time = int(time.time()) - allowed_measurement_age
@@ -57,7 +57,7 @@ def __get_measurements_for_nodes(measurement_ids: [int],
         measurements = []
         for res in result_list:
             ripe_measurement = RipeMeasurementResult.create_from_dict(res)
-            ripe_measurement.probe = node_dct[res['prb_id']]
+            ripe_measurement.probe_id = node_dct[str(res['prb_id'])]
 
             measurements.append(ripe_measurement)
 
@@ -90,7 +90,7 @@ def check_measurements_for_nodes(measurement_ids: [int],
         logging.debug('next result {}'.format(len(measurements)))
         for measurement in measurements:
             oldest_allowed_time = int(time.time()) - allowed_measurement_age
-            if measurement.timestamp < oldest_allowed_time:
+            if measurement.timestamp.timestamp() < oldest_allowed_time:
                 continue
 
             measurement_objs.append(measurement)
@@ -105,13 +105,14 @@ def check_measurements_for_nodes(measurement_ids: [int],
                     if date_n is None or date_n < measurement.timestamp:
                         date_n = measurement.timestamp
 
-            elif temp_result is None or result_rtt.min_rtt < temp_result.min_rtt:
+            elif temp_result is None or result_rtt < temp_result.min_rtt:
                 temp_result = measurement
 
-    measurement_objs.remove(temp_result)
-    measurement_objs.insert(0, temp_result)
+    if temp_result:
+        measurement_objs.remove(temp_result)
+        measurement_objs.insert(0, temp_result)
 
-    return temp_result
+    return measurement_objs
 
 
 def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
@@ -140,9 +141,9 @@ def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
 
 
 def __parse_probe(probe_dct: typing.Dict[str, typing.Any],
-                db_session: Session) -> RipeAtlasProbe:
-    probe_id = probe_dct['id']
-    probe_db_obj = probe_for_id(str(probe_id), db_session)
+        db_session: Session) -> RipeAtlasProbe:
+    probe_id = str(probe_dct['id'])
+    probe_db_obj = probe_for_id(probe_id, db_session)
 
     if probe_db_obj and \
             probe_db_obj.location.gps_distance_haversine_plain(

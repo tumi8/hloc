@@ -143,7 +143,7 @@ class RipeAtlasProbe(Probe):
             ValueError('latitude or longitude not in json to create Ripe Atlas Probe object')
 
         probe = RipeAtlasProbe()
-        probe.probe_id = _id
+        probe.probe_id = str(_id)
         probe.location = _location
         probe._update()
 
@@ -265,12 +265,12 @@ class RipeAtlasProbe(Probe):
 
         min_result = min(m_results, key=operator.itemgetter('min'))
         measurement_result = RipeMeasurementResult.create_from_dict(min_result)
-        if self.probe_id == min_result['prb_id']:
-            measurement_result.probe_id = self.probe_id
+        if self.probe_id == str(min_result['prb_id']):
+            measurement_result.probe_id = self.id
         else:
             probe = [probe for probe in additional_probes
-                     if probe.probe_id == min_result['prb_id']][0]
-            measurement_result.probe_id = probe.probe_id
+                     if probe.probe_id == str(min_result['prb_id'])][0]
+            measurement_result.probe_id = probe.id
 
         return measurement_result
 

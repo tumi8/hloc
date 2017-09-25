@@ -166,6 +166,9 @@ class Location(Base):
 
         return math.degrees(lat_new), math.degrees(lon_new)
 
+    def __hash__(self):
+        return hash(self.id)
+
 
 probe_location_info_table = sqla.Table('probe_location_infos', Base.metadata,
                                        sqla.Column('probe_id', sqla.Integer,

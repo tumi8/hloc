@@ -16,6 +16,8 @@ import queue
 
 from sqlalchemy.exc import InvalidRequestError
 
+import ripe.atlas.cousteau.exceptions as ripe_exceptions
+
 from hloc import util, constants
 from hloc.models import *
 from hloc.models.location import probe_location_info_table
@@ -95,6 +97,8 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Debug argument to prevent getting ripe probes')
     parser.add_argument('--include-ip-encoded', action='store_true',
                         help='Search also domains of type IP encoded')
+    parser.add_argument('--stop-without-old-results', action='store_true',
+                        help='Do not measure for domains if there is no existing measurement')
     parser.add_argument('--debug', action='store_true', help='Use only one process and one thread')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
@@ -157,19 +161,28 @@ def main():
 
         for location in locations:
             if location.nearby_probes:
+                location_to_probes_dct[location.id] = []
                 for probe in location.nearby_probes:
                     probes.add(probe)
-                location_to_probes_dct[location.id] = [(probe,
-                                                        location.gps_distance_haversine(
-                                                            probe.location)
-                                                        )
-                                                       for probe in location.nearby_probes]
+                    _ = str(probe.location.lat + probe.location.lon) + probe.location.id
+                    location_to_probes_dct[location.id].append((
+                        probe,
+                        location.gps_distance_haversine(probe.location),
+                        probe.location
+                    ))
             else:
                 loc_without_probes += 1
 
-        for probe in probes:
-            db_session.expunge(probe)
+        logger.debug('expunging probes')
 
+        for probe in probes:
+            try:
+                db_session.expunge(probe.location)
+                db_session.expunge(probe)
+            except InvalidRequestError:
+                pass
+
+        logger.debug('updating probes')
         update_probes(probes)
 
         logger.info('{} locations without nodes'.format(loc_without_probes))
@@ -205,7 +218,8 @@ def main():
                                    args.buffer_time,
                                    args.measurement_packets,
                                    args.use_efficient_probes,
-                                   location_to_probes_dct),
+                                   location_to_probes_dct,
+                                   args.stop_without_old_results),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -271,7 +285,8 @@ def ripe_check_process(pid: int,
                        packets_per_measurement: int,
                        use_efficient_probes: bool,
                        location_to_probes_dct: typing.Dict[
-                           str, typing.Tuple[RipeAtlasProbe, float]]):
+                           str, typing.Tuple[RipeAtlasProbe, float]],
+                       stop_without_old_results: bool):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -317,6 +332,7 @@ def ripe_check_process(pid: int,
                     for location_hint in location_hints:
                         if isinstance(location_hint, CodeMatch):
                             _ = location_hint.location.name
+                            _ = location_hint.code_type
                             location_hint_tuples.append((location_hint,
                                                          location_hint.location))
 
@@ -334,17 +350,19 @@ def ripe_check_process(pid: int,
                         db_session=db_session,
                         allow_all_zmap_measurements=True)
 
-                    measurement_results = []
+                    measurement_result_tuples = []
 
                     for res in measurement_results_query:
-                        measurement_results.append(res)
+                        _ = res.probe.location
+                        measurement_result_tuples.append((res, res.probe.location))
                         try:
+                            db_session.expunge(res.probe.location)
                             db_session.expunge(res)
                         except InvalidRequestError:
                             pass
 
                     db_session.expunge(domain)
-                    return domain, location_hint_tuples, measurement_results
+                    return domain, location_hint_tuples, measurement_result_tuples
             except StopIteration:
                 return None
 
@@ -366,7 +384,8 @@ def ripe_check_process(pid: int,
                                             packets_per_measurement,
                                             use_efficient_probes,
                                             location_to_probes_dct,
-                                            measurement_results_queue))
+                                            measurement_results_queue,
+                                            stop_without_old_results))
 
             threads.append(thread)
             thread.start()
@@ -424,8 +443,8 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
                                       [],
                                       typing.Tuple[
                                           Domain,
-                                          typing.List[typing.Tuple[LocationHint, str]],
-                                          typing.List[MeasurementResult]
+                                          typing.List[typing.Tuple[LocationHint, Location]],
+                                          typing.List[typing.Tuple[MeasurementResult, Location]]
                                       ]],
                                   increment_domain_type_count: typing.Callable[
                                       [DomainLocationType], None],
@@ -444,8 +463,9 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
                                   packets_per_measurement: int,
                                   use_efficient_probes: bool,
                                   location_to_probes_dct: typing.Dict[
-                                      str, typing.Tuple[RipeAtlasProbe, float]],
-                                  measurement_results_queue: queue.Queue):
+                                      str, typing.Tuple[RipeAtlasProbe, float, Location]],
+                                  measurement_results_queue: queue.Queue,
+                                  stop_without_old_results: bool):
     """The method called to create a thread and manage the domain checks"""
     logger.debug('thread started')
 
@@ -458,7 +478,7 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
             else:
                 break
 
-    for domain, location_hints, measurement_results in get_domains():
+    for domain, location_hints, measurement_result_tuples in get_domains():
         try:
             logger.debug('next domain')
             check_domain_location_ripe(domain, location_hints, increment_domain_type_count,
@@ -467,8 +487,8 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
                                        wo_measurements, allowed_measurement_age, api_key,
                                        measurement_strategy, number_of_probes_per_measurement,
                                        buffer_time, packets_per_measurement, use_efficient_probes,
-                                       location_to_probes_dct, measurement_results,
-                                       measurement_results_queue)
+                                       location_to_probes_dct, measurement_result_tuples,
+                                       measurement_results_queue, stop_without_old_results)
         except Exception:
             logger.exception('Check Domain Error')
 
@@ -495,9 +515,11 @@ def check_domain_location_ripe(domain: Domain,
                                packets_per_measurement: int,
                                use_efficient_probes: bool,
                                location_to_probes_dct: typing.Dict[
-                                   str, typing.Tuple[RipeAtlasProbe, float]],
-                               old_measurement_results: typing.List[MeasurementResult],
-                               measurement_results_queue: queue.Queue):
+                                   str, typing.Tuple[RipeAtlasProbe, float, Location]],
+                               old_measurement_results: typing.List[typing.Tuple[MeasurementResult,
+                                                                                 Location]],
+                               measurement_results_queue: queue.Queue,
+                               stop_without_old_results: bool):
     """checks if ip is at location"""
     matched = False
 
@@ -505,7 +527,7 @@ def check_domain_location_ripe(domain: Domain,
 
     allowed_age = allowed_measurement_age
     if old_measurement_results:
-        newest_restult_timestamp = old_measurement_results[0].timestamp
+        newest_restult_timestamp = old_measurement_results[0][0].timestamp
         time_since_last_result = (datetime.datetime.now() - newest_restult_timestamp).seconds
 
         if time_since_last_result < allowed_measurement_age:
@@ -521,6 +543,19 @@ def check_domain_location_ripe(domain: Domain,
         return
 
     matches = location_hints
+
+    def add_new_result(new_result: typing.Tuple[MeasurementResult, Location]):
+        remove_obj = None
+        for iter_result, iter_location in results:
+            if str(iter_result.probe_id) == str(new_result[0].probe_id):
+                if iter_result.rtt <= new_result[0].rtt:
+                    return
+                else:
+                    remove_obj = iter_result, iter_location
+                    break
+        if remove_obj:
+            results.remove(remove_obj)
+        results.append(new_result)
 
     def get_next_match():
         """
@@ -538,10 +573,8 @@ def check_domain_location_ripe(domain: Domain,
         if isinstance(return_val, tuple):
             rtt, match_tuple = return_val
             increment_count_for_type(match_tuple[0].code_type)
-            # match.matching = True
-            # match.matching_rtt = rtt
 
-            increment_domain_type_count(DomainLocationType.correct)
+            increment_domain_type_count(DomainLocationType.verified)
             matched = True
             return None
         else:
@@ -561,10 +594,11 @@ def check_domain_location_ripe(domain: Domain,
         logger.debug('number of ripe measurements {}'.format(len(measurement_ids)))
     else:
         measurement_ids = []
-        
-    if (not measurement_ids and not old_measurement_results) or \
-            not [res for res in old_measurement_results
-                 if isinstance(res, CaidaArkMeasurementResult)]:
+
+    if stop_without_old_results and \
+            ((not measurement_ids and not old_measurement_results) or
+             not [res for res in old_measurement_results
+                  if isinstance(res, CaidaArkMeasurementResult)]):
         increment_domain_type_count(DomainLocationType.not_reachable)
         return
 
@@ -574,16 +608,16 @@ def check_domain_location_ripe(domain: Domain,
             next_match = next_match_tup[0]
             near_node_distances = location_to_probes_dct.get(location.id)
 
+            if not near_node_distances:
+                no_verification_matches.append((next_match, location))
+                continue
+
             logger.debug('match_id {} location_id {} #near_nodes {}'.format(next_match.id,
                                                                             location.id,
                                                                             len(near_node_distances)
                                                                             ))
 
-            if not near_node_distances:
-                no_verification_matches.append(next_match)
-                continue
-
-            probes = [probe for probe, _ in near_node_distances]
+            probes = [probe for probe, _, _ in near_node_distances]
             measurement_results = check_measurements_for_nodes(measurement_ids,
                                                                probes,
                                                                ripe_slow_down_sema,
@@ -593,25 +627,18 @@ def check_domain_location_ripe(domain: Domain,
                 make_measurement = False
 
                 for res in measurement_results:
-                    measurement_results_queue.put(res)
+                    if res.min_rtt:
+                        measurement_results_queue.put(res)
 
                 measurement_result = measurement_results[0]
-                results.append(measurement_result)
+                used_probe, node_location_dist, used_probe_loc = \
+                    [(probe, dst, probe_loc) for probe, dst, probe_loc in near_node_distances
+                     if probe.id == measurement_result.probe_id][0]
+
+                if measurement_result.min_rtt:
+                    add_new_result((measurement_result, used_probe_loc))
 
                 logger.debug('checked for measurement results')
-
-                def add_new_result(new_result: MeasurementResult):
-                    remove_obj = None
-                    for iter_result in results:
-                        if str(iter_result.location_id) == str(new_result.location_id):
-                            if iter_result.rtt <= new_result.rtt:
-                                return
-                            else:
-                                remove_obj = iter_result
-                                break
-                    if remove_obj:
-                        results.remove(remove_obj)
-                    results.append(new_result)
 
                 if not wo_measurements:
                     make_measurement = make_measurement or (measurement_result.min_rtt is None and
@@ -619,9 +646,6 @@ def check_domain_location_ripe(domain: Domain,
                                                                 MeasurementStrategy.anticipated,
                                                                 MeasurementStrategy.aggressive])
                     if not make_measurement:
-                        node_location_dist = location.gps_distance_haversine(
-                            measurement_result.probe.location)
-
                         make_measurement = measurement_result.min_rtt >= (
                             buffer_time + node_location_dist / 100)
 
@@ -632,7 +656,7 @@ def check_domain_location_ripe(domain: Domain,
                     available_nodes = __get_available_probes([ip_version], probes)
 
                     if not available_nodes:
-                        no_verification_matches.append(next_match)
+                        no_verification_matches.append((next_match, location))
                         continue
 
                     measurement_results = create_and_check_measurement(
@@ -650,13 +674,19 @@ def check_domain_location_ripe(domain: Domain,
                     if not measurement_results:
                         continue
 
+                    if not measurement_results[0].min_rtt:
+                        increment_domain_type_count(DomainLocationType.not_reachable)
+                        return
+
                     measurement_result = min(measurement_results, key=lambda result: result.min_rtt)
 
                     for res in measurement_results:
-                        measurement_results_queue.put(res)
+                        if res.min_rtt:
+                            measurement_results_queue.put(res)
 
-                    node_location_dist = location.gps_distance_haversine(
-                        measurement_result.probe_id.location)
+                    used_probe, node_location_dist, used_probe_loc = \
+                        [(probe, dst, probe_loc) for probe, dst, probe_loc in near_node_distances
+                         if probe.id == measurement_result.probe_id][0]
 
                     logger.debug('finished measurement')
 
@@ -670,14 +700,15 @@ def check_domain_location_ripe(domain: Domain,
                         increment_domain_type_count(DomainLocationType.verified)
                         break
                     else:
-                        add_new_result(measurement_result)
+                        add_new_result((measurement_result, used_probe_loc))
 
             elif measurement_result.min_rtt is None:
                 increment_domain_type_count(DomainLocationType.not_reachable)
                 return
             else:
-                node_location_dist = location.gps_distance_haversine(
-                    measurement_result.probe.location)
+                used_probe, node_location_dist, used_probe_loc = \
+                    [(probe, dst, probe_loc) for probe, dst, probe_loc in near_node_distances
+                     if probe.id == measurement_result.probe_id][0]
 
                 if measurement_result.min_rtt < (buffer_time + node_location_dist / 100):
                     increment_count_for_type(next_match.code_type)
@@ -687,7 +718,7 @@ def check_domain_location_ripe(domain: Domain,
                 else:
                     add_new_result(measurement_result)
 
-            no_verification_matches.append(next_match)
+            no_verification_matches.append((next_match, location))
             logger.debug('next match')
         finally:
             if not matched:
@@ -720,18 +751,17 @@ def __get_available_probes(ip_versions: [str], probes: [RipeAtlasProbe]):
     return [probe for probe in probes if probe.available() in ip_versions_needed]
 
 
-def eliminate_duplicate_results(results: [MeasurementResult]):
-    remove_obj = []
-    for result in results:
-        if result not in remove_obj:
-            for inner_result in results:
+def eliminate_duplicate_results(results: [typing.Tuple[MeasurementResult, Location]]):
+    remove_obj = set()
+    for result, location in results:
+        if (result, location) not in remove_obj:
+            for inner_result, inner_location in results:
                 if result is not inner_result and inner_result not in remove_obj:
-                    if result.probe.location.gps_distance_haversine(inner_result.probe.location) \
-                            < 100:
+                    if location.gps_distance_haversine(inner_location) < 100:
                         if result.min_rtt < inner_result.min_rtt:
-                            remove_obj.append(inner_result)
+                            remove_obj.add((inner_result, inner_location))
                         else:
-                            remove_obj.append(result)
+                            remove_obj.add((result, location))
                             break
 
     for obj in remove_obj:
@@ -739,7 +769,7 @@ def eliminate_duplicate_results(results: [MeasurementResult]):
 
 
 def filter_possible_matches(matches: [typing.Tuple[LocationHint, LocationInfo]],
-                            results: [MeasurementResult],
+                            results: [typing.Tuple[MeasurementResult, Location]],
                             buffer_time: float) \
         -> typing.Union[bool, typing.Tuple[float, typing.Tuple[LocationHint, LocationInfo]]]:
     """
@@ -751,17 +781,17 @@ def filter_possible_matches(matches: [typing.Tuple[LocationHint, LocationInfo]],
         return True if matches else False
 
     f_results = results[:]
-    f_results.sort(key=lambda res: res.rtt)
+    f_results.sort(key=lambda res: res[0].rtt)
     f_results = f_results[:10]
 
     near_matches = collections.defaultdict(list)
     for match, location_info in matches:
         location_distances = []
-        for result in f_results:
+        for result, loc in f_results:
             if result.min_rtt is None:
                 continue
 
-            distance = result.probe.location.gps_distance_haversine(location_info)
+            distance = loc.gps_distance_haversine(location_info)
 
             if distance > result.min_rtt * 100:
                 break
@@ -771,16 +801,16 @@ def filter_possible_matches(matches: [typing.Tuple[LocationHint, LocationInfo]],
                     result.min_rtt < buffer_time + distance / 100:
                 return result.rtt, (match, location_info)
 
-            location_distances.append((result, distance))
+            location_distances.append(((result, loc), distance))
 
         if len(location_distances) != len(f_results):
             continue
 
-        min_res = min(location_distances, key=lambda res: res[1])[0]
+        min_res = min(location_distances, key=lambda res: res[0][0].rtt)[0]
 
-        near_matches[min_res.probe.location].append(match)
+        near_matches[min_res[1]].append((match, location_info))
 
-    if f_results[0].rtt > 75:
+    if not f_results[0][0].rtt or f_results[0][0].rtt > 75:
         def match_in_near_matches(m_match):
             for near_match_arr in near_matches.values():
                 if m_match in near_match_arr:
@@ -799,11 +829,10 @@ def filter_possible_matches(matches: [typing.Tuple[LocationHint, LocationInfo]],
         matches.clear()
         handled_locations = set()
 
-        for result in f_results:
-            if result.probe.location in near_matches and \
-                            result.probe.location not in handled_locations:
-                handled_locations.add(result.probe.location)
-                matches.extend(near_matches[result.probe.location])
+        for result, loc in f_results:
+            if loc in near_matches and loc not in handled_locations:
+                handled_locations.add(loc)
+                matches.extend(near_matches[loc])
 
     return True if matches else False
 
@@ -868,7 +897,17 @@ def update_probes(probes: [RipeAtlasProbe]):
         try:
             while True:
                 probe_t = probe_queue_int.get(timeout=1)
-                probe_t.update()
+                retries = 0
+                while True:
+                    try:
+                        probe_t.update()
+                    except ripe_exceptions.APIResponseError:
+                        retries += 1
+
+                        if retries % 5 == 0:
+                            logger.exception('ripe ApiResponseError mod 5:')
+                    else:
+                        break
         except queue.Empty:
             pass
 
@@ -890,7 +929,7 @@ def update_probes(probes: [RipeAtlasProbe]):
 
 def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
                            db_session: Session) -> typing.Dict[str,
-                                                               typing.Tuple[RipeAtlasProbe, float]]:
+                                                               typing.Tuple[RipeAtlasProbe, float, Location]]:
     near_probes_assignments = []
     location_to_probes_dct = {}
 
@@ -899,16 +938,22 @@ def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
         for probe in probes:
             dist = probe.location.gps_distance_haversine(location)
             if dist < 1000:
-                near_probes.append((probe, dist))
+                _ = str(probe.location.lat) + str(probe.location.lon) + probe.location.id
+                near_probes.append((probe, dist, probe.location))
 
         near_probes.sort(key=operator.itemgetter(1))
+        near_probes = near_probes[:200]
         location_to_probes_dct[location.id] = near_probes
         near_probes_assignments.extend([{'probe_id': probe[0].id,
                                          'location_info_id': location.id}
                                         for probe in near_probes])
 
     for probe in probes:
-        db_session.expunge(probe)
+        try:
+            db_session.expunge(probe.location)
+            db_session.expunge(probe)
+        except InvalidRequestError:
+            pass
 
     db_session.execute(probe_location_info_table.delete())
     insert_expr = probe_location_info_table.insert().values(near_probes_assignments)
