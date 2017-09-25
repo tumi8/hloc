@@ -42,7 +42,13 @@ def __get_measurements_for_nodes(measurement_ids: [int],
         ripe_slow_down_sema.acquire()
         success, result_list = ripe_atlas.AtlasResultsRequest(**params).create()
         retries = 0
+
         while not success and retries < 5:
+            if not success and 'error' in result_list and 'status' in result_list[
+                    'error'] and 'code' in result_list['error'] and result_list['error'][
+                    'status'] == 406 and result_list['error']['code'] == 104:
+                retries = 5
+                break
             logging.debug('AtlasResultsRequest error! {}'.format(result_list))
             time.sleep(10 + (random.randrange(0, 500) / 100))
             ripe_slow_down_sema.acquire()
@@ -126,7 +132,7 @@ def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
         ripe_response.raise_for_status()
 
     probe_str = bz2.decompress(ripe_response.content)
-    probes_dct_list = json.loads(probe_str)['objects']
+    probes_dct_list = json.loads(probe_str.decode())['objects']
     return_dct = {}
 
     for probe_dct in probes_dct_list:
