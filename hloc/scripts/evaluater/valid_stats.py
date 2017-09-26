@@ -88,11 +88,11 @@ def main():
         output_file.write(str_to_wrt)
 
     print('domains count: ')
-    pprint.pprint(sorted(domains_count.values(), key=operator.itemgetter(1)))
+    pprint.pprint(sorted(domains_count.items(), key=operator.itemgetter(1)))
     print('location_id_count')
-    pprint.pprint(sorted(location_id_count, key=operator.itemgetter(1)))
+    pprint.pprint(sorted(location_id_count.items(), key=operator.itemgetter(1)))
     print('probes_count')
-    pprint.pprint(sorted(probes_count, key=operator.itemgetter(1)))
+    pprint.pprint(sorted(probes_count.items(), key=operator.itemgetter(1)))
 
 
 def domain_base_name(domain_name):
