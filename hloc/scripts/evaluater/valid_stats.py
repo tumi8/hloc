@@ -32,12 +32,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='specify the ipVersion')
     parser.add_argument('-ma', '--allowed-measurement-age', type=int,
                         help='The allowed measurement age in seconds')
-    parser.add_argument('-bt', '--buffer-time', type=float, default=constants.DEFAULT_BUFFER_TIME,
-                        help='The assumed amount of time spent in router buffers')
-    parser.add_argument('-i', '--analyze-ip-encoded', action='store_true',
-                        help='Analyze the domains of type IP encoded')
-    parser.add_argument('-a', '--analyze-all', action='store_true',
-                        help='Analyze the domains of all types')
+    parser.add_argument('-t', '--exclude-traceroute', action='store_true')
     parser.add_argument('-o', '--output-filename', type=str)
     parser.add_argument('-l', '--log-file', type=str, default='validate-stats.log',
                         help='Specify a logging file where the log should be saved')
@@ -65,8 +60,8 @@ def main():
 
     db_session = scoped_session(sessionmaker(autoflush=True, bind=engine))()
 
-    slq_query = 'SELECT * from domainsWithDistanceRTTs(TIMESTAMP \'{}\')'.format(
-        oldest_date_allowed.strftime('%Y-%m-%d %H:%M:%S'))
+    slq_query = 'SELECT * from domainsWithDistanceRTTs(TIMESTAMP \'{}\', {})'.format(
+        oldest_date_allowed.strftime('%Y-%m-%d %H:%M:%S'), str(args.exclude_traceroute))
 
     results = db_session.execute(slq_query + ';')
 
