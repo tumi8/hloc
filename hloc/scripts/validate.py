@@ -15,19 +15,22 @@ import operator
 import queue
 
 from sqlalchemy.exc import InvalidRequestError
+from sqlalchemy.orm import sessionmaker, scoped_session
+import sqlalchemy.ext.declarative
+from sqlalchemy import create_engine
 
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
 
 from hloc import util, constants
 from hloc.models import *
 from hloc.models.location import probe_location_info_table
-from hloc.db_utils import get_measurements_for_domain, create_session_for_process, \
-    get_all_domains_splitted_efficient
+from hloc.db_utils import get_measurements_for_domain, get_all_domains_splitted_efficient
 from hloc.exceptions import ProbeError
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes, get_archive_probes
 
 logger = None
+engine = None
 MAX_THREADS = 10
 
 
@@ -105,6 +108,12 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-debugdb')
+
+
+def create_session_for_process():
+    engine.dispose()
+    return scoped_session(sessionmaker(autoflush=True, bind=engine))
 
 
 def main():
@@ -112,6 +121,11 @@ def main():
     parser = argparse.ArgumentParser()
     __create_parser_arguments(parser)
     args = parser.parse_args()
+
+    global engine
+    engine = create_engine('postgresql://hloc:hloc2017@localhost/{}'.format(args.database_name),
+                           echo=False)
+    Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
 
     global logger
     logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level)
