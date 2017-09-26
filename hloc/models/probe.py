@@ -171,10 +171,12 @@ class RipeAtlasProbe(Probe):
 
         atlas_request = self._create_request(dest_address, kwargs)
 
+        ripe_slowdown_sema.acquire()
         (success, response) = atlas_request.create()
 
         retries = 0
         while not success:
+            ripe_slowdown_sema.acquire()
             success, response = atlas_request.create()
 
             if success:
@@ -242,6 +244,7 @@ class RipeAtlasProbe(Probe):
 
         sleep_time(amount=360)
         while True:
+            ripe_slowdown_sema.acquire()
             res = ripe_helper.get_ripe_measurement(measurement_id)
             if res is not None:
                 if res.status_id == 4:
