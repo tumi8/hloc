@@ -97,3 +97,6 @@ def main():
 
 def domain_base_name(domain_name):
     return '.'.join(domain_name.split('.')[-2:])
+
+if __name__ == '__main__':
+    main()
