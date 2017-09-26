@@ -178,7 +178,8 @@ def main():
                 location_to_probes_dct[location.id] = []
                 for probe in location.nearby_probes:
                     probes.add(probe)
-                    _ = str(probe.location.lat + probe.location.lon) + probe.location.id
+                    _ = str(probe.location.lat + probe.location.lon) + probe.location.id + \
+                        str(probe.second_hop_latency)
                     location_to_probes_dct[location.id].append((
                         probe,
                         location.gps_distance_haversine(probe.location),
@@ -957,7 +958,8 @@ def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
         for probe in probes:
             dist = probe.location.gps_distance_haversine(location)
             if dist < 1000:
-                _ = str(probe.location.lat) + str(probe.location.lon) + probe.location.id
+                _ = str(probe.location.lat) + str(probe.location.lon) + probe.location.id + \
+                    str(probe.second_hop_latency)
                 near_probes.append((probe, dist, probe.location))
 
         near_probes.sort(key=operator.itemgetter(1))
