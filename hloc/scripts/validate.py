@@ -13,6 +13,7 @@ import enum
 import datetime
 import operator
 import queue
+import random
 
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -881,8 +882,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
         near_nodes.sort(key=lambda x: x.second_hop_latency if x.second_hop_latency else 10000)
         near_nodes = near_nodes[:number_of_probes * 2]
 
-    # while len(near_nodes) > number_of_probes:
-    #     del near_nodes[random.randint(0, len(near_nodes) - 1)]
+    while len(near_nodes) > number_of_probes:
+        del near_nodes[random.randint(0, len(near_nodes) - 1)]
 
     if not near_nodes:
         return None
@@ -896,7 +897,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                     RipeAtlasProbe.MeasurementKeys.ip_version.value: ip_version,
                     RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
                     RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema,
-                    RipeAtlasProbe.MeasurementKeys.num_packets.value: number_of_packets
+                    RipeAtlasProbe.MeasurementKeys.num_packets.value: number_of_packets,
+                    RipeAtlasProbe.MeasurementKeys.additional_probes: near_nodes[1:]
                 }
                 if bill_to_address:
                     params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
@@ -905,8 +907,13 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
 
                 return measurement_results
             except ProbeError:
-                NON_WORKING_PROBES.add(near_nodes[0])
-                near_nodes.remove(near_nodes[0])
+                for node in near_nodes:
+                    NON_WORKING_PROBES.add(node)
+                    near_nodes_all.remove(node)
+
+                near_nodes = near_nodes_all[:]
+                while len(near_nodes) > number_of_probes:
+                    del near_nodes[random.randint(0, len(near_nodes) - 1)]
 
                 if not near_nodes:
                     return None
