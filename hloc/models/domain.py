@@ -24,6 +24,7 @@ class CodeMatch(LocationHint):
     def __init__(self, location_id, domain_label,
                  code_type: LocationCodeType, code=None):
         """init"""
+        super().__init__()
         self.location_id = location_id
         self.code_type = code_type
         self.code = code
