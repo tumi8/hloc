@@ -596,9 +596,7 @@ def check_domain_location_ripe(domain: Domain,
         measurement_ids = []
 
     if stop_without_old_results and \
-            ((not measurement_ids and not old_measurement_results) or
-             not [res for res in old_measurement_results
-                  if isinstance(res, CaidaArkMeasurementResult)]):
+            (not measurement_ids and not old_measurement_results):
         increment_domain_type_count(DomainLocationType.not_reachable)
         return
 
