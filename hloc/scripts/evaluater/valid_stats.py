@@ -66,7 +66,7 @@ def main():
     db_session = scoped_session(sessionmaker(autoflush=True, bind=engine))()
 
     slq_query = 'SELECT * from domainsWithDistanceRTTs(TIMESTAMP \'{}\')'.format(
-        oldest_date_allowed.strftime('%Y-%M-%d %H:%m:%S'))
+        oldest_date_allowed.strftime('%Y-%m-%d %H:%M:%S'))
 
     results = db_session.execute(slq_query + ';')
 
