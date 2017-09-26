@@ -94,7 +94,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Amount of packets per measurement')
     parser.add_argument('-e', '--use-efficient-probes', action='store_true',
                         help='sort probes after second hop latency and use the most efficient ones')
-    parser.add_argument('-mt', '--probes-per-measurement', default=1,
+    parser.add_argument('-mt', '--probes-per-measurement', default=1, type=int,
                         help='Maximum amount of probes used per measurement')
     parser.add_argument('-dpf', '--disable-probe-fetching', action='store_true',
                         help='Debug argument to prevent getting ripe probes')
