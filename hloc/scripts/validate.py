@@ -898,7 +898,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                     RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
                     RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema,
                     RipeAtlasProbe.MeasurementKeys.num_packets.value: number_of_packets,
-                    RipeAtlasProbe.MeasurementKeys.additional_probes: near_nodes[1:]
+                    RipeAtlasProbe.MeasurementKeys.additional_probes.value: near_nodes[1:]
                 }
                 if bill_to_address:
                     params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
