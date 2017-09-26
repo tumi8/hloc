@@ -598,6 +598,7 @@ def check_domain_location_ripe(domain: Domain,
     if stop_without_old_results and \
             (not measurement_ids and not old_measurement_results):
         increment_domain_type_count(DomainLocationType.not_reachable)
+        logger.debug('not reachable')
         return
 
     while next_match_tup is not None:
@@ -670,10 +671,12 @@ def check_domain_location_ripe(domain: Domain,
                     )
 
                     if not measurement_results:
+                        logger.debug('not results')
                         continue
 
                     if not measurement_results[0].min_rtt:
                         increment_domain_type_count(DomainLocationType.not_reachable)
+                        logger.debug('not reachable')
                         return
 
                     measurement_result = min(measurement_results, key=lambda result: result.min_rtt)
@@ -690,18 +693,21 @@ def check_domain_location_ripe(domain: Domain,
 
                     if measurement_result.min_rtt is None:
                         increment_domain_type_count(DomainLocationType.not_reachable)
+                        logger.debug('not reachable')
                         return
                     elif measurement_result.min_rtt < (buffer_time +
                                                        node_location_dist / 100):
                         increment_count_for_type(next_match.code_type)
                         matched = True
                         increment_domain_type_count(DomainLocationType.verified)
+                        logger.debug('success')
                         break
                     else:
                         add_new_result((measurement_result, used_probe_loc))
 
             elif measurement_result.min_rtt is None:
                 increment_domain_type_count(DomainLocationType.not_reachable)
+                logger.debug('not reachable')
                 return
             else:
                 used_probe, node_location_dist, used_probe_loc = \
@@ -712,6 +718,7 @@ def check_domain_location_ripe(domain: Domain,
                     increment_count_for_type(next_match.code_type)
                     matched = True
                     increment_domain_type_count(DomainLocationType.verified)
+                    logger.debug('success')
                     break
                 else:
                     add_new_result(measurement_result)

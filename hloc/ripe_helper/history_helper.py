@@ -122,7 +122,7 @@ def check_measurements_for_nodes(measurement_ids: [int],
 
 
 def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    yesterday = datetime.date.today() - datetime.timedelta(days=2)
     probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
                         yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
 
