@@ -83,7 +83,7 @@ def main():
         probes_count[probe_id] += 1
 
     with open(args.output_filename, 'w') as output_file:
-        str_to_wrt = ','.join(['{}; {}; {}'.format(domain_id, rtt, dist)
+        str_to_wrt = '\n'.join(['{}; {}; {}'.format(domain_id, rtt, dist)
                                for domain_id, rtt, dist in rtt_distances])
         output_file.write(str_to_wrt)
 
