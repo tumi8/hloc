@@ -77,13 +77,14 @@ def main():
 
     for domain_id, domain_name, hint_location_id, hint_location_name, location_hint_id, \
             measurement_result_id, probe_id, distance, min_rtt in results:
-        rtt_distances.append((min_rtt, distance))
+        rtt_distances.append((domain_id, min_rtt, distance))
         domains_count[domain_base_name(domain_name)] += 1
         location_id_count[hint_location_id] += 1
         probes_count[probe_id] += 1
 
     with open(args.output_filename, 'w') as output_file:
-        str_to_wrt = ','.join(['{}; {}'.format(rtt, dist) for rtt, dist in rtt_distances])
+        str_to_wrt = ','.join(['{}; {}; {}'.format(domain_id, rtt, dist)
+                               for domain_id, rtt, dist in rtt_distances])
         output_file.write(str_to_wrt)
 
     print('domains count: ')
