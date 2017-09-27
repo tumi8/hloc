@@ -32,7 +32,10 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='specify the ipVersion')
     parser.add_argument('-ma', '--allowed-measurement-age', type=int,
                         help='The allowed measurement age in seconds')
+    parser.add_argument('-mma', '--minimum-measurement-age', type=str,
+                        help='The youngest date allowed in format "%Y-%m-%d %H:%M:%S')
     parser.add_argument('-t', '--exclude-traceroute', action='store_true')
+    parser.add_argument('-c', '--exclude-caida-measurements', action='store_true')
     parser.add_argument('-o', '--output-filename', type=str)
     parser.add_argument('-l', '--log-file', type=str, default='validate-stats.log',
                         help='Specify a logging file where the log should be saved')
@@ -51,19 +54,29 @@ def main():
     logger = util.setup_logger(args.log_file, 'validate-stats', loglevel=args.log_level)
     logger.debug('starting')
 
-    oldest_date_allowed = datetime.datetime.now() - datetime.timedelta(
-        seconds=args.allowed_measurement_age)
-
     engine = create_engine('postgresql://{}:{}@localhost/{}'.format(
         args.database_username, args.database_password, args.database_name), echo=False)
     # Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
 
     db_session = scoped_session(sessionmaker(autoflush=True, bind=engine))()
 
-    slq_query = 'SELECT * from domainsWithDistanceRTTs(TIMESTAMP \'{}\', {})'.format(
-        oldest_date_allowed.strftime('%Y-%m-%d %H:%M:%S'), str(args.exclude_traceroute))
+    if args.allowed_measurement_age:
+        oldest_date_allowed = datetime.datetime.now() - datetime.timedelta(
+            seconds=args.allowed_measurement_age)
+        sql_args = 'TIMESTAMP \'' + oldest_date_allowed.strftime('%Y-%m-%d %H:%M:%S') + '\', '
+    else:
+        sql_args = 'NULL, '
 
-    results = db_session.execute(slq_query + ';')
+    if args.minimum_measurement_age:
+        sql_args += 'TIMESTAMP \'' + args.minimum_measurement_age + '\', '
+    else:
+        sql_args += 'NULL, '
+
+    sql_args += str(args.exclude_traceroute) + ', ' + str(args.exclude_caida_measurements)
+
+    slq_query = 'SELECT * from domainsWithDistanceRTTs({});'.format(sql_args)
+
+    results = db_session.execute(slq_query )
 
     rtt_distances = []
     domains_count = collections.defaultdict(int)
