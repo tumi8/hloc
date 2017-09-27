@@ -177,12 +177,21 @@ def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
 
 
 def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processes: int,
-                                       domain_types: typing.List[DomainType], db_session: Session) \
+                                       domain_types: typing.List[DomainType], db_session: Session,
+                                       return_random_part: typing.Optional[float]=None) \
         -> typing.Generator[Domain, None, None]:
-    for domain in db_session.query(Domain).filter(
-            sqla.and_(
-                Domain.id % nr_processes == index,
-                Domain.classification_type.in_(domain_types),
-                func.random() * 3 < 1
-            )).yield_per(block_limit):
-        yield domain
+    if not return_random_part:
+        for domain in db_session.query(Domain).filter(
+                sqla.and_(
+                    Domain.id % nr_processes == index,
+                    Domain.classification_type.in_(domain_types)
+                )).yield_per(block_limit):
+            yield domain
+    else:
+        for domain in db_session.query(Domain).filter(
+                sqla.and_(
+                    Domain.id % nr_processes == index,
+                    Domain.classification_type.in_(domain_types),
+                    func.random() * 1 / return_random_part < 1
+                )).yield_per(block_limit):
+            yield domain

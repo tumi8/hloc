@@ -12,30 +12,41 @@ CREATE OR REPLACE FUNCTION gpsDistance(lat1 float, lon1 float, lat2 float, lon2 
     LANGUAGE SQL
     RETURNS NULL on NULL INPUT;
 
-CREATE OR REPLACE FUNCTION domainsWithDistanceRTTs(newestDateAllowed timestamp) RETURNS TABLE (domain_id integer, domain_name varchar, hint_location_id varchar, hint_location_name varchar, location_hints_id integer, measurement_results_id integer, probe_id varchar, distance float, min_rtt float)
+CREATE OR REPLACE FUNCTION domainsWithDistanceRTTs(oldestDateAllowed timestamp, youngestDateAllowed timestamp, excludeTracerouteMeasurements boolean) RETURNS TABLE (domain_id integer, domain_name varchar, hint_location_id varchar, hint_location_name varchar, location_hints_id integer, measurement_results_id integer, probe_id varchar, distance float, min_rtt float)
     AS $$ SELECT domains.id as domain_id, domains.name as domain_name, hint_location.id as hint_location_id, hint_location.name as hint_location_name, location_hints.id as location_hints_id, measurement_results.id as measurement_results_id, probes.probe_id as probe_id, gpsDistance(hint_location.lat, hint_location.lon, measurement_location.lat, measurement_location.lon) as distance, measurement_results.rtt as min_rtt
         FROM domains join domain_to_labels d_t_label on (domains.id = d_t_label.domain_id and domains.classification_type = 'valid')
             join domain_labels on (domain_labels.id = d_t_label.domain_label_id)
             join location_hint_labels loc_hint on (domain_labels.id = loc_hint.domain_label_id)
             join location_hints on (location_hints.id = loc_hint.location_hint_id)
             join locations hint_location on (location_hints.location_id=hint_location.id)
-            join measurement_results on (domains.ipv4_address = measurement_results.destination_address and (measurement_results.timestamp > newestDateAllowed or newestDateAllowed IS NULL or measurement_results.measurement_result_type='zmap_measurement'))
+            join measurement_results on (domains.ipv4_address = measurement_results.destination_address and (measurement_results.timestamp > oldestDateAllowed or oldestDateAllowed IS NULL) and (measurement_results.timestamp < youngestDateAllowed or youngestDateAllowed IS NULL) and (not excludeTracerouteMeasurements or not measurement_results.from_traceroute))
             join probes on (probes.id = measurement_results.probe_id)
             join locations measurement_location on (measurement_location.id = probes.location_id)
         $$
     LANGUAGE SQL
     RETURNS NULL on NULL INPUT;
 
-CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, newestDateAllowed timestamp, maxDistance float) RETURNS TABLE (domain_id integer, domain_name varchar, hint_location_id varchar, hint_location_name varchar, location_hints_id integer, measurement_results_id integer, probe_id varchar, distance float, min_rtt float)
+CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, oldestDateAllowed timestamp, maxDistance float) RETURNS TABLE (domain_id integer, domain_name varchar, hint_location_id varchar, hint_location_name varchar, location_hints_id integer, measurement_results_id integer, probe_id varchar, distance float, min_rtt float)
     AS $$ SELECT domain_id, domain_name, hint_location_id, hint_location_name, location_hints_id, measurement_results_id, probe_id, distance, min_rtt
-        FROM domainsWithDistanceRTTs(newestDateAllowed) as temp_table
+        FROM domainsWithDistanceRTTs(oldestDateAllowed) as temp_table
         WHERE min_rtt < 11 + buffertime AND distance < maxDistance AND distance / 100 + buffertime > min_rtt $$
     LANGUAGE SQL
     RETURNS NULL on NULL INPUT;
 
 CREATE OR REPLACE VIEW valid9msView(domain_id, domain_name, hint_location_id, hint_location_name, location_hint_id, measurement_result_id, probe_id, distance, min_rtt)
-    AS SELECT * from domainsWithLocation(9.0, TIMESTAMP '2017-08-21 00:00:00', 1000);
+    AS SELECT * from domainsWithLocation(9.0, TIMESTAMP '2017-08-17 00:00:00', 1000);
 
-SELECT count(*) 
-FROM domains
+SELECT count(distinct domains.id)
+FROM domains join domain_to_labels d_t_label on (domains.id = d_t_label.domain_id) 
+    join domain_labels on (domain_labels.id = d_t_label.domain_label_id) 
+    join location_hint_labels loc_hint on (domain_labels.id = loc_hint.domain_label_id) 
+    join location_hints on (location_hints.id = loc_hint.location_hint_id) 
+    join locations hint_location on (location_hints.location_id=hint_location.id) 
+    join measurement_results on (domains.ipv4_address = measurement_results.destination_address and (measurement_results.timestamp > TIMESTAMP '2017-08-15 00:00:00' or measurement_results.measurement_result_type='zmap_measurement')) 
+    join probes on (probes.id = measurement_results.probe_id)
+    join locations measurement_location on (measurement_location.id = probes.location_id);
+
+SELECT count(*)
+FROM domains join domain_to_labels d_t_label on (domains.id = d_t_label.domain_id) join domain_labels on (domain_labels.id = d_t_label.domain_label_id) join location_hint_labels loc_hint on (domain_labels.id = loc_hint.domain_label_id) join location_hints on (location_hints.id = loc_hint.location_hint_id) join locations hint_location on (location_hints.location_id=hint_location.id)
 WHERE EXISTS (SELECT 1 FROM measurement_results WHERE domains.ipv4_address = measurement_results.destination_address);
+      

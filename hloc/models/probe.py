@@ -290,7 +290,7 @@ class RipeAtlasProbe(Probe):
         if not self._last_update or datetime.datetime.now() - max_age >= self._last_update:
             if not self._update():
                 if self._probe_obj:
-                    raise ValueError('Probes location changed')
+                    raise ProbeError('Probes location changed')
                 raise ProbeError('Probe object could not be fetched')
 
         if not self._probe_obj:
@@ -341,10 +341,13 @@ class RipeAtlasProbe(Probe):
         self._probe_obj = ripe_atlas.Probe(id=self.probe_id)
         self._last_update = datetime.datetime.now()
 
+        if not self._probe_obj.geometry:
+            return False
+
         delta_dist = self.location.gps_distance_haversine_plain(
             self._probe_obj.geometry['coordinates'][1], self._probe_obj.geometry['coordinates'][0])
 
-        return self._probe_obj.geometry and abs(delta_dist) < 2
+        return abs(delta_dist) < 10
 
     def is_rfc_1918(self) -> bool:
         """Returns if the probe is behind a NAT according to RFC 1918"""

@@ -769,7 +769,16 @@ def __get_available_probes(ip_versions: [str], probes: [RipeAtlasProbe]):
     else:
         raise ValueError('no valid ip version in ip versions list')
 
-    return [probe for probe in probes if probe.available() in ip_versions_needed]
+    available_probes = []
+
+    for probe in probes:
+        try:
+            if probe.available() in ip_versions_needed:
+                available_probes.append(probe)
+        except ProbeError:
+            logger.exception('Probe Error while searching for aivailable Probes')
+
+    return available_probes
 
 
 def eliminate_duplicate_results(results: [typing.Tuple[MeasurementResult, Location]]):
@@ -956,7 +965,9 @@ def update_probes(probes: [RipeAtlasProbe]):
 
 def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
                            db_session: Session) -> typing.Dict[str,
-                                                               typing.Tuple[RipeAtlasProbe, float, Location]]:
+                                                               typing.Tuple[RipeAtlasProbe,
+                                                                            float,
+                                                                            Location]]:
     near_probes_assignments = []
     location_to_probes_dct = {}
 
