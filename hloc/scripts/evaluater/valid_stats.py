@@ -3,7 +3,6 @@
 Evaluates the data in the database
 """
 
-
 import argparse
 import collections
 import datetime
@@ -13,7 +12,6 @@ import operator
 # import sqlalchemy.ext.declarative
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-
 
 from hloc import util, constants
 
@@ -76,7 +74,7 @@ def main():
 
     slq_query = 'SELECT * from domainsWithDistanceRTTs({});'.format(sql_args)
 
-    results = db_session.execute(slq_query )
+    results = db_session.execute(slq_query)
 
     rtt_distances = []
     domains_count = collections.defaultdict(int)
