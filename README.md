@@ -96,14 +96,13 @@ The structure of the data is as follows:
     - No IP encoded: `ipv6/wo-encoded-ip/`
         - Drop: `ipv6/wo-encoded-ip/drop/`
         - IP2Location: `ipv6/wo-encoded-ip/ip2loc/`
-
     - IP encoded: `ipv6/w-encoded-ip/`
         - Drop: `ipv6/w-encoded-ip/drop/`
         - IP2Location: `ipv6/w-encoded-ip/ip2loc/`
  -  DRoP domains
-    - All data in: `drop-main-domains`
-    - *HLOC DRoP reproduction* results are directly in each subfolder
-    - HLOC results are in a subfolder of each domain called `hloc-results`
+    - All data in: `drop-main-domains`, with subfolders for each DRoP domain
+    - *HLOC DRoP reproduction* results are in each domain's subfolder
+    - *HLOC results* are in the `hloc-results` subfolder per domain, e.g. `drop-main-domains/ntt.net/hloc-results`
 
 #### File Endings
  These endings are always after the file ending and the process number (`<filename>-<process-number><file-ending>`)
