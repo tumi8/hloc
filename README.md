@@ -23,7 +23,16 @@ It also parses IP/DNS files to a json format, which we can not deliver due to it
 python3 -m src.data_processing.preprocessing <rdns-file> -n <number-of-processes> -t src/data_processing/collectedData/tlds.txt -d preprocessing_output -i -v [ipv4, ipv6]
 ```
 
-The *number-of-processes* defines also the number of output files.
+The *number-of-processes* also defines the number of output files.
+
+The format of the rdns-file is:
+```
+103.13.80.138,xe-2-1-0-2144.a06.sydnau01.au.ra.gin.ntt.net
+103.13.80.142,xe-3-0-0-175.a01.sydnau04.au.ra.gin.ntt.net
+103.13.80.145,xe-6-1-0.a04.sydnau03.au.ra.gin.ntt.net
+```
+
+You can find the files we used in our dataset (see below) under the folder rdns-sources.
 
 ## Find
 
