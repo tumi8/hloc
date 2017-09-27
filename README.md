@@ -84,29 +84,29 @@ The structure of the data is as follows:
  -  IPv4
     - Preprocessed data: `ipv4`
     - No IP encoded: `ipv4/wo-encoded-ip/`
-        - Drop: `ipv4/wo-encoded-ip/drop/`
-        - IP2Location: `ipv4/wo-encoded-ip/ip2loc/`
-        - GeoLite: `ipv4/wo-encoded-ip/geoip/`
+        - DRoP: `ipv4/wo-encoded-ip/drop/` (Hints/Results from DRoP)
+        - IP2Location: `ipv4/wo-encoded-ip/ip2loc/` (Results from IP2Location)
+        - GeoLite: `ipv4/wo-encoded-ip/geoip/` (Results from GeoLite)
     - IP encoded: `ipv4/w-encoded-ip/`
-        - Drop: `ipv4/w-encoded-ip/drop`
+        - DRoP: `ipv4/w-encoded-ip/drop`
         - IP2Location: `ipv4/w-encoded-ip/ip2loc/`
         - GeoLite: `ipv4/w-encoded-ip/geoip/`
- - IPv6
+ -  IPv6
     - Preprocessed data: `ipv6/`
     - No IP encoded: `ipv6/wo-encoded-ip/`
-        - Drop: `ipv6/wo-encoded-ip/drop/`
+        - DRoP: `ipv6/wo-encoded-ip/drop/`
         - IP2Location: `ipv6/wo-encoded-ip/ip2loc/`
     - IP encoded: `ipv6/w-encoded-ip/`
-        - Drop: `ipv6/w-encoded-ip/drop/`
+        - DRoP: `ipv6/w-encoded-ip/drop/`
         - IP2Location: `ipv6/w-encoded-ip/ip2loc/`
  -  DRoP domains
-    - All data in: `drop-main-domains`, with subfolders for each DRoP domain
-    - *HLOC DRoP reproduction* results are in each domain's subfolder
-    - *HLOC results* are in the `hloc-results` subfolder per domain, e.g. `drop-main-domains/ntt.net/hloc-results`
+        -  All data in: `drop-main-domains`, with subfolders for each DRoP domain
+        -  *HLOC DRoP reproduction* (DRoP hints, HLOC measurements) results are in each domain's subfolder
+        -  *HLOC results* (HLOC hints on DRoP domains, HLOC measurements) are in the `hloc-results` subfolder per domain, e.g. `drop-main-domains/ntt.net/hloc-results`
 
 #### File Endings
  These endings are always after the file ending and the process number (`<filename>-<process-number><file-ending>`)
- 
+
  - After preprocessing
     - Correct (`.cor`)
         All domains not filtered by the preprocessing step
