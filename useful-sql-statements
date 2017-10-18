@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION domainsWithDistanceRTTs(oldestDateAllowed timestamp, 
 
 CREATE OR REPLACE FUNCTION domainsWithLocation(buffertime float, oldestDateAllowed timestamp, maxDistance float) RETURNS TABLE (domain_id integer, domain_name varchar, hint_location_id varchar, hint_location_name varchar, location_hints_id integer, measurement_results_id integer, probe_id varchar, distance float, min_rtt float)
     AS $$ SELECT domain_id, domain_name, hint_location_id, hint_location_name, location_hints_id, measurement_results_id, probe_id, distance, min_rtt
-        FROM domainsWithDistanceRTTs(oldestDateAllowed) as temp_table
+        FROM domainsWithDistanceRTTs(oldestDateAllowed, NULL, False, False) as temp_table
         WHERE min_rtt < 11 + buffertime AND distance < maxDistance AND distance / 100 + buffertime > min_rtt $$
     LANGUAGE SQL;
 

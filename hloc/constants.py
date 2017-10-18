@@ -3,9 +3,7 @@ A set of constants and keys used in the framework
 """
 
 import re
-import string
 
-ACCEPTED_CHARACTER = frozenset('{0}.-_'.format(string.printable[0:62]))
 DROP_RULE_TYPE_REGEX = re.compile(r'<<(?P<type>[a-z]*)>>')
 JSON_CLASS_IDENTIFIER = '_c'
 IPV4_IDENTIFIER = 'ipv4'

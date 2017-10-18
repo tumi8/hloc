@@ -3,6 +3,7 @@
 
 import math
 import hashlib
+import string
 
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
@@ -82,7 +83,7 @@ class Location(Base):
     def __init__(self, lat: float, lon: float):
         self.lat = lat
         self.lon = lon
-        self._idfy_location()
+        self.idfy_location()
 
     def available_probes(self, ip_versions: [str]):
         """
@@ -102,7 +103,7 @@ class Location(Base):
                              key=lambda probe: self.gps_distance_haversine(probe.location))
         return [probe for probe in sorted_prbs if probe.available() in ip_versions_needed][:25]
 
-    def _idfy_location(self):
+    def idfy_location(self):
         """
         Assign a unique id to every location in the array by computing the hash over all codes
         sorted alphabetically. That should guarantee a unique and
@@ -110,7 +111,7 @@ class Location(Base):
         self.id = hashlib.md5('{}:{}'.format(self.lat, self.lon).encode()).hexdigest()
 
     def is_in_radius(self, location, radius):
-        """Returns a True if the location is within the radius with the haversine method"""
+        """Returns a True if the location is within the radius [km] with the haversine method"""
         return self.gps_distance_haversine(location) <= radius
 
     def gps_distance_equirectangular(self, location):
@@ -187,7 +188,7 @@ class LocationInfo(Location):
 
     __mapper_args__ = {'polymorphic_identity': 'location_infos'}
 
-    name = sqla.Column(sqla.String(50))
+    city_name = sqla.Column(sqla.String(100))
     state_id = sqla.Column(sqla.Integer, sqla.ForeignKey(State.id))
     population = sqla.Column(sqla.Integer)
     airport_info_id = sqla.Column(sqla.Integer,
@@ -212,6 +213,14 @@ class LocationInfo(Location):
             setattr(self, name, value)
 
         super().__init__(lat, lon)
+
+    @property
+    def name(self):
+        return self.city_name
+
+    @name.setter
+    def name(self, name):
+        self.city_name = name[:100]
 
     def available_probes(self, ip_versions: [str]):
         ip_versions_needed = []
@@ -248,7 +257,7 @@ class LocationInfo(Location):
         #     print(self.dict_representation(), 'has no id')
         #     raise ValueError('id is not int')
         ret_list = []
-        if self.name:
+        if self.name and not set(self.name).difference(set(string.ascii_letters + string.digits)):
             ret_list.append((self.name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
             ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))

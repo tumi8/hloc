@@ -14,8 +14,7 @@
 import argparse
 import json
 import time
-from string import ascii_lowercase
-from string import printable
+from string import ascii_lowercase, printable, ascii_letters, digits
 from time import sleep
 
 import requests
@@ -23,7 +22,6 @@ from html.parser import HTMLParser
 
 from hloc.models import LocationInfo, State, Session
 from hloc.util import setup_logger
-from hloc.constants import ACCEPTED_CHARACTER
 from hloc.db_utils import recreate_db, create_session_for_process
 
 logger = None
@@ -57,7 +55,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Load geonames from the given path')
     parser.add_argument('-m', '--merge-locations', type=int,
                         dest='merge_radius',
-                        help='Try to merge locations in the given radius by gps')
+                        help='Try to merge locations in the given radius in km by gps')
     parser.add_argument('-p', '--min-population', default=10000, type=int,
                         dest='min_population',
                         help='Specify the allowed minimum population for locations')
@@ -142,10 +140,7 @@ class WorldAirportCodesParser(HTMLParser):
             if len(name_split) > 1:
                 city_name = name_split[0].strip()
                 state_string = name_split[-1].strip()
-                self.airportInfo.name = city_name.lower()
-
-                if set(self.airportInfo.name).difference(ACCEPTED_CHARACTER):
-                    self.airportInfo.name = None
+                self.airportInfo.name = city_name.lower()[:100]
 
                 state_code_index_s = state_string.find('(') + 1
                 while state_string[state_code_index_s:].find('(') != -1:
@@ -274,7 +269,7 @@ def parse_airport_specific_page(page_text: str, db_session: Session):
              parser.airportInfo.airport_info.icao_codes or
              parser.airportInfo.airport_info.faa_codes):
         parser.airportInfo.state = parser.state
-        parser.airportInfo._idfy_location()
+        parser.airportInfo.idfy_location()
         # db_session.add(parser.airportInfo)
         AIRPORT_LOCATION_CODES.append(parser.airportInfo)
 
@@ -291,7 +286,6 @@ def get_locode_locations(locode_filename: str, db_session: Session):
     Parses the locode information from a locode csv file and stores the
     locations into the LOCATION_CODES array
     """
-    # i = 0
     with open(locode_filename, encoding='ISO-8859-1') as locode_file:
         current_state = None
         for line in locode_file:
@@ -372,9 +366,6 @@ def get_location_from_locode_text(locationtext: str):
 
 def get_locode_name(city_name: str):
     """if there is a '=' in the name extract the first part of the name"""
-    if set(city_name).difference(ACCEPTED_CHARACTER):
-        return None
-    # FIXME not reachable
     if '=' in city_name:
         city_name = city_name.split('=')[0].strip()
     return city_name
@@ -425,8 +416,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
                                               lon=float(columns[5]),
                                               name=name)
 
-            if set(new_geo_names_info.name).difference(ACCEPTED_CHARACTER) \
-                    or len(columns[14]) > 0 and int(columns[14]) < min_population:
+            if len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
 
             new_geo_names_info.name = columns[2].lower()
@@ -441,7 +431,7 @@ def get_geo_names(file_path: str, min_population: int, db_session: Session):
             for name in alternatenames:
                 maxname = max(name.split(' '), key=len)
 
-                if set(maxname).difference(ACCEPTED_CHARACTER):
+                if set(maxname).difference(set(ascii_letters + digits)):
                     continue
                 if len(maxname) > 0:
                     new_geo_names_info.alternate_names.append(maxname.lower())
@@ -519,6 +509,10 @@ def add_locations(locations: [LocationInfo], to_add_locations: [LocationInfo], r
     The first argument is a list which will not be condensed but the items
     of the second list will be matched on it. the remaining items in add_locations
     list will be added to list 1
+    :param locations: base list of locations where the to_add_locations are added
+    :param to_add_locations: locations to add to the basic location list locations
+    :param radius: the merging radius
+    :param db_session: the database connection object
     :param create_new_locations: Set false if the add_locations are not allowed to
         create new location objects Default is true
     """
