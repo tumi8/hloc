@@ -61,9 +61,21 @@ def main():
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
 
-    filenames = get_filenames(args.archive_path, args.file_regex)
     global engine
     engine = create_engine(args.database_name)
+
+    parsed_file_name = '{}-parsed-ripe-files.txt'.format(args.database_name)
+    parsed_files = set()
+
+    if not os.path.exists(parsed_file_name):
+        logger.debug('Creating parsed files history file for database {}'.format(
+            args.database_name))
+    else:
+        with open(parsed_file_name) as parsed_files_histoy_file:
+            for line in parsed_files_histoy_file:
+                parsed_files.add(line.strip())
+
+    filenames = get_filenames(args.archive_path, args.file_regex, parsed_files)
 
     Session = create_session_for_process(engine)
     db_session = Session()
@@ -74,25 +86,35 @@ def main():
 
     processes = []
 
+    new_parsed_files = mp.Queue()
+
     for i in range(args.number_processes):
         process = mp.Process(target=parse_ripe_data, args=(filenames, not args.plaintext,
                                                            args.days_in_past, args.debug,
-                                                           probe_dct),
+                                                           probe_dct, new_parsed_files),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
         process.start()
 
-    for process in processes:
-        process.join()
+    try:
+        for process in processes:
+            process.join()
+    finally:
+        with open(parsed_file_name, 'a') as parsed_files_histoy_file:
+            while not new_parsed_files.empty():
+                filename = new_parsed_files.get()
+                parsed_files_histoy_file.write(filename + '\n')
 
 
-def get_filenames(archive_path: str, file_regex: str) -> mp.Queue:
+def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str]) \
+        -> mp.Queue:
     filename_queue = mp.Queue()
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
 
     for dirname, _, filenames in os.walk(archive_path):
         for filename in filenames:
-            if file_regex_obj.match(filename):
+            if file_regex_obj.match(filename) and \
+                    os.path.join(dirname, filename) not in already_parsed_files:
                 filename_queue.put(os.path.join(dirname, filename))
 
     return filename_queue
@@ -125,6 +147,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
     try:
         while True:
             filename = filenames.get(timeout=1)
+
+            new_parsed_files.put(filename)
 
             file_date_str = str(os.path.basename(filename).split('.')[0][-10:])
             modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
@@ -213,7 +237,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                 measurement_results.extend(probe_measurement_dct.values())
 
             db_session.bulk_save_objects(measurement_results)
-            logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
+            logger.info('parsed and saved {} measurements from file {}'.format(
+                len(measurement_results), filename))
             db_session.commit()
 
             if debugging:

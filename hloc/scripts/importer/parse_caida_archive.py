@@ -52,7 +52,7 @@ def main():
     args = parser.parse_args()
 
     global logger
-    logger = util.setup_logger(args.logging_file, 'parse_ripe_archive')
+    logger = util.setup_logger(args.logging_file, 'parse_ripe_archive', args.log_level)
 
     if not os.path.isdir(args.archive_path):
         print('Archive path does not lead to a directory', file=sys.stderr)
@@ -64,24 +64,43 @@ def main():
     Session = create_session_for_process(engine)
     db_session = Session()
 
+    parsed_file_name = '{}-parsed-caida-files.txt'.format(args.database_name)
+    parsed_files = set()
+    
+    if not os.path.exists(parsed_file_name):
+        logger.debug('Creating parsed files history file for database {}'.format(
+            args.database_name))
+    else:
+        with open(parsed_file_name) as parsed_files_histoy_file:
+            for line in parsed_files_histoy_file:
+                parsed_files.add(line.strip())
+
     filenames, probe_dct = get_filenames(args.archive_path, args.file_regex, args.days_in_past,
-                                         db_session)
+                                         parsed_files, db_session)
 
     processes = []
+    new_parsed_files = mp.Queue()
 
     for i in range(args.number_processes):
         process = mp.Process(target=parse_caida_data, args=(filenames, not args.plaintext,
                                                             args.days_in_past, args.debug,
-                                                            probe_dct),
+                                                            probe_dct, new_parsed_files),
                              name='parse caida data {}'.format(i))
         processes.append(process)
         process.start()
 
-    for process in processes:
-        process.join()
+    try:
+        for process in processes:
+            process.join()
+    finally:
+        with open(parsed_file_name, 'a') as parsed_files_histoy_file:
+            while not new_parsed_files.empty():
+                filename = new_parsed_files.get()
+                parsed_files_histoy_file.write(filename + '\n')
 
 
-def get_filenames(archive_path: str, file_regex: str, days_in_past: int, db_session) \
+def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
+                  parsed_files: typing.Set[str], db_session) \
         -> typing.Tuple[mp.Queue, typing.Dict[str, int]]:
     filename_queue = mp.Queue()
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
@@ -92,7 +111,8 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int, db_sess
         for filename in filenames:
             basename = os.path.basename(filename)
 
-            if file_regex_obj.match(filename):
+            if file_regex_obj.match(filename) and \
+                    os.path.join(dirname, filename) not in parsed_files:
                 date_str = str(basename.split('.')[1])
                 date = datetime.datetime.strptime(date_str, '%Y%m%d')
 
@@ -140,13 +160,15 @@ def parse_caida_probe(probe_id: str, location: LocationInfo, db_session: Session
 
 
 def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
-                     probe_id_dct: typing.Dict[str, int]):
+                     probe_id_dct: typing.Dict[str, int], new_parsed_files: mp.Queue):
     Session = create_session_for_process(engine)
     db_session = Session()
 
     try:
         while True:
             filename = filenames.get(timeout=1)
+
+            new_parsed_files.put(filename)
             
             logger.debug('parsing {}'.format(filename))
 
@@ -240,6 +262,7 @@ def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
         return measurement
+
 
 if __name__ == '__main__':
     main()
