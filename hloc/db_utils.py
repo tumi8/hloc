@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.sql.expression import func
 
 
-from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, \
+from hloc.models import State, Probe, Domain, MeasurementResult, DomainLabel, Base, \
     DomainType, Location, LocationInfo, AirportInfo
 
 
@@ -40,7 +40,7 @@ def recreate_db(engine):
     Base.metadata.create_all(bind=engine)
 
 
-def state_for_code(state_code, state_name, db_session: Session):
+def state_for_code(state_code, state_name, db_session):
     """
     :param state_code: A state code 
     :param state_name: the name of the state
@@ -60,7 +60,7 @@ def state_for_code(state_code, state_name, db_session: Session):
     return state
 
 
-def label_for_name(label_name: str, db_session: Session):
+def label_for_name(label_name: str, db_session):
     """
     Checks for an existing label with the same name and returns it.
     If there is no existing a new one is created
@@ -83,7 +83,7 @@ def label_for_name(label_name: str, db_session: Session):
     return label
 
 
-def location_for_coordinates(lat: float, lon: float, db_session: Session, create_new: bool=True) \
+def location_for_coordinates(lat: float, lon: float, db_session, create_new: bool=True) \
         -> Location:
     location = db_session.query(Location).filter_by(lat=lat, lon=lon).first()
 
@@ -95,7 +95,7 @@ def location_for_coordinates(lat: float, lon: float, db_session: Session, create
     return location
 
 
-def location_for_iata_code(iata_code: str, db_session: Session) -> LocationInfo:
+def location_for_iata_code(iata_code: str, db_session) -> LocationInfo:
     location = db_session.query(LocationInfo).join(AirportInfo)\
         .filter(
             iata_code == sqla.any_(AirportInfo.iata_codes)
@@ -103,7 +103,7 @@ def location_for_iata_code(iata_code: str, db_session: Session) -> LocationInfo:
     return location
 
 
-def probe_for_id(probe_id: str, db_session: Session) -> Probe:
+def probe_for_id(probe_id: str, db_session) -> Probe:
     """
     searches for a probe with the probe_id
     :param probe_id: the id of the probe
@@ -113,7 +113,7 @@ def probe_for_id(probe_id: str, db_session: Session) -> Probe:
     return db_session.query(Probe).filter_by(probe_id=probe_id).first()
 
 
-def domain_by_id(domain_id: int, db_session: Session) -> Domain:
+def domain_by_id(domain_id: int, db_session) -> Domain:
     """
     return the domain with the id
     :param domain_id: the id of the domain
@@ -123,7 +123,7 @@ def domain_by_id(domain_id: int, db_session: Session) -> Domain:
     return db_session.query(Domain).filter(Domain.id == domain_id).first()
 
 
-def domains_for_ids(domain_ids: [int], db_session: Session) -> [Domain]:
+def domains_for_ids(domain_ids: [int], db_session) -> [Domain]:
     """
     return all domains with an id in domain_ids
     :param domain_ids: the ids of the domains
@@ -137,7 +137,7 @@ def get_measurements_for_domain(domain: Domain,
                                 ip_version: str,
                                 max_measurement_age: typing.Optional[int],
                                 sorted_return: bool,
-                                db_session: Session,
+                                db_session,
                                 allow_all_zmap_measurements: bool = False) -> [MeasurementResult]:
     """
     :param domain: the domain for which measurements should be returned
@@ -181,7 +181,7 @@ def get_measurements_for_domain(domain: Domain,
 
 
 def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
-                                domain_types: typing.List[DomainType], db_session: Session) \
+                                domain_types: typing.List[DomainType], db_session) \
         -> typing.Generator[int, None, None]:
     for domain_id in db_session.query(Domain.id).filter(
             sqla.and_(
@@ -192,7 +192,7 @@ def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
 
 
 def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processes: int,
-                                       domain_types: typing.List[DomainType], db_session: Session,
+                                       domain_types: typing.List[DomainType], db_session,
                                        return_random_part: typing.Optional[float]=None) \
         -> typing.Generator[Domain, None, None]:
     if not return_random_part:
