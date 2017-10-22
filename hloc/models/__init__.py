@@ -1,8 +1,5 @@
 
-from sqlalchemy.orm import sessionmaker, scoped_session
-from .sql_alchemy_base import Base, engine
-
-Session = scoped_session(sessionmaker(autoflush=True, bind=engine))
+from .sql_alchemy_base import Base
 
 from .enums import LocationCodeType, AvailableType, MeasurementError, DomainLocationType, \
     DomainType, MeasurementProtocol

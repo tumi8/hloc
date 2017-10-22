@@ -9,12 +9,8 @@ import datetime
 import pprint
 import operator
 
-# import sqlalchemy.ext.declarative
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
-
 from hloc import util, constants
-
+from hloc.db_utils import create_engine, create_session_for_process
 logger = None
 
 
@@ -52,11 +48,9 @@ def main():
     logger = util.setup_logger(args.log_file, 'validate-stats', loglevel=args.log_level)
     logger.debug('starting')
 
-    engine = create_engine('postgresql://{}:{}@localhost/{}'.format(
-        args.database_username, args.database_password, args.database_name), echo=False)
-    # Base = sqlalchemy.ext.declarative.declarative_base(bind=engine)
+    engine = create_engine(args.database_name)
 
-    db_session = scoped_session(sessionmaker(autoflush=True, bind=engine))()
+    db_session = create_session_for_process(engine)()
 
     if args.allowed_measurement_age:
         oldest_date_allowed = datetime.datetime.now() - datetime.timedelta(

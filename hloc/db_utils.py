@@ -12,17 +12,32 @@ from sqlalchemy.sql.expression import func
 
 
 from hloc.models import State, Probe, Session, Domain, MeasurementResult, DomainLabel, Base, \
-    DomainType, Location, LocationInfo, AirportInfo, engine
+    DomainType, Location, LocationInfo, AirportInfo
 
 
-def create_session_for_process():
+def create_engine(database_name: str, database_user: str='hloc', database_password: str='hloc2017'):
+    """
+    Creates a sqlalchemy database engine bind to the database name
+    :param database_name: the name of the database to connect
+    :param database_user: database username to use
+    :param database_password: the password for the database user
+    :return: sqlalchemy engine
+    """
+    # echo writes sql to output
+    return sqla.create_engine('postgresql://{}:{}@localhost/{}'.format(database_user,
+                                                                       database_password,
+                                                                       database_name),
+                              echo=False)
+
+
+def create_session_for_process(engine):
     engine.dispose()
     return scoped_session(sessionmaker(autoflush=True, bind=engine))
 
 
-def recreate_db():
-    Base.metadata.drop_all()
-    Base.metadata.create_all()
+def recreate_db(engine):
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
 
 
 def state_for_code(state_code, state_name, db_session: Session):

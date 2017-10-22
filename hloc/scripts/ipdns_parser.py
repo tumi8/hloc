@@ -17,13 +17,14 @@ import configargparse
 
 import hloc.constants as constants
 from hloc import util
-from hloc.db_utils import recreate_db, create_session_for_process
+from hloc.db_utils import recreate_db, create_session_for_process, create_engine
 from hloc.models import Domain, DomainType, DomainLabel
 from hloc.domain_processing_helper.domain_name_preprocessing import RegexStrategy, \
     preprocess_domains
 from hloc.models.domain import domain_to_label_table
 
 logger = None
+engine = None
 BLOCK_SIZE = 10
 
 
@@ -43,12 +44,16 @@ def __create_parser_arguments(parser):
                         help='specify the ipVersion')
     parser.add_argument('-f', '--white-list-file-path', type=str,
                         help='path to a file with a white list of IPs')
-    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log',
-                        help='Specify a logging file where the log should be saved')
     parser.add_argument('-d', '--database-recreate', action='store_true',
                         help='Recreates the database structure. Attention deletes all data!')
     parser.add_argument('-b', '--buffer-lines-per-process', type=int, default=1000,
                         help='Number of lines buffered for each process')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
+    parser.add_argument('-l', '--logging-file', type=str, default='preprocess.log',
+                        help='Specify a logging file where the log should be saved')
+    parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
+                        choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the preferred log level')
     # parser.add_argument('-c', '--config-file', type=str, dest='config_filepath',
     #                     is_config_file=True, help='The path to a config file')
 
@@ -62,12 +67,15 @@ def main():
     start = time.time()
 
     global logger
-    logger = util.setup_logger(args.logging_file, 'domain-processing')
+    logger = util.setup_logger(args.logging_file, 'domain-processing', args.log_level)
+
+    global engine
+    engine = create_engine(args.database_name)
 
     if args.database_recreate:
         inp = input('Do you really want to recreate the database structure? (y)')
         if inp == 'y':
-            recreate_db()
+            recreate_db(engine)
 
     if args.isp_ip_filter:
         logger.info('using strategy: {}'.format(args.regex_strategy))
@@ -205,7 +213,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
         labels_to_save.clear()
         db_sess.execute(insert_expr)
 
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     new_labels = []
@@ -261,7 +269,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
     logger.info('starting')
     label_stats = collections.defaultdict(int)
 
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
     try:
         bad_characters = collections.defaultdict(int)

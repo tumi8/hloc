@@ -22,9 +22,10 @@ from html.parser import HTMLParser
 
 from hloc.models import LocationInfo, State, Session
 from hloc.util import setup_logger
-from hloc.db_utils import recreate_db, create_session_for_process
+from hloc.db_utils import recreate_db, create_session_for_process, create_engine
 
 logger = None
+engine = None
 
 CODE_SEPARATOR = '#################'
 LOCATION_RADIUS = 100
@@ -69,6 +70,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Set the preferred log level')
     parser.add_argument('-d', '--database-recreate',  action='store_true',
                         help='Recreates the database structure. Attention deletes all data!')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
     # TODO config file
 
 
@@ -78,14 +80,17 @@ def main():
     __create_parser_arguments(parser)
     args = parser.parse_args()
 
-    if args.database_recreate:
-        inp = input('Do you really want to recreate the database structure? (y)')
-        if inp == 'y':
-            recreate_db()
-
     global logger
     logger = setup_logger(args.log_file, 'parse_codes', loglevel=args.log_level)
     logger.debug('starting')
+
+    global engine
+    engine = create_engine(args.database_name)
+
+    if args.database_recreate:
+        inp = input('Do you really want to recreate the database structure? (y)')
+        if inp == 'y':
+            recreate_db(engine)
 
     parse_codes(args)
 
@@ -667,7 +672,7 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session: Session) ->
 
 def parse_codes(args):
     """start real parsing"""
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
     start_time = time.clock()
     start_rtime = time.time()

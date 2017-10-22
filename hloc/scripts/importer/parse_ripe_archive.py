@@ -20,12 +20,13 @@ import threading
 import typing
 
 from hloc import util
-from hloc.db_utils import create_session_for_process
+from hloc.db_utils import create_session_for_process, create_engine
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementProtocol, \
     MeasurementError, MeasurementResult
 from hloc.ripe_helper.history_helper import get_archive_probes
 
 logger = None
+engine = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -39,6 +40,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
     parser.add_argument('-l', '--logging-file', type=str, default='ripe-archive-import.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
@@ -60,8 +62,10 @@ def main():
         return 1
 
     filenames = get_filenames(args.archive_path, args.file_regex)
+    global engine
+    engine = create_engine(args.database_name)
 
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
     probe_dct = get_archive_probes(db_session)
 
@@ -114,8 +118,8 @@ class MeasurementKey(enum.Enum):
 
 # @util.cprofile('ripe_parser')
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
-                    probe_dct: typing.Dict[int, RipeAtlasProbe]):
-    Session = create_session_for_process()
+                    probe_dct: typing.Dict[int, RipeAtlasProbe], new_parsed_files: mp.Queue):
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     try:

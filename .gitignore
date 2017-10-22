@@ -10,6 +10,7 @@
 .TemporaryItems
 .Trashes
 .VolumeIcon.icns
+.ipynb_checkpoints
 __pycache__
 *.log
 *.pyc

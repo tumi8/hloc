@@ -20,9 +20,11 @@ from hloc import util
 from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, \
     DomainType, LocationInfo
 from hloc.models.location import location_hint_label_table
-from hloc.db_utils import get_all_domains_splitted_efficient, create_session_for_process
+from hloc.db_utils import get_all_domains_splitted_efficient, create_session_for_process, \
+    create_engine
 
 logger = None
+engine = None
 
 
 def __create_parser_arguments(parser):
@@ -42,6 +44,7 @@ def __create_parser_arguments(parser):
                         help='The number of domains taken per block to process them')
     parser.add_argument('--include-ip-encoded', action='store_true',
                         help='Search also domains of type IP encoded')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO', dest='log_level',
@@ -58,6 +61,9 @@ def main():
 
     global logger
     logger = util.setup_logger(args.logging_file, 'find', loglevel=args.log_level)
+
+    global engine
+    engine = create_engine(args.database_name)
 
     trie = create_trie(args.code_blacklist_file, args.word_blacklist_file)
 
@@ -112,7 +118,7 @@ def create_trie(code_blacklist_filepath: str, word_blacklist_filepath: str):
     :param word_blacklist_filepath: the path to the word blacklist file
     :rtype: marisa_trie.RecordTrie
     """
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
     try:
         locations = db_session.query(LocationInfo)
@@ -215,7 +221,7 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
             insert_expr = location_hint_label_table.insert().values(insert_values)
             db_sess.execute(insert_expr)
 
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     new_matches = []
@@ -275,7 +281,7 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
 
 
 def update_labels(label_queue: mp.Queue, stop_event: threading.Event):
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
     deleted_ids = set()
 
@@ -308,7 +314,7 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
     """
     for all amount=0
     """
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     match_count = collections.defaultdict(int)

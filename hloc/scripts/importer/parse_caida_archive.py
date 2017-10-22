@@ -17,12 +17,13 @@ import threading
 import typing
 
 from hloc import util
-from hloc.db_utils import create_session_for_process, location_for_iata_code
+from hloc.db_utils import create_session_for_process, location_for_iata_code, create_engine
 from hloc.models import Session, CaidaArkProbe, CaidaArkMeasurementResult, LocationInfo
 
 
 probe_lock = mp.Lock()
 logger = None
+engine = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -36,6 +37,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
+    parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
     parser.add_argument('-l', '--logging-file', type=str, default='caida-archive-parsing.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
@@ -56,7 +58,10 @@ def main():
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
 
-    Session = create_session_for_process()
+    global engine
+    engine = create_engine(args.database_name)
+
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     filenames, probe_dct = get_filenames(args.archive_path, args.file_regex, args.days_in_past,
@@ -136,7 +141,7 @@ def parse_caida_probe(probe_id: str, location: LocationInfo, db_session: Session
 
 def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
                      probe_id_dct: typing.Dict[str, int]):
-    Session = create_session_for_process()
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     try:
