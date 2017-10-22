@@ -21,7 +21,7 @@ import hloc.ripe_helper.basics_helper as ripe_helper
 from hloc import util, constants
 from .location import probe_location_info_table
 from hloc.exceptions import ProbeError
-from hloc.models import Location, RipeMeasurementResult, AvailableType, Base, Session
+from hloc.models import Location, RipeMeasurementResult, AvailableType, Base
 from hloc.constants import IPV6_IDENTIFIER, IPV4_IDENTIFIER
 
 
@@ -48,7 +48,7 @@ class Probe(Base):
 
     __mapper_args__ = {'polymorphic_on': measurement_type}
 
-    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
+    def measure_rtt(self, dest_address, **kwargs):
         """Creates a method for the Probe"""
         raise NotImplementedError("subclass must implement this")
 
@@ -361,7 +361,7 @@ class CaidaArkProbe(Probe):
 
     __mapper_args__ = {'polymorphic_identity': 'caida_ark'}
 
-    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
+    def measure_rtt(self, dest_address, **kwargs):
         raise NotImplementedError('Caida Results are only gathered passively')
 
     @property
@@ -387,7 +387,7 @@ class ZmapProbe(Probe):
 
     __mapper_args__ = {'polymorphic_identity': 'zmap'}
 
-    def measure_rtt(self, dest_address, db_session: Session, **kwargs):
+    def measure_rtt(self, dest_address, **kwargs):
         raise NotImplementedError('Zmap Results are only gathered passively')
 
     @property
