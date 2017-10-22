@@ -45,7 +45,7 @@ def main():
     oldest_date_allowed = datetime.date.today() - datetime.timedelta(days=args.days_in_past)
     db_session.query(MeasurementResult).filter(MeasurementResult.timestamp < oldest_date_allowed).delete()
 
-    logger.info('deleted all measurements before {}'.format(oldest_date_allowed.strftime('%Y%m%d')))
+    logger.info('deleted all measurements before {}'.format(oldest_date_allowed.strftime('%Y-%m-%d')))
 
 
 if __name__ == '__main__':
