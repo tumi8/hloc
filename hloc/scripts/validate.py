@@ -55,9 +55,6 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     """Creates the arguments for the parser"""
     parser.add_argument('-p', '--number-processes', type=int, default=4,
                         help='specify the number of processes used')
-    parser.add_argument('-v', '--ip-version', type=str, default=constants.IPV4_IDENTIFIER,
-                        choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
-                        help='specify the ipVersion')
     parser.add_argument('-s', '--measurement-strategy', type=str,
                         default=MeasurementStrategy.classic.value,
                         choices=(MeasurementStrategy.classic.aliases() +
@@ -238,7 +235,6 @@ def main():
                              args=(pid,
                                    ripe_create_sema,
                                    ripe_slow_down_sema,
-                                   args.ip_version,
                                    args.bill_to,
                                    args.without_new_measurements,
                                    args.allowed_measurement_age,
@@ -307,7 +303,6 @@ def generate_ripe_request_tokens(sema: mp.Semaphore, limit: int, finish_event: t
 def ripe_check_process(pid: int,
                        ripe_create_sema: mp.Semaphore,
                        ripe_slow_down_sema: mp.Semaphore,
-                       ip_version: str,
                        bill_to_address: str,
                        wo_measurements: bool,
                        allowed_measurement_age: int,
@@ -386,9 +381,12 @@ def ripe_check_process(pid: int,
                             except InvalidRequestError:
                                 pass
 
+                    loc_ip_version = constants.IPV4_IDENTIFIER if domain.ipv4_address else \
+                        constants.IPV6_IDENTIFIER
+
                     measurement_results_query = get_measurements_for_domain(
                         domain,
-                        ip_version,
+                        loc_ip_version,
                         allowed_measurement_age,
                         sorted_return=True,
                         db_session=db_session,
@@ -417,7 +415,6 @@ def ripe_check_process(pid: int,
                                             increment_count_for_type,
                                             ripe_create_sema,
                                             ripe_slow_down_sema,
-                                            ip_version,
                                             bill_to_address,
                                             wo_measurements,
                                             allowed_measurement_age,
@@ -496,7 +493,6 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
                                       [LocationCodeType], None],
                                   ripe_create_sema: mp.Semaphore,
                                   ripe_slow_down_sema: mp.Semaphore,
-                                  ip_version: str,
                                   bill_to_address: str,
                                   wo_measurements: bool,
                                   allowed_measurement_age: int,
@@ -525,6 +521,8 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
     for domain, location_hints, measurement_result_tuples in get_domains():
         try:
             logger.debug('next domain')
+            ip_version = constants.IPV4_IDENTIFIER if domain.ipv4_address else \
+                constants.IPV6_IDENTIFIER
             check_domain_location_ripe(domain, location_hints, increment_domain_type_count,
                                        increment_count_for_type, ripe_create_sema,
                                        ripe_slow_down_sema, ip_version, bill_to_address,
