@@ -193,20 +193,51 @@ def get_all_domain_ids_splitted(index: int, block_limit: int, nr_processes: int,
 
 def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processes: int,
                                        domain_types: typing.List[DomainType], db_session,
-                                       return_random_part: typing.Optional[float]=None) \
+                                       return_random_part: typing.Optional[float]=None,
+                                       use_random_order: bool=False,
+                                       endless_mode: bool=False) \
         -> typing.Generator[Domain, None, None]:
-    if not return_random_part:
-        for domain in db_session.query(Domain).filter(
-                sqla.and_(
-                    Domain.id % nr_processes == index,
-                    Domain.classification_type.in_(domain_types)
-                )).yield_per(block_limit):
-            yield domain
+    if return_random_part:
+        domains_query = db_session.query(Domain).filter(
+            sqla.and_(
+                Domain.id % nr_processes == index,
+                Domain.classification_type.in_(domain_types),
+                func.random() * 1 / return_random_part < 1
+            ))
     else:
-        for domain in db_session.query(Domain).filter(
-                sqla.and_(
-                    Domain.id % nr_processes == index,
-                    Domain.classification_type.in_(domain_types),
-                    func.random() * 1 / return_random_part < 1
-                )).yield_per(block_limit):
+        domains_query = db_session.query(Domain).filter(
+            sqla.and_(
+                Domain.id % nr_processes == index,
+                Domain.classification_type.in_(domain_types)
+            ))
+
+    if use_random_order:
+        domains_query.order_by(func.random())
+
+    while True:
+        for domain in domains_query.yield_per(block_limit):
             yield domain
+
+        if not endless_mode:
+            break
+
+
+def get_domains_for_ips(ip_filter_list: typing.List[str], db_session, block_limit: int,
+                        use_random_order: bool=False, endless_mode: bool=False) \
+        -> typing.Generator[Domain, None, None]:
+    domains_query = db_session.query(Domain).filter(
+        sqla.or_(
+            Domain.ipv4_address.in_(ip_filter_list),
+            Domain.ipv6_address.in_(ip_filter_list)
+        )
+    )
+
+    if use_random_order:
+        domains_query.order_by(func.random())
+
+    while True:
+        for domain in domains_query.yield_per(block_limit):
+            yield domain
+
+        if not endless_mode:
+            break

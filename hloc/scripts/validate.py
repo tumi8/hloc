@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Verify obtained location hints with rtt measurements using a predefined treshhold
+Verify obtained location hints with rtt measurements using a predefined threshold
 """
 
 import argparse
@@ -23,7 +23,7 @@ from hloc import util, constants
 from hloc.models import *
 from hloc.models.location import probe_location_info_table
 from hloc.db_utils import get_measurements_for_domain, get_all_domains_splitted_efficient, \
-    create_session_for_process, create_engine
+    create_session_for_process, create_engine, get_domains_for_ips
 from hloc.exceptions import ProbeError
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes, get_archive_probes
@@ -101,6 +101,11 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         help='Search also domains of type IP encoded')
     parser.add_argument('--stop-without-old-results', action='store_true',
                         help='Do not measure for domains if there is no existing measurement')
+    parser.add_argument('--endless-measurements', action='store_true',
+                        help='Should the list of IPs be reapeatedly scanned until the process is '
+                             'closed')
+    parser.add_argument('--random-domains', action='store_true',
+                        help='Select the domains to measure randomly')
     parser.add_argument('--debug', action='store_true', help='Use only one process and one thread')
     parser.add_argument('-l', '--log-file', type=str, default='check_locations.log',
                         help='Specify a logging file where the log should be saved')
@@ -108,6 +113,10 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                         choices=['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Set the preferred log level')
     parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
+    parser.add_argument('--ip-filter-file', type=str,
+                        help='The file with the IPs which should be validated. '
+                             'Only IPs which also have a domain entry in the database are '
+                             'considered')
 
 
 def main():
@@ -202,12 +211,29 @@ def main():
 
     process_count = args.number_processes
 
-    # TODO pass along probes or dictionary from location to (probe, distance)
-
     if args.debug:
         process_count = 1
 
+    if args.ip_list_file:
+        ip_set = set()
+        with open(args.ip_list_file) as ip_list_file:
+            for line in ip_list_file:
+                ip_set.add(line.strip())
+
+        ips = list(ip_set)
+    else:
+        ips = None
+
+    ips_count = len(ips)
+
     for pid in range(0, process_count):
+        ips_start_index = int(pid * (ips_count / process_count))
+        ips_end_index = int((pid + 1) * (ips_count / process_count))
+
+        if pid + 1 == process_count:
+            ips_end_index = ips_count
+
+        ips_for_process = ips[ips_start_index:ips_end_index]
         process = mp.Process(target=ripe_check_process,
                              args=(pid,
                                    ripe_create_sema,
@@ -226,7 +252,10 @@ def main():
                                    args.measurement_packets,
                                    args.use_efficient_probes,
                                    location_to_probes_dct,
-                                   args.stop_without_old_results),
+                                   args.stop_without_old_results,
+                                   ips_for_process,
+                                   args.endless_measurements,
+                                   args.random_domains),
                              name='domain_checking_{}'.format(pid))
 
         processes.append(process)
@@ -293,7 +322,10 @@ def ripe_check_process(pid: int,
                        use_efficient_probes: bool,
                        location_to_probes_dct: typing.Dict[
                            str, typing.Tuple[RipeAtlasProbe, float]],
-                       stop_without_old_results: bool):
+                       stop_without_old_results: bool,
+                       ip_list: typing.List[str],
+                       endless_measurements: bool,
+                       random_domains: bool):
     """Checks for all domains if the suspected locations are correct"""
     correct_type_count = collections.defaultdict(int)
 
@@ -321,11 +353,16 @@ def ripe_check_process(pid: int,
     save_measurements_thread.start()
 
     try:
-        domain_generator = get_all_domains_splitted_efficient(pid,
-                                                              domain_block_limit,
-                                                              nr_processes,
-                                                              domain_types,
-                                                              db_session)
+        if ip_list:
+            domain_generator = get_domains_for_ips(ip_list, db_session, domain_block_limit, endless_mode=endless_measurements)
+        else:
+            domain_generator = get_all_domains_splitted_efficient(pid,
+                                                                  domain_block_limit,
+                                                                  nr_processes,
+                                                                  domain_types,
+                                                                  db_session,
+                                                                  use_random_order=random_domains,
+                                                                  endless_mode=endless_measurements)
 
         generator_lock = threading.Lock()
 
