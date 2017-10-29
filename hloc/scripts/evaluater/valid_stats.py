@@ -9,21 +9,16 @@ import datetime
 import pprint
 import operator
 
-from hloc import util, constants
+from hloc import util
 from hloc.db_utils import create_engine, create_session_for_process
 logger = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
     """Creates the arguments for the parser"""
-    parser.add_argument('-p', '--number-processes', type=int, default=4,
-                        help='specify the number of processes used')
     parser.add_argument('-dbn', '--database-name', type=str, default='hloc-debugdb')
     parser.add_argument('-dbp', '--database-password', type=str, default='hloc2017')
     parser.add_argument('-dbu', '--database-username', type=str, default='hloc')
-    parser.add_argument('-v', '--ip-version', type=str, default=constants.IPV4_IDENTIFIER,
-                        choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
-                        help='specify the ipVersion')
     parser.add_argument('-ma', '--allowed-measurement-age', type=int,
                         help='The allowed measurement age in seconds')
     parser.add_argument('-mma', '--minimum-measurement-age', type=str,
@@ -97,6 +92,7 @@ def main():
 
 def domain_base_name(domain_name):
     return '.'.join(domain_name.split('.')[-2:])
+
 
 if __name__ == '__main__':
     main()
