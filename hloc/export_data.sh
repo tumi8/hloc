@@ -6,6 +6,7 @@ allowedMeasurementAge=8640000
 oldestDateAllowed=`date -v-${allowedMeasurementAge}S +%Y-%m-%d-%H-%M-%S`
 
 # $1 is the database name
+cd /data/hloc
 
 if [ -z $1 ]; then
     echo "a databasename is needed!"

@@ -8,6 +8,7 @@ if [ -z $1 ] || [ -z $2 ]; then
     return 1
 else
     echo "if asked to recreate the db answer with yes (y)"
+    cd /data/hloc
     python3 -m hloc.scripts.codes_parser --database-name $1 -ao /data/old-vm/data/rdns-parse/pages_offline/ -le "/data/location-data/locodePart{}.csv" -c /data/location-data/clli-lat-lon.txt -g /data/location-data/cities1000.txt -e /data/location-data/iata_metropolitan.txt -m 100 -p 100000 -ll DEBUG -d
 
     if [ -e $2 ]; then
