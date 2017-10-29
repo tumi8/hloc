@@ -39,9 +39,6 @@ def __create_parser_arguments(parser):
                         help='set if you want to filter isp ip domain names')
     parser.add_argument('-s', '--regex-strategy', type=str, choices=RegexStrategy.all_values(),
                         default=RegexStrategy.abstract.value, help='Specify a regex Strategy')
-    parser.add_argument('-v', '--ip-version', type=str, required=True,
-                        choices=[constants.IPV4_IDENTIFIER, constants.IPV6_IDENTIFIER],
-                        help='specify the ipVersion')
     parser.add_argument('-f', '--white-list-file-path', type=str,
                         help='path to a file with a white list of IPs')
     parser.add_argument('-d', '--database-recreate', action='store_true',
@@ -121,9 +118,9 @@ def main():
 
     for i in range(0, args.number_processes):
         process = mp.Process(target=preprocess_file_part,
-                             args=(args.filepath, i, line_queue, args.ip_version,
-                                   args.isp_ip_filter, regex_strategy, tlds, whitelist, parsed_ips,
-                                   parsed_ips_lock, domain_label_queue, finished_reading_event),
+                             args=(args.filepath, i, line_queue, args.isp_ip_filter, regex_strategy,
+                                   tlds, whitelist, parsed_ips, parsed_ips_lock, domain_label_queue,
+                                   finished_reading_event),
                              name='preprocessing_{}'.format(i))
         processes.append(process)
         process.start()
@@ -256,7 +253,7 @@ def handle_labels(labels_queue: mp.Queue, stop_event: threading.Event):
     labels_queue.close()
 
 
-def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_version: str,
+def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue,
                          ip_encoding_filter: bool, regex_strategy: RegexStrategy,
                          tlds: typing.Set[str], whitelist: typing.Set[str],
                          parsed_ips: typing.Set[str], parsed_ips_lock: mp.Lock,
@@ -291,6 +288,11 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue, ip_versi
             if not domain:
                 logger.info('Warning found empty domain for IP {} skipping'.format(ip))
                 continue
+
+            if ':' in domain:
+                ip_version = constants.IPV6_IDENTIFIER
+            else:
+                ip_version = constants.IPV4_IDENTIFIER
 
             with parsed_ips_lock:
                 parsed_ips.add(ip)
@@ -382,13 +384,13 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
 
     db_session.add(domain)
     db_session.commit()
-    domain_label_tuples = get_domain_label_tuples(domain, domain_labels_queue)
+    domain_label_tuples = get_domain_label_tuples(domain)
     domain_labels_queue.put(domain_label_tuples)
 
     return len(good_lines), len(ip_encoded_lines)
 
 
-def get_domain_label_tuples(domain: Domain, domain_labels_queue: mp.Queue):
+def get_domain_label_tuples(domain: Domain):
     domain_labels = set()
     for label in domain.name.split('.')[::-1]:
         domain_labels.add((label, domain.id))
