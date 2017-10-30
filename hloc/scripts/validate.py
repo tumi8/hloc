@@ -370,7 +370,7 @@ def ripe_check_process(pid: int,
 
                     for location_hint in location_hints:
                         if isinstance(location_hint, CodeMatch):
-                            _ = location_hint.location.name
+                            _ = location_hint.location.city_name
                             _ = location_hint.code_type
                             location_hint_tuples.append((location_hint,
                                                          location_hint.location))
@@ -928,7 +928,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
             try:
                 params = {
                     RipeAtlasProbe.MeasurementKeys.measurement_name.value:
-                        'HLOC Geolocation Measurement for location {}'.format(location.name),
+                        'HLOC Geolocation Measurement for location {}'.format(location.city_name),
                     RipeAtlasProbe.MeasurementKeys.ip_version.value: ip_version,
                     RipeAtlasProbe.MeasurementKeys.api_key.value: api_key,
                     RipeAtlasProbe.MeasurementKeys.ripe_slowdown_sema.value: ripe_slow_down_sema,

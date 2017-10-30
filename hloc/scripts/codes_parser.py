@@ -146,7 +146,7 @@ class WorldAirportCodesParser(HTMLParser):
                 city_name = name_split[0].strip()
                 state_string = name_split[-1].strip()
                 state_string = state_string.encode('ascii', errors='ignore').decode()
-                self.airportInfo.name = city_name.lower()[:100]
+                self.airportInfo.city_name = city_name.lower()[:100]
 
                 state_code_index_s = state_string.find('(') + 1
                 while state_string[state_code_index_s:].find('(') != -1:
@@ -270,7 +270,7 @@ def parse_airport_specific_page(page_text: str, db_session):
     parser.db_session = db_session
     parser.feed(page_text[body_start:])
 
-    if parser.airportInfo.name is not None and \
+    if parser.airportInfo.city_name is not None and \
             (parser.airportInfo.airport_info.iata_codes or
              parser.airportInfo.airport_info.icao_codes or
              parser.airportInfo.airport_info.faa_codes):
@@ -339,7 +339,7 @@ def get_locode_locations(locode_filename: str, db_session):
             airport_info.locode_info.place_codes.append(normalize_locode_info(
                 line_elements[2]).lower())
 
-            airport_info.name = locode_name.lower()
+            airport_info.city_name = locode_name.lower()
 
             airport_info.state = current_state
 
@@ -422,11 +422,11 @@ def get_geo_names(file_path: str, min_population: int, db_session):
             if len(columns[14]) > 0 and int(columns[14]) < min_population:
                 continue
 
-            new_geo_names_info.name = columns[2].lower()
+            new_geo_names_info.city_name = columns[2].lower()
 
             if len(columns[9]) > 0:
                 if columns[9].find(',') >= 0:
-                    columns[9] = columns[9].split(',')[0]
+                    columns[9] = columns[9].split(',')[0].encode('ascii', errors='ignore').decode()
                 new_geo_names_info.state = state_for_code(columns[9].lower(), None,)
 
             new_geo_names_info.population = int(columns[14])
@@ -448,13 +448,13 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session)
     Merge location2 into location1
     location1 is the dominant one that means it defines the important properties
     """
-    if location1.name is None:
-        location1.name = location2.name
+    if location1.city_name is None:
+        location1.city_name = location2.city_name
 
     if location1.state is not None and location2.state is not None and \
             location1.state != location2.state:
         raise ValueError('Location states do not match {} {}'.format(
-            location1.name, location2.name))
+            location1.city_name, location2.city_name))
 
     if location1.state is None:
         location1.state = location2.state
@@ -481,8 +481,8 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session)
 
     location1.alternate_names.extend(location2.alternate_names)
 
-    if location2.name != location1.name:
-        location1.alternate_names.append(location2.name)
+    if location2.city_name != location1.city_name:
+        location1.alternate_names.append(location2.city_name)
 
     if location1.population is None:
         location1.population = location2.population
@@ -603,8 +603,8 @@ def merge_location_codes(merge_radius, db_session):
                                 reverse=True)
         merge_locations_by_gps(location_codes, merge_radius, db_session)
 
-        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.name)
-        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.name)
+        locodes = sorted(LOCODE_LOCATION_CODES, key=lambda location: location.city_name)
+        airport_codes = sorted(AIRPORT_LOCATION_CODES, key=lambda location: location.city_name)
         clli_codes = sorted(CLLI_LOCATION_CODES, key=lambda location: location.clli[0])
         # add_locations(location_codes, geo_codes)
 

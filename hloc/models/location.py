@@ -257,8 +257,8 @@ class LocationInfo(Location):
         #     print(self.dict_representation(), 'has no id')
         #     raise ValueError('id is not int')
         ret_list = []
-        if self.name and not set(self.name).difference(set(string.ascii_letters + string.digits)):
-            ret_list.append((self.name.lower(), (self.id, LocationCodeType.geonames.value)))
+        if self.city_name and not set(self.city_name).difference(set(string.ascii_letters + string.digits)):
+            ret_list.append((self.city_name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
             ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
         for name in self.alternate_names:
