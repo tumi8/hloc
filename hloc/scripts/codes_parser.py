@@ -350,7 +350,7 @@ def normalize_locode_info(text: str):
     ret = ''
     for char in text[1:-1]:
         if char in printable:
-            ret = '{0}{1}'.format(ret, char)
+            ret += char
     return ret
 
 
@@ -670,6 +670,11 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session) -> [Locatio
     return metropolitan_locations
 
 
+def sanitize_location_names(locations):
+    for location in locations:
+        location.city_name = location.city_name.encode('ascii', errors='ignore').decode()
+
+
 def parse_codes(args):
     """start real parsing"""
     Session = create_session_for_process(engine)
@@ -703,17 +708,7 @@ def parse_codes(args):
 
         locations = merge_location_codes(args.merge_radius, db_session)
 
-
-        airport_infos = []
-        locode_infos = []
-
-        for loc in locations:
-            if loc.airport_info:
-                airport_infos.append(loc.airport_info)
-            if loc.locode_info:
-                locode_infos.append(loc.locode_info)
-
-        logger.info('number of airport info object {}'.format(len(airport_infos)))
+        sanitize_location_names(locations)
 
         db_session.add_all(locations)
         db_session.commit()
