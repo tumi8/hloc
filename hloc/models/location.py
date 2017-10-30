@@ -196,7 +196,7 @@ class LocationInfo(Location):
     locode_info_id = sqla.Column(sqla.Integer,
                                  sqla.ForeignKey(LocodeInfo.id, ondelete='set null'))
     clli = sqla.Column(postgresql.ARRAY(sqla.String(6)), default=[])
-    alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(50)), default=[])
+    alternate_names = sqla.Column(postgresql.ARRAY(sqla.String(100)), default=[])
 
     state = sqlorm.relationship(State, back_populates='location_infos', cascade="all")
     nearby_probes = sqlorm.relationship('Probe',
