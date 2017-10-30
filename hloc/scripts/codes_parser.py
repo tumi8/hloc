@@ -2,10 +2,10 @@
 """
 
 * Scrapes airport codes (IATA, ICAO, FAA) from world-airport-codes.com
-* Parses UN/LOCODE codes from files in 1_preprocessing/data/locode*json
+* Parses UN/LOCODE codes from locode*json files
 * Parses CLLI codes from a tab-separated CSV file (CLLI code, lat, lon)
     * this file is not included for copyright reasons
-* Parses geonames from file 1_preprocessing/geonames.txt
+* Parses geonames from file geonames.txt
     * You can obtain a recent copy from geonames.org
 * Filters location for minimum population
 * Merges locations from various sources
@@ -14,7 +14,7 @@
 import argparse
 import json
 import time
-from string import ascii_lowercase, printable, ascii_letters, digits
+from string import ascii_lowercase, ascii_letters, digits
 from time import sleep
 
 import requests
@@ -145,6 +145,7 @@ class WorldAirportCodesParser(HTMLParser):
             if len(name_split) > 1:
                 city_name = name_split[0].strip()
                 state_string = name_split[-1].strip()
+                state_string = state_string.encode('ascii', errors='ignore').decode()
                 self.airportInfo.name = city_name.lower()[:100]
 
                 state_code_index_s = state_string.find('(') + 1
@@ -308,8 +309,9 @@ def get_locode_locations(locode_filename: str, db_session):
                 current_state = state_for_code(normalize_locode_info(line_elements[1]),
                                                normalize_locode_info(line_elements[3])[1:])
                 if not current_state:
-                    print('Alert', normalize_locode_info(line_elements[1]),
-                          normalize_locode_info(line_elements[3])[1:])
+                    logger.warning('Could not create state with name {} and code {}'.format(
+                        normalize_locode_info(line_elements[3])[1:],
+                        normalize_locode_info(line_elements[1])))
                 continue
 
             if len(line_elements[6]) < 4:
@@ -346,12 +348,8 @@ def get_locode_locations(locode_filename: str, db_session):
 
 
 def normalize_locode_info(text: str):
-    """remove "" at beginning and at the end and remove non utf8 character"""
-    ret = ''
-    for char in text[1:-1]:
-        if char in printable:
-            ret += char
-    return ret
+    """remove "" at beginning and at the end and remove non ascii character"""
+    return text[1:-1].encode('ascii', errors='ignore').decode()
 
 
 def get_location_from_locode_text(locationtext: str):
