@@ -437,7 +437,8 @@ def get_geo_names(file_path: str, min_population: int, db_session):
                 if set(maxname).difference(set(ascii_letters + digits)):
                     continue
                 elif len(maxname) > 0:
-                    new_geo_names_info.alternate_names.append(maxname.lower())
+                    new_geo_names_info.alternate_names.append(maxname.lower().encode(
+                        'ascii', errors='ignore').decode())
 
             # db_session.add(new_geo_names_info)
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
