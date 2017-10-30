@@ -436,7 +436,7 @@ def get_geo_names(file_path: str, min_population: int, db_session):
 
                 if set(maxname).difference(set(ascii_letters + digits)):
                     continue
-                if len(maxname) > 0:
+                elif len(maxname) > 0:
                     new_geo_names_info.alternate_names.append(maxname.lower())
 
             # db_session.add(new_geo_names_info)
@@ -550,6 +550,10 @@ def merge_locations_by_gps(locations: [LocationInfo], radius: int, db_session):
 
 
 def state_for_code(state_code, state_name):
+    state_code = state_code.lower()
+    if state_name:
+        state_name = state_name.lower().encode('ascii', errors='ignore').decode()
+
     states_for_code = [state for state in STATES if state.iso3166code == state_code]
     if states_for_code:
         return states_for_code[0]
