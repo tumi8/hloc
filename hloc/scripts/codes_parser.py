@@ -437,8 +437,7 @@ def get_geo_names(file_path: str, min_population: int, db_session):
                 if set(maxname).difference(set(ascii_letters + digits)):
                     continue
                 elif len(maxname) > 0:
-                    new_geo_names_info.alternate_names.append(maxname.lower().encode(
-                        'ascii', errors='ignore').decode())
+                    new_geo_names_info.alternate_names.append(maxname.lower())
 
             # db_session.add(new_geo_names_info)
             GEONAMES_LOCATION_CODES.append(new_geo_names_info)
@@ -483,7 +482,9 @@ def location_merge(location1: LocationInfo, location2: LocationInfo, db_session)
     location1.alternate_names.extend(location2.alternate_names)
 
     if location2.city_name != location1.city_name:
-        location1.alternate_names.append(location2.city_name)
+        if location2.city_name:
+            location1.alternate_names.append(
+                location2.city_name.encode('ascii', errors='ignore').decode())
 
     if location1.population is None:
         location1.population = location2.population
