@@ -81,17 +81,30 @@ def main():
     db_session = Session()
     probe_dct = get_archive_probes(db_session)
 
+    for probe in probe_dct.values():
+        _ = probe.id
+        _ = probe.is_rfc_1918()
+        db_session.expunge(probe)
+
     db_session.close()
     Session.remove()
 
     processes = []
 
     new_parsed_files = mp.Queue()
+    probe_latency_queue = mp.Queue()
+    finish_event = mp.Event()
+
+    probe_latency_thread = threading.Thread(target=update_second_hop_latency,
+                                            args=(probe_latency_queue, finish_event),
+                                            name='update probe latency')
+    probe_latency_thread.start()
 
     for i in range(args.number_processes):
         process = mp.Process(target=parse_ripe_data, args=(filenames, not args.plaintext,
                                                            args.days_in_past, args.debug,
-                                                           probe_dct, new_parsed_files),
+                                                           probe_dct, new_parsed_files,
+                                                           probe_latency_queue),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
         process.start()
@@ -99,6 +112,10 @@ def main():
     try:
         for process in processes:
             process.join()
+
+        finish_event.set()
+
+        probe_latency_thread.join()
     finally:
         with open(parsed_file_name, 'a') as parsed_files_histoy_file:
             while not new_parsed_files.empty():
@@ -118,6 +135,30 @@ def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typi
                 filename_queue.put(os.path.join(dirname, filename))
 
     return filename_queue
+
+
+def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: mp.Event):
+    Session = create_session_for_process(engine)
+    db_session = Session()
+
+    update_sql = 'UPDATE probes SET second_hop_latency = {} WHERE id = {} AND ' \
+                 '(second_hop_latency IS NULL OR second_hop_latency > {});'
+
+    last_commit = datetime.datetime.now()
+
+    while not finish_event.is_set() or not probe_latency_queue.empty():
+        try:
+            probe_id, latency = probe_latency_queue.get(1)
+            db_session.execute(update_sql.format(latency, probe_id, latency))
+
+            if last_commit - datetime.datetime.now() > datetime.timedelta(seconds=20):
+                db_session.commit()
+        except queue.Empty:
+            pass
+
+    db_session.commit()
+    db_session.close()
+    Session.remove()
 
 
 class MeasurementKey(enum.Enum):
@@ -140,7 +181,8 @@ class MeasurementKey(enum.Enum):
 
 # @util.cprofile('ripe_parser')
 def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int, debugging: bool,
-                    probe_dct: typing.Dict[int, RipeAtlasProbe], new_parsed_files: mp.Queue):
+                    probe_dct: typing.Dict[int, RipeAtlasProbe], new_parsed_files: mp.Queue,
+                    probe_latency_queue: mp.Queue):
     Session = create_session_for_process(engine)
     db_session = Session()
 
@@ -197,7 +239,8 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                 for line in line_generator():
                     measurement_result_dct = json.loads(line)
 
-                    measurement_result = parse_measurement(measurement_result_dct, probe_dct)
+                    measurement_result = parse_measurement(measurement_result_dct, probe_dct,
+                                                           probe_latency_queue)
 
                     if measurement_result:
                         if measurement_result.probe_id not in \
@@ -219,7 +262,7 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
                         measurement_result_dct = json.loads(line)
 
                         measurement_result = parse_measurement(measurement_result_dct,
-                                                               probe_dct)
+                                                               probe_dct, probe_latency_queue)
 
                         if measurement_result:
                             if measurement_result.probe_id not in \
@@ -264,7 +307,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'dst_addr: .dst_addr, from: .from, msm_id: .msm_id, type: .type, ' \
                   'result: [.result[] | select(has("result")) | {result: [.result[] | ' \
-                  'select(has("rtt") and has("from") and .rtt < 30) | ' \
+                  'select(has("rtt") and has("from") and .rtt < 50) | ' \
                   '{rtt: .rtt, ttl: .ttl, from: .from}] | group_by(.from) | ' \
                   'map(min_by(.rtt)), hop: .hop}] | map(select(.result | length > 0)), ' \
                   'proto: .proto, src_addr: .src_addr, prb_id: .prb_id} | ' \
@@ -273,7 +316,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
-                  'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 30) | .rtt] ' \
+                  'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 50) | .rtt] ' \
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
                   '| select(.result >= 0)\''
 
@@ -287,7 +330,8 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     finished_reading.set()
 
 
-def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]) \
+def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe],
+                      probe_latency_queue: mp.Queue) \
         -> typing.Optional[MeasurementResult]:
     timestamp = datetime.datetime.fromtimestamp(
         measurement_result[MeasurementKey.timestamp.value])
@@ -358,9 +402,8 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
             result.protocol = protocol
             result.ripe_measurement_id = measurement_id
 
-            if second_hop_latency and (not probe.second_hop_latency
-                                       or probe.second_hop_latency > second_hop_latency):
-                probe.second_hop_latency = second_hop_latency
+            if second_hop_latency:
+                probe_latency_queue.put((probe.id, second_hop_latency))
 
             if not rtt:
                 result.error_msg = MeasurementError.not_reachable
