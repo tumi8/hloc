@@ -10,11 +10,12 @@ import re
 import typing
 
 from hloc import util
-from hloc.models import Session, ZmapProbe, ZmapMeasurementResult
-from hloc.db_utils import create_session_for_process, location_for_coordinates
+from hloc.models import ZmapProbe, ZmapMeasurementResult
+from hloc.db_utils import create_session_for_process, location_for_coordinates, create_engine
 
 
 logger = None
+engine = None
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -40,7 +41,10 @@ def main():
     global logger
     logger = util.setup_logger(args.logging_file, 'parse_zmap_results')
 
-    Session = create_session_for_process()
+    global engine
+    engine = create_engine(args.database_name)
+
+    Session = create_session_for_process(engine)
     db_session = Session()
 
     filenames = get_filenames(args.zmap_results_dir, args.file_regex)
@@ -89,15 +93,14 @@ def __get_location_name(filename):
     return os.path.basename(filename).split('.')[0]
 
 
-def parse(filenames: [str], location_probe_ids: typing.Dict[str, int],
-          db_session: Session):
+def parse(filenames: [str], location_probe_ids: typing.Dict[str, int], db_session):
     for filename in filenames:
         location_name = __get_location_name(filename)
         probe_id = location_probe_ids[location_name]
         parse_zmap_results(filename, probe_id, db_session)
 
 
-def parse_zmap_results(zmap_filepath: str, probe_id: int, db_session: Session):
+def parse_zmap_results(zmap_filepath: str, probe_id: int, db_session):
     """Parses a file """
     measurements = {}
     with open(zmap_filepath) as zmap_file:

@@ -15,8 +15,7 @@ import requests
 import ripe.atlas.cousteau as ripe_atlas
 
 from hloc.db_utils import probe_for_id, location_for_coordinates
-from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementResult, \
-    Session
+from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementResult
 
 
 def __get_measurements_for_nodes(measurement_ids: [int],
@@ -121,7 +120,7 @@ def check_measurements_for_nodes(measurement_ids: [int],
     return measurement_objs
 
 
-def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
+def get_archive_probes(db_session) -> typing.Dict[str, RipeAtlasProbe]:
     yesterday = datetime.date.today() - datetime.timedelta(days=2)
     probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
                         yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
@@ -146,8 +145,7 @@ def get_archive_probes(db_session: Session) -> typing.Dict[str, RipeAtlasProbe]:
     return return_dct
 
 
-def __parse_probe(probe_dct: typing.Dict[str, typing.Any],
-        db_session: Session) -> RipeAtlasProbe:
+def __parse_probe(probe_dct: typing.Dict[str, typing.Any], db_session) -> RipeAtlasProbe:
     probe_id = str(probe_dct['id'])
     probe_db_obj = probe_for_id(probe_id, db_session)
 

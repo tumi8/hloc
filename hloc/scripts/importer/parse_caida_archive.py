@@ -18,7 +18,7 @@ import typing
 
 from hloc import util
 from hloc.db_utils import create_session_for_process, location_for_iata_code, create_engine
-from hloc.models import Session, CaidaArkProbe, CaidaArkMeasurementResult, LocationInfo
+from hloc.models import CaidaArkProbe, CaidaArkMeasurementResult, LocationInfo
 
 
 probe_lock = mp.Lock()
@@ -146,7 +146,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
     finished_reading.set()
 
 
-def parse_caida_probe(probe_id: str, location: LocationInfo, db_session: Session) \
+def parse_caida_probe(probe_id: str, location: LocationInfo, db_session) \
         -> typing.Optional[CaidaArkProbe]:
     caida_probe = db_session.query(CaidaArkProbe).filter_by(probe_id=probe_id).first()
     if caida_probe:
