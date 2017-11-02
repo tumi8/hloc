@@ -97,6 +97,9 @@ class RipeAtlasProbe(Probe):
 
     required_keys = ['measurement_name', 'ip_version', 'api_key', 'ripe_slowdown_sema']
 
+    _last_update = None
+    _probe_obj = None
+
     class MeasurementKeys(enum.Enum):
         measurement_name = 'measurement_name'
         ip_version = 'ip_version'
