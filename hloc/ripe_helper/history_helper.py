@@ -10,6 +10,7 @@ import multiprocessing as mp
 import random
 import time
 import typing
+import collections
 
 import requests
 import ripe.atlas.cousteau as ripe_atlas
@@ -121,6 +122,8 @@ def check_measurements_for_nodes(measurement_ids: [int],
 
 
 def get_archive_probes(db_session) -> typing.Dict[str, RipeAtlasProbe]:
+    ProbeRFC1918Tuple = collections.namedtuple('ProbeRFC1918Tuple', ['probe', 'is_rfc1918'])
+
     yesterday = datetime.date.today() - datetime.timedelta(days=2)
     probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
                         yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
@@ -137,9 +140,11 @@ def get_archive_probes(db_session) -> typing.Dict[str, RipeAtlasProbe]:
     for probe_dct in probes_dct_list:
         if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
             probe = __parse_probe(probe_dct, db_session)
-            return_dct[str(probe.probe_id)] = probe
+            return_dct[str(probe.probe_id)] = ProbeRFC1918Tuple(
+                probe=probe,
+                is_rfc1918='system-ipv4-rfc1918' in [tag['slug'] for tag in probe_dct['tags']])
 
-    db_session.add_all(return_dct.values())
+    db_session.add_all([probe for probe, _ in return_dct.values()])
     db_session.commit()
 
     return return_dct

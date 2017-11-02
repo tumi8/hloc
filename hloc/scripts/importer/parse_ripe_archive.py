@@ -81,9 +81,8 @@ def main():
     db_session = Session()
     probe_dct = get_archive_probes(db_session)
 
-    for probe in probe_dct.values():
+    for probe, _ in probe_dct.values():
         _ = probe.id
-        _ = probe.is_rfc_1918()
         db_session.expunge(probe)
 
     db_session.close()
@@ -341,7 +340,7 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
     if probe_id not in probe_dct:
         return None
 
-    probe = probe_dct[probe_id]
+    probe, is_rfc1918 = probe_dct[probe_id]
 
     destination = measurement_result[MeasurementKey.destination.value]
 
@@ -349,7 +348,7 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
 
     if MeasurementKey.source.value in measurement_result and \
             MeasurementKey.source_alt.value in measurement_result:
-        behind_nat = probe.is_rfc_1918()
+        behind_nat = is_rfc1918
 
     if MeasurementKey.source.value in measurement_result:
         source = measurement_result[MeasurementKey.source.value]
