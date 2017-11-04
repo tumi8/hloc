@@ -142,7 +142,7 @@ def get_archive_probes(db_session) -> typing.Dict[str, RipeAtlasProbe]:
             probe = __parse_probe(probe_dct, db_session)
             return_dct[str(probe.probe_id)] = ProbeRFC1918Tuple(
                 probe=probe,
-                is_rfc1918='system-ipv4-rfc1918' in [tag['slug'] for tag in probe_dct['tags']])
+                is_rfc1918='system-ipv4-rfc1918' in probe_dct['tags'])
 
     db_session.add_all([probe for probe, _ in return_dct.values()])
     db_session.commit()
