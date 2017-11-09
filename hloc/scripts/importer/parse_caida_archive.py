@@ -168,57 +168,41 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
         while True:
             filename = filenames.get(timeout=1)
 
-            new_parsed_files.put(filename)
-            
-            logger.debug('parsing {}'.format(filename))
+            try:
+                new_parsed_files.put(filename)
 
-            probe_id = str(os.path.basename(filename).split('.')[0])
-            probe_db_id = probe_id_dct[probe_id]
+                logger.debug('parsing {}'.format(filename))
 
-            modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+                probe_id = str(os.path.basename(filename).split('.')[0])
+                probe_db_id = probe_id_dct[probe_id]
 
-            measurements = collections.defaultdict(dict)
+                modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
 
-            if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
-                continue
+                measurements = collections.defaultdict(dict)
 
-            if bz2_compressed:
-                line_queue = queue.Queue(10 ** 5)
-                finished_reading = threading.Event()
-                read_thread = threading.Thread(target=read_bz2_file_queued,
-                                               args=(line_queue, filename, finished_reading),
-                                               name='bz2 read thread')
-                read_thread.start()
+                if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
+                    continue
 
-                def line_generator():
-                    try:
-                        rline = line_queue.get(2)
-                    except queue.Empty:
-                        return
-                    while True:
-                        yield rline
-                        if finished_reading.is_set() and line_queue.empty():
+                if bz2_compressed:
+                    line_queue = queue.Queue(10 ** 5)
+                    finished_reading = threading.Event()
+                    read_thread = threading.Thread(target=read_bz2_file_queued,
+                                                   args=(line_queue, filename, finished_reading),
+                                                   name='bz2 read thread')
+                    read_thread.start()
+
+                    def line_generator():
+                        try:
+                            rline = line_queue.get(2)
+                        except queue.Empty:
                             return
-                        rline = line_queue.get()
+                        while True:
+                            yield rline
+                            if finished_reading.is_set() and line_queue.empty():
+                                return
+                            rline = line_queue.get()
 
-                for line in line_generator():
-                    measurement = parse_measurement(line, probe_db_id, days_in_past)
-
-                    if measurement:
-                        if measurement.probe_id not in \
-                                measurements[measurement.destination_address] or \
-                                measurements[measurement.destination_address][
-                                    measurement.probe_id].min_rtt > \
-                                measurement.min_rtt:
-                            measurements[measurement.destination_address][measurement.probe_id] = \
-                                measurement
-            else:
-                with open(filename) as caida_archive_filedesc, \
-                        mmap.mmap(caida_archive_filedesc.fileno(), 0,
-                                  access=mmap.ACCESS_READ) as caida_archive_file:
-                    line = caida_archive_file.readline().decode('utf-8')
-
-                    while len(line) > 0:
+                    for line in line_generator():
                         measurement = parse_measurement(line, probe_db_id, days_in_past)
 
                         if measurement:
@@ -227,22 +211,42 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
                                     measurements[measurement.destination_address][
                                         measurement.probe_id].min_rtt > \
                                     measurement.min_rtt:
-                                measurements[measurement.destination_address][
-                                    measurement.probe_id] = \
+                                measurements[measurement.destination_address][measurement.probe_id] = \
                                     measurement
-
+                else:
+                    with open(filename) as caida_archive_filedesc, \
+                            mmap.mmap(caida_archive_filedesc.fileno(), 0,
+                                      access=mmap.ACCESS_READ) as caida_archive_file:
                         line = caida_archive_file.readline().decode('utf-8')
 
-            measurement_results = []
-            for probe_measurement_dct in measurements.values():
-                measurement_results.extend(probe_measurement_dct.values())
+                        while len(line) > 0:
+                            measurement = parse_measurement(line, probe_db_id, days_in_past)
 
-            db_session.bulk_save_objects(measurement_results)
-            logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
-            db_session.commit()
+                            if measurement:
+                                if measurement.probe_id not in \
+                                        measurements[measurement.destination_address] or \
+                                        measurements[measurement.destination_address][
+                                            measurement.probe_id].min_rtt > \
+                                        measurement.min_rtt:
+                                    measurements[measurement.destination_address][
+                                        measurement.probe_id] = \
+                                        measurement
 
-            if debugging:
-                break
+                            line = caida_archive_file.readline().decode('utf-8')
+
+                measurement_results = []
+                for probe_measurement_dct in measurements.values():
+                    measurement_results.extend(probe_measurement_dct.values())
+
+                db_session.bulk_save_objects(measurement_results)
+                logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
+                db_session.commit()
+
+                if debugging:
+                    break
+
+            except Exception:
+                logger.exception('Error while parsing file: ')
 
     except queue.Empty:
         pass

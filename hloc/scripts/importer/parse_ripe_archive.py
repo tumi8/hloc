@@ -189,102 +189,105 @@ def parse_ripe_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: int
         while True:
             filename = filenames.get(timeout=1)
 
-            new_parsed_files.put(filename)
+            try:
+                new_parsed_files.put(filename)
 
-            file_date_str = str(os.path.basename(filename).split('.')[0][-10:])
-            modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
+                file_date_str = str(os.path.basename(filename).split('.')[0][-10:])
+                modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
 
-            if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
-                continue
+                if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
+                    continue
 
-            logger.info('parsing {}'.format(filename))
+                logger.info('parsing {}'.format(filename))
 
-            results = collections.defaultdict(dict)
+                results = collections.defaultdict(dict)
 
-            if bz2_compressed:
-                line_queue = queue.Queue(10**5)
-                finished_reading = threading.Event()
-                read_thread = threading.Thread(target=read_bz2_file_queued,
-                                               args=(line_queue, filename, finished_reading,
-                                                     days_in_past),
-                                               name='bz2 read thread')
-                read_thread.start()
+                if bz2_compressed:
+                    line_queue = queue.Queue(10**5)
+                    finished_reading = threading.Event()
+                    read_thread = threading.Thread(target=read_bz2_file_queued,
+                                                   args=(line_queue, filename, finished_reading,
+                                                         days_in_past),
+                                                   name='bz2 read thread')
+                    read_thread.start()
 
-                def line_generator():
-                    try:
-                        rline = line_queue.get(timeout=2)
-                    except queue.Empty:
-                        logger.exception('empty queue for {}'.format(filename))
-                        return
-
-                    status_msg = False
-                    read_fails = 0
-                    while True:
-                        if rline:
-                            yield rline
-                        if finished_reading.is_set() and (line_queue.empty() or read_fails == 5):
-                            return
-                        if finished_reading.is_set() and not status_msg:
-                            logger.debug('reading finished finishing processing')
-                            status_msg = True
-                        rline = None
+                    def line_generator():
                         try:
                             rline = line_queue.get(timeout=2)
-                            read_fails = 0
                         except queue.Empty:
-                            logger.debug('failed reading')
-                            read_fails += 1
+                            logger.exception('empty queue for {}'.format(filename))
+                            return
 
-                for line in line_generator():
-                    measurement_result_dct = json.loads(line)
+                        status_msg = False
+                        read_fails = 0
+                        while True:
+                            if rline:
+                                yield rline
+                            if finished_reading.is_set() and (line_queue.empty() or read_fails == 5):
+                                return
+                            if finished_reading.is_set() and not status_msg:
+                                logger.debug('reading finished finishing processing')
+                                status_msg = True
+                            rline = None
+                            try:
+                                rline = line_queue.get(timeout=2)
+                                read_fails = 0
+                            except queue.Empty:
+                                logger.debug('failed reading')
+                                read_fails += 1
 
-                    measurement_result = parse_measurement(measurement_result_dct, probe_dct,
-                                                           probe_latency_queue)
-
-                    if measurement_result:
-                        if measurement_result.probe_id not in \
-                                results[measurement_result.destination_address] or \
-                                results[measurement_result.destination_address][
-                                    measurement_result.probe_id].min_rtt > \
-                                measurement_result.min_rtt:
-                            results[measurement_result.destination_address][
-                                measurement_result.probe_id] = measurement_result
-
-                read_thread.join()
-            else:
-                with open(filename) as ripe_archive_filedesc, \
-                    mmap.mmap(ripe_archive_filedesc.fileno(), 0,
-                              access=mmap.ACCESS_READ) as ripe_archive_file:
-                    line = ripe_archive_file.readline().decode('utf-8')
-
-                    while len(line) > 0:
+                    for line in line_generator():
                         measurement_result_dct = json.loads(line)
 
-                        measurement_result = parse_measurement(measurement_result_dct,
-                                                               probe_dct, probe_latency_queue)
+                        measurement_result = parse_measurement(measurement_result_dct, probe_dct,
+                                                               probe_latency_queue)
 
                         if measurement_result:
                             if measurement_result.probe_id not in \
                                     results[measurement_result.destination_address] or \
                                     results[measurement_result.destination_address][
-                                    measurement_result.probe_id].min_rtt > \
+                                        measurement_result.probe_id].min_rtt > \
                                     measurement_result.min_rtt:
                                 results[measurement_result.destination_address][
                                     measurement_result.probe_id] = measurement_result
 
+                    read_thread.join()
+                else:
+                    with open(filename) as ripe_archive_filedesc, \
+                        mmap.mmap(ripe_archive_filedesc.fileno(), 0,
+                                  access=mmap.ACCESS_READ) as ripe_archive_file:
                         line = ripe_archive_file.readline().decode('utf-8')
 
-            measurement_results = []
-            for probe_measurement_dct in results.values():
-                measurement_results.extend(probe_measurement_dct.values())
+                        while len(line) > 0:
+                            measurement_result_dct = json.loads(line)
 
-            db_session.bulk_save_objects(measurement_results)
-            logger.info('parsed and saved {} measurements from file {}'.format(
-                len(measurement_results), filename))
-            db_session.commit()
+                            measurement_result = parse_measurement(measurement_result_dct,
+                                                                   probe_dct, probe_latency_queue)
 
-            if debugging:
-                break
+                            if measurement_result:
+                                if measurement_result.probe_id not in \
+                                        results[measurement_result.destination_address] or \
+                                        results[measurement_result.destination_address][
+                                        measurement_result.probe_id].min_rtt > \
+                                        measurement_result.min_rtt:
+                                    results[measurement_result.destination_address][
+                                        measurement_result.probe_id] = measurement_result
+
+                            line = ripe_archive_file.readline().decode('utf-8')
+
+                measurement_results = []
+                for probe_measurement_dct in results.values():
+                    measurement_results.extend(probe_measurement_dct.values())
+
+                db_session.bulk_save_objects(measurement_results)
+                logger.info('parsed and saved {} measurements from file {}'.format(
+                    len(measurement_results), filename))
+                db_session.commit()
+
+                if debugging:
+                    break
+            except Exception:
+                logger.exception('Error while parsing file: ')
 
     except queue.Empty:
         pass
