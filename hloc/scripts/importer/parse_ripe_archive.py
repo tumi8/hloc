@@ -309,7 +309,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'dst_addr: .dst_addr, from: .from, msm_id: .msm_id, type: .type, ' \
                   'result: [.result[] | select(has("result")) | {result: [.result[] | ' \
-                  'select(has("rtt") and has("from") and .rtt < 50) | ' \
+                  'select(has("rtt") and has("from") and .rtt < 30) | ' \
                   '{rtt: .rtt, ttl: .ttl, from: .from}] | group_by(.from) | ' \
                   'map(min_by(.rtt)), hop: .hop}] | map(select(.result | length > 0)), ' \
                   'proto: .proto, src_addr: .src_addr, prb_id: .prb_id} | ' \
@@ -318,7 +318,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
                   str(oldest_date_allowed) + ' and has("dst_addr")) | {timestamp: .timestamp, ' \
                   'avg: .avg, dst_addr: .dst_addr, from: .from, min: .min, msm_id: .msm_id, ' \
-                  'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 50) | .rtt] ' \
+                  'type: .type, result: [.result[] | select(has("rtt") and .rtt <= 30) | .rtt] ' \
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
                   '| select(.result >= 0)\''
 
