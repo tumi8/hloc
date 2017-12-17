@@ -8,7 +8,7 @@ filedateUnix=`date +%s`
 # 100 days of allowed measurement age (100 * 24 * 60 * 60)
 allowedMeasurementAge=8640000
 oldestDateAllowedUnix=`expr ${filedateUnix} - ${allowedMeasurementAge}`
-oldestDateAllowed=`date --date "@${oldestDateAllowedUnix}" +%Y-%m-%d %H:%M:%S`
+oldestDateAllowed=`date --date "@${oldestDateAllowedUnix}" "+%Y-%m-%d %H:%M:%S"`
 
 if [ -z $1 ] || [ -z $2 ]; then
     echo "a database name and an export directory is needed!"
