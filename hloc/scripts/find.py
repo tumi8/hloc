@@ -241,7 +241,6 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
             else:
                 for location_id, location_code, location_code_type, domain_label_id in \
                         location_matches_tuples:
-                    logger.debug('inserting elem for {}'.format(domain_label_id))
                     location_hint_key = make_location_hint_key(location_id, location_code,
                                                                location_code_type)
                     try:

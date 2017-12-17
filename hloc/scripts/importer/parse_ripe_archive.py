@@ -422,7 +422,13 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
         hop_count = 0
 
         for inner_result in result[MeasurementKey.result.value]:
-            if ipaddress.ip_address(inner_result[MeasurementKey.source.value]).is_private:
+            try:
+                ip_addr = ipaddress.ip_address(inner_result[MeasurementKey.source.value])
+            except ValueError as e:
+                logger.warn("could not parse IP {}".format(inner_result[MeasurementKey.source.value]), exc_info=True)
+                continue
+
+            if ip_addr.is_private:
                 continue
 
             hop_count += 1
