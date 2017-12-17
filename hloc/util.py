@@ -67,28 +67,25 @@ def remove_file_ending(filenamepath: str) -> str:
 
 def setup_logger(filename: str, loggername: str, loglevel: str='DEBUG', hourly_log_rotation: bool=False) -> logging.Logger:
     """does the basic config on logging"""
+    # TODO only make basic setup and each script should get its logger on its own
     numeric_level = getattr(logging, loglevel.upper(), None)
 
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: {}'.format(loglevel))
-
-    logging.basicConfig(filename=filename, level=numeric_level,
-                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s][%(threadName)s] '
-                               u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
-                        datefmt='%d.%m %H:%M:%S')
-    logging.getLogger("requests").setLevel(logging.ERROR)
-    logging.getLogger("urllib3").setLevel(logging.ERROR)
-
-    logger = logging.getLogger(loggername)
 
     if hourly_log_rotation:
         file_rotation_handler = logging.handlers.TimedRotatingFileHandler(filename)
     else:
         file_rotation_handler = logging.handlers.TimedRotatingFileHandler(filename, when='midnight')
 
-    logger.addHandler(file_rotation_handler)
+    logging.basicConfig(filename=filename, level=numeric_level,
+                        format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s][%(threadName)s] '
+                               u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
+                        datefmt='%d.%m %H:%M:%S', handlers=[file_rotation_handler])
+    logging.getLogger("requests").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
 
-    return logger
+    return logging.getLogger(loggername)
 
 
 def ip_to_int(ip_addr, ip_version):
