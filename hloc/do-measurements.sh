@@ -10,7 +10,7 @@ filedate=`date +%Y-%m-%d-%H-%M`
 # 180 days of allowed measurement age
 allowedMeasurementAge=15552000
 
-if [ -z $1 ] || [ -z $2 ] || [ ! -D $3 ] || [ ! -D $4 ]; then
+if [ -z $1 ] || [ -z $2 ] || [ ! -d $3 ] || [ ! -d $4 ]; then
     echo "provide the database name, the RIPE Atlas API key, the hloc directory, and the python environment directory! Aborting!"
     return 1
 else
@@ -19,7 +19,7 @@ else
     cd $3
 
     logPath="logs"
-    if [ ! -D ${logPath} ]; then
+    if [ ! -d ${logPath} ]; then
         mkdir ${logPath}
     fi
 

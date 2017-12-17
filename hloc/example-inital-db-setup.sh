@@ -5,7 +5,7 @@
 # $3 is the hloc directory
 # $4 path to python environment
 
-if [ -z $1 ] || [ -z $2 ] || [ -z $3 ] || [ ! -D $4 ]; then
+if [ -z $1 ] || [ -z $2 ] || [ -z $3 ] || [ ! -d $4 ]; then
     echo "a databasename, the rdns file, the hloc directory, and the python environment directory is needed! Aborting!"
     return 1
 else
@@ -15,7 +15,7 @@ else
     cd $3
 
     logPath="logs"
-    if [ ! -D ${logPath} ]; then
+    if [ ! -d ${logPath} ]; then
         mkdir ${logPath}
     fi
 

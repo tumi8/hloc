@@ -10,7 +10,7 @@ nonDeletedPastDays=90
 # last 60 days will be imported
 importDays=30
 
-if [ -z $1 ] || [ -z $2 ] || [ ! -D $3 ]; then
+if [ -z $1 ] || [ -z $2 ] || [ ! -d $3 ]; then
     echo "provide path to hloc directory, the database name, and the python environment! Aborting!"
     return 1
 else

@@ -10,14 +10,10 @@ allowedMeasurementAge=8640000
 oldestDateAllowedUnix=`expr ${filedateUnix} - ${allowedMeasurementAge}`
 oldestDateAllowed=`date --date "@${oldestDateAllowedUnix}" "+%Y-%m-%d %H:%M:%S"`
 
-if [ -z $1 ] || [ -z $2 ]; then
+if [ -z $1 ] || [ -d $2 ]; then
     echo "a database name and an export directory is needed!"
     return 1
 else
-    if [ ! -D $2 ]; then
-        echo "the export directory must exist!"
-    fi
-
     curDir=`pwd`
     cd $2
     exportAbsolutDir=`pwd`
