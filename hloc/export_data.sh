@@ -4,9 +4,11 @@
 # 2nd parameter: export directory
 
 filedate=`date +%Y-%m-%d-%H-%M`
-# 100 days of allowed measurement age (100 * 24 * 60 * 60
+filedateUnix=`date +%s`
+# 100 days of allowed measurement age (100 * 24 * 60 * 60)
 allowedMeasurementAge=8640000
-oldestDateAllowed=`date -v-${allowedMeasurementAge}S +%Y-%m-%d-%H-%M-%S`
+oldestDateAllowedUnix=`expr $filedateUnix - $allowedMeasurementAge`
+oldestDateAllowed=`date --date "@${oldestDateAllowedUnix}" +%Y-%m-%d-%H-%M-%S`
 
 if [ -z $1 ] || [ -z $2 ]; then
     echo "a database name and an export directory is needed!"
