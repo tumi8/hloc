@@ -126,7 +126,8 @@ def main():
     engine = create_engine(args.database_name)
 
     global logger
-    logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level)
+    logger = util.setup_logger(args.log_file, 'check', loglevel=args.log_level,
+                               hourly_log_rotation=True)
     logger.debug('starting')
 
     start_time = time.time()

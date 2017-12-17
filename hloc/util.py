@@ -4,6 +4,7 @@
 import binascii
 import inspect
 import logging
+import logging.handlers
 import os
 import socket
 import subprocess
@@ -64,18 +65,30 @@ def remove_file_ending(filenamepath: str) -> str:
                         '.'.join(get_path_filename(filenamepath).split('.')[:-1]))
 
 
-def setup_logger(filename: str, loggername: str, loglevel: str = 'DEBUG') -> logging.Logger:
+def setup_logger(filename: str, loggername: str, loglevel: str='DEBUG', hourly_log_rotation: bool=False) -> logging.Logger:
     """does the basic config on logging"""
     numeric_level = getattr(logging, loglevel.upper(), None)
+
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: {}'.format(loglevel))
+
     logging.basicConfig(filename=filename, level=numeric_level,
                         format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s][%(threadName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
                         datefmt='%d.%m %H:%M:%S')
     logging.getLogger("requests").setLevel(logging.ERROR)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
-    return logging.getLogger(loggername)
+
+    logger = logging.getLogger(loggername)
+
+    if hourly_log_rotation:
+        file_rotation_handler = logging.handlers.TimedRotatingFileHandler(filename)
+    else:
+        file_rotation_handler = logging.handlers.TimedRotatingFileHandler(filename, when='midnight')
+
+    logger.addHandler(file_rotation_handler)
+
+    return logger
 
 
 def ip_to_int(ip_addr, ip_version):
