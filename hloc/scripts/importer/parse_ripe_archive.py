@@ -347,6 +347,12 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
 
     destination = measurement_result[MeasurementKey.destination.value]
 
+    try:
+        ipaddress.ip_address(destination)
+    except ValueError:
+        logger.warn("could not parse destination IP '{}'".format(destination), exc_info=True)
+        return
+
     behind_nat = False
 
     if MeasurementKey.source.value in measurement_result and \
@@ -361,6 +367,11 @@ def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe]
         raise ValueError('source not found {}'.format(str(measurement_result)))
 
     if not source:
+        source = None
+
+    try:
+        ipaddress.ip_address(source)
+    except ValueError:
         source = None
 
     protocol = None
