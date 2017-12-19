@@ -19,7 +19,7 @@ else
     cd $1
 
     logPath="logs"
-    if [ ! -D ${logPath} ]; then
+    if [ ! -d ${logPath} ]; then
         mkdir ${logPath}
     fi
 
