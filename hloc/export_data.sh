@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # 1st parameter: database name
 # 2nd parameter: export directory

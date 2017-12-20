@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 
 # $1 is the database name
 # $2 is the path to the rdns file

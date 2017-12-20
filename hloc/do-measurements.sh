@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 
 # 1st parameter: database name
 # 2nd parameter: ripe atlas API key
