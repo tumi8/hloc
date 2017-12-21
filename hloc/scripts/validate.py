@@ -211,10 +211,10 @@ def main():
     if args.debug:
         process_count = 1
 
-    if args.ip_list_file:
+    if args.ip_filter_file:
         ip_set = set()
-        with open(args.ip_list_file) as ip_list_file:
-            for line in ip_list_file:
+        with open(args.ip_filter_file) as ip_filter_file:
+            for line in ip_filter_file:
                 ip_set.add(line.strip())
 
         ips = list(ip_set)
