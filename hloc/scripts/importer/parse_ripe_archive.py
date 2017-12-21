@@ -153,7 +153,8 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: mp.Ev
             if last_commit - datetime.datetime.now() > datetime.timedelta(seconds=20):
                 db_session.commit()
         except queue.Empty:
-            pass
+            if finish_event.is_set():
+                break
 
     db_session.commit()
     db_session.close()
