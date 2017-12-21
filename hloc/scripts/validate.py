@@ -157,7 +157,7 @@ def main():
     if not args.disable_probe_fetching:
         probe_distances = get_archive_probes(db_session).values()
 
-        location_to_probes_dct = assign_location_probes(locations, probe_distances, db_session)
+        location_to_probes_dct = assign_location_probes(locations, [probe for probe, _ in probe_distances], db_session)
         db_session.commit()
 
         null_locations = [location for location in locations
