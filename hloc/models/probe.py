@@ -105,7 +105,7 @@ class RipeAtlasProbe(Probe):
         ip_version = 'ip_version'
         num_packets = 'num_packets'
         api_key = 'api_key'
-        bill_to_address = 'bill_to_address'
+        bill_to_address = 'bill_to'
         ripe_slowdown_sema = 'ripe_slowdown_sema'
 
         additional_probes = 'additional_probes'
