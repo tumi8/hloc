@@ -4,27 +4,26 @@ Verify obtained location hints with rtt measurements using a predefined threshol
 """
 
 import argparse
-import time
-import multiprocessing as mp
-import threading
 import collections
-import typing
-import enum
 import datetime
+import enum
+import multiprocessing as mp
 import operator
 import queue
 import random
-
-from sqlalchemy.exc import InvalidRequestError
+import threading
+import time
+import typing
 
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
+from sqlalchemy.exc import InvalidRequestError
 
 from hloc import util, constants
-from hloc.models import *
-from hloc.models.location import probe_location_info_table
 from hloc.db_utils import get_measurements_for_domain, get_all_domains_splitted_efficient, \
     create_session_for_process, create_engine, get_domains_for_ips
 from hloc.exceptions import ProbeError
+from hloc.models import *
+from hloc.models.location import probe_location_info_table
 from hloc.ripe_helper.basics_helper import get_measurement_ids
 from hloc.ripe_helper.history_helper import check_measurements_for_nodes, get_archive_probes
 
@@ -991,10 +990,10 @@ def update_probes(probes: [RipeAtlasProbe]):
 
 
 def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
-                           db_session: Session) -> typing.Dict[str,
-                                                               typing.Tuple[RipeAtlasProbe,
-                                                                            float,
-                                                                            Location]]:
+                           db_session) -> typing.Dict[str,
+                                                      typing.Tuple[RipeAtlasProbe,
+                                                                   float,
+                                                                   Location]]:
     near_probes_assignments = []
     location_to_probes_dct = {}
 
