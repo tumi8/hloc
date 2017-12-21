@@ -177,7 +177,7 @@ def main():
                 for probe in location.nearby_probes:
                     probes.add(probe)
                     _ = str(probe.location.lat + probe.location.lon) + probe.location.id + \
-                        str(probe.second_hop_latency)
+                        str(probe.second_hop_latency) + probe.probe_id
                     location_to_probes_dct[location.id].append((
                         probe,
                         location.gps_distance_haversine(probe.location),
