@@ -221,16 +221,23 @@ def main():
     else:
         ips = None
 
-    ips_count = len(ips)
+
+    if ips:
+        ips_count = len(ips)
 
     for pid in range(0, process_count):
-        ips_start_index = int(pid * (ips_count / process_count))
-        ips_end_index = int((pid + 1) * (ips_count / process_count))
 
-        if pid + 1 == process_count:
-            ips_end_index = ips_count
+        if ips:
+            ips_start_index = int(pid * (ips_count / process_count))
+            ips_end_index = int((pid + 1) * (ips_count / process_count))
 
-        ips_for_process = ips[ips_start_index:ips_end_index]
+            if pid + 1 == process_count:
+                ips_end_index = ips_count
+
+            ips_for_process = ips[ips_start_index:ips_end_index]
+        else:
+            ips_for_process = None
+
         process = mp.Process(target=ripe_check_process,
                              args=(pid,
                                    ripe_create_sema,
