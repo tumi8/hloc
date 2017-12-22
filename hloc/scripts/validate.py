@@ -132,6 +132,7 @@ def main():
     start_time = time.time()
     Session = create_session_for_process(engine)
     db_session = Session()
+    db_session.expire_on_commit = False
 
     ripe_slow_down_sema = mp.BoundedSemaphore(args.ripe_request_burst_limit)
     ripe_create_sema = mp.Semaphore(args.measurement_limit)
@@ -157,7 +158,9 @@ def main():
     if not args.disable_probe_fetching:
         probe_distances = get_archive_probes(db_session).values()
 
-        location_to_probes_dct = assign_location_probes(locations, [probe for probe, _ in probe_distances], db_session)
+        location_to_probes_dct = assign_location_probes(locations,
+                                                        [probe for probe, _ in probe_distances],
+                                                        db_session)
         db_session.commit()
 
         null_locations = [location for location in locations
@@ -220,7 +223,6 @@ def main():
         ips = list(ip_set)
     else:
         ips = None
-
 
     if ips:
         ips_count = len(ips)
@@ -334,6 +336,7 @@ def ripe_check_process(pid: int,
     domain_type_count = collections.defaultdict(int)
     Session = create_session_for_process(engine)
     db_session = Session()
+    db_session.expire_on_commit = False
 
     def increment_count_for_type(ctype: LocationCodeType):
         correct_type_count[ctype.name] += 1
@@ -356,7 +359,8 @@ def ripe_check_process(pid: int,
 
     try:
         if ip_list:
-            domain_generator = get_domains_for_ips(ip_list, db_session, domain_block_limit, endless_mode=endless_measurements)
+            domain_generator = get_domains_for_ips(ip_list, db_session, domain_block_limit,
+                                                   endless_mode=endless_measurements)
         else:
             domain_generator = get_all_domains_splitted_efficient(pid,
                                                                   domain_block_limit,
@@ -527,7 +531,7 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
 
     for domain, location_hints, measurement_result_tuples in get_domains():
         try:
-            logger.debug('next domain')
+            logger.debug('next domain %s', domain.name)
             ip_version = constants.IPV4_IDENTIFIER if domain.ipv4_address else \
                 constants.IPV6_IDENTIFIER
             check_domain_location_ripe(domain, location_hints, increment_domain_type_count,
@@ -539,7 +543,7 @@ def domain_check_threading_manage(next_domain_info: typing.Callable[
                                        location_to_probes_dct, measurement_result_tuples,
                                        measurement_results_queue, stop_without_old_results)
         except Exception:
-            logger.exception('Check Domain Error')
+            logger.exception('Check Domain Error %s', domain.name)
 
     logger.debug('Thread finished')
 
@@ -1032,6 +1036,7 @@ def assign_location_probes(locations: [LocationInfo], probes: [RipeAtlasProbe],
     db_session.execute(insert_expr)
 
     return location_to_probes_dct
+
 
 if __name__ == '__main__':
     main()
