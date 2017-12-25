@@ -180,7 +180,7 @@ def main():
                 for probe in location.nearby_probes:
                     probes.add(probe)
                     _ = str(probe.location.lat + probe.location.lon) + probe.location.id + \
-                        str(probe.second_hop_latency) + probe.probe_id
+                        str(probe.second_hop_latency) + probe.probe_id + str(probe.id)
                     location_to_probes_dct[location.id].append((
                         probe,
                         location.gps_distance_haversine(probe.location),
@@ -953,6 +953,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
 
                 return measurement_results
             except ProbeError:
+                logger.warning('Probe error for probe id %s', near_nodes[0].id, exc_info=True)
+
                 for node in near_nodes:
                     NON_WORKING_PROBES.add(node)
                     near_nodes_all.remove(node)
