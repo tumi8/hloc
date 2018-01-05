@@ -24,9 +24,9 @@ else
     fi
 
     if [ $# -eq 5 ] && [ -e $5 ]; then
-        python3 -m hloc.scripts.validate --number-processes 8 --ripe-request-limit 30 --ripe-request-burst-limit 50 --measurement-limit 100 --allowed-measurement-age ${allowedMeasurementAge} --buffer-time 0 --measurement-strategy aggressive --api-key $2 --include-ip-encoded --use-efficient-probes --probes-per-measurement 3 --measurement-packets 4 --database-name $1 --ip-filter-file $5 -l ${logPath}/validate-multi.log -ll DEBUG
+        python3 -m hloc.scripts.validate --number-processes 4 --ripe-request-limit 30 --ripe-request-burst-limit 50 --measurement-limit 100 --allowed-measurement-age ${allowedMeasurementAge} --buffer-time 0 --measurement-strategy aggressive --api-key $2 --include-ip-encoded --use-efficient-probes --probes-per-measurement 3 --measurement-packets 4 --database-name $1 --ip-filter-file $5 -l ${logPath}/validate-multi.log -ll DEBUG
     elif [ $# -eq 4 ]; then
-        python3 -m hloc.scripts.validate --number-processes 8 --ripe-request-limit 30 --ripe-request-burst-limit 50 --measurement-limit 100 --allowed-measurement-age ${allowedMeasurementAge} --buffer-time 0 --measurement-strategy aggressive --api-key $2 --include-ip-encoded --use-efficient-probes --probes-per-measurement 3 --measurement-packets 4 --database-name $1 --endless-measurements --random-domains -l ${logPath}/validate-multi.log -ll DEBUG
+        python3 -m hloc.scripts.validate --number-processes 4 --ripe-request-limit 30 --ripe-request-burst-limit 50 --measurement-limit 100 --allowed-measurement-age ${allowedMeasurementAge} --buffer-time 0 --measurement-strategy aggressive --api-key $2 --include-ip-encoded --use-efficient-probes --probes-per-measurement 3 --measurement-packets 4 --database-name $1 --endless-measurements --random-domains -l ${logPath}/validate-multi.log -ll DEBUG
     else
         echo "Either not the correct amount of properties was given or IP-List file could not be found!"
     fi
