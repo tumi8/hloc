@@ -5,3 +5,4 @@ sqlalchemy>=1.1.10
 psycopg2>=2.7.1
 marisa-trie>=0.7.4
 ujson>=1.35
+multiprocessing-logging>=0.2.5

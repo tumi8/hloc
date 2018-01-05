@@ -10,6 +10,7 @@ import socket
 import subprocess
 import ipaddress
 import cProfile
+import multiprocessing_logging
 
 from hloc import constants
 
@@ -82,6 +83,9 @@ def setup_logger(filename: str, loggername: str, loglevel: str='DEBUG', hourly_l
                         format=u'[%(asctime)s][%(name)-{}s][%(levelname)-s][%(processName)s][%(threadName)s] '
                                u'%(filename)s:%(lineno)d %(message)s'.format(len(loggername)),
                         datefmt='%d.%m %H:%M:%S', handlers=[file_rotation_handler])
+
+    multiprocessing_logging.install_mp_handler()
+
     logging.getLogger("requests").setLevel(logging.ERROR)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
 
