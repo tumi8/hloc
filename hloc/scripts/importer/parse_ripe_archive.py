@@ -8,7 +8,6 @@ import collections
 import datetime
 import enum
 import ipaddress
-import ujson as json
 import mmap
 import multiprocessing as mp
 import os
@@ -18,6 +17,7 @@ import subprocess
 import sys
 import threading
 import typing
+import ujson as json
 
 from hloc import util
 from hloc.db_utils import create_session_for_process, create_engine
@@ -92,7 +92,7 @@ def main():
 
     new_parsed_files = mp.Queue()
     probe_latency_queue = mp.Queue()
-    finish_event = mp.Event()
+    finish_event = threading.Event()
 
     probe_latency_thread = threading.Thread(target=update_second_hop_latency,
                                             args=(probe_latency_queue, finish_event),
@@ -113,6 +113,7 @@ def main():
             process.join()
 
         finish_event.set()
+        logger.debug('finishe event set waiting for secodn hop latency thread')
 
         probe_latency_thread.join()
     finally:
@@ -136,7 +137,7 @@ def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typi
     return filename_queue
 
 
-def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: mp.Event):
+def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threading.Event):
     Session = create_session_for_process(engine)
     db_session = Session()
 
@@ -147,10 +148,11 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: mp.Ev
 
     while not finish_event.is_set() or not probe_latency_queue.empty():
         try:
-            probe_id, latency = probe_latency_queue.get(1)
+            probe_id, latency = probe_latency_queue.get(timeout=1)
             db_session.execute(update_sql.format(latency, probe_id, latency))
 
             if last_commit - datetime.datetime.now() > datetime.timedelta(seconds=20):
+                logger.debug("Committing updates to second hop latency")
                 db_session.commit()
         except queue.Empty:
             if finish_event.is_set():
@@ -312,8 +314,9 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, finished_readin
                   'result: [.result[] | select(has("result")) | {result: [.result[] | ' \
                   'select(has("rtt") and has("from") and .rtt < 30) | ' \
                   '{rtt: .rtt, ttl: .ttl, from: .from}] | group_by(.from) | ' \
-                  'map(min_by(.rtt)), hop: .hop}] | map(select(.result | length > 0)), ' \
-                  'proto: .proto, src_addr: .src_addr, prb_id: .prb_id} | ' \
+                  'map(min_by(.rtt)), hop: .hop}] | map(select(.result | length > 0) | ' \
+                  '{rtt: .result[0].rtt, ttl: .result[0].ttl, from: .result[0].from, hop: .hop}),' \
+                  ' proto: .proto, src_addr: .src_addr, prb_id: .prb_id} | ' \
                   'select(.result | length > 0)\''
     else:
         command = 'bzcat ' + filename + ' | jq -c \'. | select(.timestamp >= ' + \
@@ -431,27 +434,22 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
     second_hop_latency = None
 
     for result in measurement_result[MeasurementKey.result.value]:
-        hop_count = 0
+        try:
+            ip_addr = ipaddress.ip_address(result[MeasurementKey.source.value])
+        except ValueError as e:
+            logger.warn("could not parse IP {}".format(result[MeasurementKey.source.value]), exc_info=True)
+            continue
 
-        for inner_result in result[MeasurementKey.result.value]:
-            try:
-                ip_addr = ipaddress.ip_address(inner_result[MeasurementKey.source.value])
-            except ValueError as e:
-                logger.warn("could not parse IP {}".format(inner_result[MeasurementKey.source.value]), exc_info=True)
-                continue
+        if ip_addr.is_private:
+            continue
 
-            if ip_addr.is_private:
-                continue
+        if result[MeasurementKey.hop.value] >= 2 and \
+                (not second_hop_latency or
+                 result[MeasurementKey.rtt.value] < second_hop_latency):
+            second_hop_latency = result[MeasurementKey.rtt.value]
 
-            hop_count += 1
-            if hop_count >= 2 and \
-                    (not second_hop_latency or
-                     inner_result[MeasurementKey.rtt.value] < second_hop_latency):
-                second_hop_latency = inner_result[MeasurementKey.rtt.value]
-
-            rtts[inner_result[MeasurementKey.source.value]] = (
-                inner_result[MeasurementKey.rtt.value],
-                inner_result.get(MeasurementKey.ttl.value, None))
+        rtts[result[MeasurementKey.source.value]] = (result[MeasurementKey.rtt.value],
+                                                     result.get(MeasurementKey.ttl.value, None))
 
     return rtts, second_hop_latency
 
