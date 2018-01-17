@@ -24,8 +24,8 @@ else
     fi
 
     python3 -m hloc.scripts.importer.delete_measurements --days-in-past ${nonDeletedPastDays} --database-name $2 -l ${logPath}/cron-delete-measurements.log -ll DEBUG &
-    python3 -m hloc.scripts.importer.parse_ripe_archive ${archivepathripe} --number-processes 4 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-ripe-import.log -ll DEBUG
-    python3 -m hloc.scripts.importer.parse_caida_archive ${archivepathcaida} --number-processes 4 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-caida-import.log -ll DEBUG
+    python3 -m hloc.scripts.importer.parse_ripe_archive ${archivepathripe} --number-processes 8 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-ripe-import.log -ll DEBUG
+    python3 -m hloc.scripts.importer.parse_caida_archive ${archivepathcaida} --number-processes 8 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-caida-import.log -ll DEBUG
 
     echo "import complete"
 fi

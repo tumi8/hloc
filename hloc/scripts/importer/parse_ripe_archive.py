@@ -112,15 +112,16 @@ def main():
         for process in processes:
             process.join()
 
-        finish_event.set()
-        logger.debug('finishe event set waiting for secodn hop latency thread')
-
-        probe_latency_thread.join()
     finally:
         with open(parsed_file_name, 'a') as parsed_files_histoy_file:
             while not new_parsed_files.empty():
                 filename = new_parsed_files.get()
                 parsed_files_histoy_file.write(filename + '\n')
+
+    finish_event.set()
+    logger.debug('finish event set waiting for second hop latency thread')
+
+    probe_latency_thread.join()
 
 
 def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str]) \
