@@ -152,7 +152,7 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
             probe_id, latency = probe_latency_queue.get(timeout=1)
             db_session.execute(update_sql.format(latency, probe_id, latency))
 
-            if last_commit - datetime.datetime.now() > datetime.timedelta(seconds=20):
+            if datetime.datetime.now() - last_commit > datetime.timedelta(seconds=20):
                 logger.debug("Committing updates to second hop latency")
                 db_session.commit()
         except queue.Empty:
