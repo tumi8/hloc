@@ -145,22 +145,23 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
     update_sql = 'UPDATE probes SET second_hop_latency = {} WHERE id = {} AND ' \
                  '(second_hop_latency IS NULL OR second_hop_latency > {});'
 
-    last_commit = datetime.datetime.now()
+    probe_dct = {}
 
     while not finish_event.is_set() or not probe_latency_queue.empty():
         try:
             probe_id, latency = probe_latency_queue.get(timeout=1)
-            db_session.execute(update_sql.format(latency, probe_id, latency))
-
-            if datetime.datetime.now() - last_commit > datetime.timedelta(minutes=5):
-                logger.debug("Committing updates to second hop latency")
-                db_session.commit()
-                last_commit = datetime.datetime.now()
+            if probe_dct.get(probe_id, sys.maxsize) > latency:
+                probe_dct[probe_id] = latency
         except queue.Empty:
             if finish_event.is_set():
                 break
 
+    for probe_id, latency in probe_dct.items():
+        db_session.execute(update_sql.format(latency, probe_id, latency))
+
+    logger.debug("Committing updates to second hop latency")
     db_session.commit()
+
     db_session.close()
     Session.remove()
 
