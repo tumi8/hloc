@@ -112,10 +112,8 @@ def main():
     time.sleep(1)
 
     for i in range(args.number_processes):
-        process = mp.Process(target=parse_ripe_data, args=(filenames, not args.plaintext,
-                                                           args.days_in_past, args.debug,
-                                                           probe_dct, new_parsed_files,
-                                                           probe_latency_queue),
+        process = mp.Process(target=parse_ripe_data, args=(line_queue, finished_reading_event,
+                                                           probe_dct, probe_latency_queue),
                              name='parse ripe data {}'.format(i))
         processes.append(process)
         process.start()
