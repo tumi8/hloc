@@ -340,7 +340,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, days_in_past: i
                   '| min, proto: .proto, src_addr: .src_addr, ttl: .ttl, prb_id: .prb_id} ' \
                   '| select(.result >= 0)\''
 
-    logger.debug('reading bz2 compressed file command:\n\n{}\n\n'.format(command))
+    logger.debug('reading bz2 compressed file %s', filename)
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
                           bufsize=1) as subprocess_call:
         for line in subprocess_call.stdout:
@@ -357,7 +357,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, days_in_past: i
                 else:
                     break
 
-    logger.debug('finished reading {}'.format(filename))
+    logger.debug('finished reading bz2 %s', filename)
 
 
 def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe],
