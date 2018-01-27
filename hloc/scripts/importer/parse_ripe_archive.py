@@ -106,7 +106,7 @@ def main():
     line_queue = mp.Queue(args.number_processes * buffer_lines_per_process)
     line_thread = threading.Thread(target=read_file,
                                    args=(filenames, not args.plaintext, args.days_in_past,
-                                         line_queue, finished_reading_event),
+                                         line_queue, finished_reading_event, new_parsed_files),
                                    name='file-reader')
     line_thread.start()
     time.sleep(1)
@@ -138,16 +138,16 @@ def main():
 
 def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str]) \
         -> [str]:
-    filenames = []
+    filepaths = []
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
 
     for dirname, _, filenames in os.walk(archive_path):
         for filename in filenames:
             if file_regex_obj.match(filename) and \
                     os.path.join(dirname, filename) not in already_parsed_files:
-                filenames.append(os.path.join(dirname, filename))
+                filepaths.append(os.path.join(dirname, filename))
 
-    return filenames
+    return filepaths
 
 
 def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threading.Event):
@@ -179,7 +179,7 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
 
 
 def read_file(files: [str], bz2_compressed: bool, days_in_past:int, line_queue: mp.Queue,
-              finished_reading_event: mp.Event):
+              finished_reading_event: mp.Event, new_parsed_files: mp.Queue):
     for filepath in files:
         file_date_str = str(os.path.basename(filepath).split('.')[0][-10:])
         modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
@@ -188,6 +188,7 @@ def read_file(files: [str], bz2_compressed: bool, days_in_past:int, line_queue: 
             continue
 
         logger.info('start reading %s', filepath)
+        new_parsed_files.put(filepath)
         if bz2_compressed:
             read_bz2_file_queued(line_queue, filepath, days_in_past)
         else:
@@ -343,11 +344,16 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, days_in_past: i
     with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, universal_newlines=True,
                           bufsize=1) as subprocess_call:
         for line in subprocess_call.stdout:
+            failures = 0
             while True:
                 try:
                     line_queue.put(line)
                 except queue.Full:
                     time.sleep(0.5)
+                    failures += 1
+                    if failures >= 10:
+                        logger.exception('Queue full for too long stopping reading %s!', filename)
+                        return
                 else:
                     break
 
