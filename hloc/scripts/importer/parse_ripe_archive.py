@@ -5,8 +5,10 @@ Parse data from the ripe archive files
 
 import argparse
 import collections
+import concurrent.futures as concurrent
 import datetime
 import enum
+import functools
 import ipaddress
 import mmap
 import multiprocessing as mp
@@ -28,7 +30,7 @@ from hloc.ripe_helper.history_helper import get_archive_probes
 
 logger = None
 engine = None
-buffer_lines_per_process = 1000
+buffer_lines_per_process = 10000
 
 
 def __create_parser_arguments(parser: argparse.ArgumentParser):
@@ -90,8 +92,6 @@ def main():
     db_session.close()
     Session.remove()
 
-    processes = []
-
     new_parsed_files = mp.Queue()
     probe_latency_queue = mp.Queue()
     finish_event = threading.Event()
@@ -104,23 +104,38 @@ def main():
     finished_reading_event = mp.Event()
 
     line_queue = mp.Queue(args.number_processes * buffer_lines_per_process)
-    line_thread = threading.Thread(target=read_file,
-                                   args=(filenames, not args.plaintext, args.days_in_past,
-                                         line_queue, finished_reading_event, new_parsed_files),
-                                   name='file-reader')
-    line_thread.start()
-    time.sleep(1)
-
-    for i in range(args.number_processes):
-        process = mp.Process(target=parse_ripe_data, args=(line_queue, finished_reading_event,
-                                                           probe_dct, probe_latency_queue),
-                             name='parse ripe data {}'.format(i))
-        processes.append(process)
-        process.start()
 
     try:
-        for process in processes:
-            process.join()
+        with concurrent.ThreadPoolExecutor(
+                max_workers=args.number_processes // 4,
+                thread_name_prefix='ripe-archive-read-') as read_thread_executor:
+            read_thread_results = read_thread_executor.map(
+                functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
+                                  new_parsed_files), filenames)
+            time.sleep(1)
+
+            with concurrent.ProcessPoolExecutor(
+                    max_workers=args.number_processes) as process_executor:
+                process_results = []
+
+                for i in range(args.number_processes):
+                    process_results.append(
+                        process_executor.submit(parse_ripe_data, line_queue, finished_reading_event,
+                                                probe_dct, probe_latency_queue))
+
+                for read_thread_result in read_thread_results:
+                    if read_thread_result:
+                        logger.exception('read thread returned with exception', read_thread_result)
+
+                finished_reading_event.set()
+
+                processes_finished = 0
+                for index, process_future in enumerate(process_results):
+                    process_result = process_future.result()
+                    processes_finished += 1
+                    if process_result:
+                        logger.exception('process nr "%s" returned with exception', index,
+                                         process_result)
 
     finally:
         with open(parsed_file_name, 'a') as parsed_files_histoy_file:
@@ -176,36 +191,33 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
     Session.remove()
 
 
-def read_file(files: [str], bz2_compressed: bool, days_in_past:int, line_queue: mp.Queue,
-              finished_reading_event: mp.Event, new_parsed_files: mp.Queue):
-    for filepath in files:
-        file_date_str = str(os.path.basename(filepath).split('.')[0][-10:])
-        modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
+def read_file(bz2_compressed: bool, days_in_past: int, line_queue: mp.Queue,
+              new_parsed_files: mp.Queue, filepath: str):
+    file_date_str = str(os.path.basename(filepath).split('.')[0][-10:])
+    modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
 
-        if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
-            continue
+    if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
+        return
 
-        logger.info('start reading %s', filepath)
-        new_parsed_files.put(filepath)
-        if bz2_compressed:
-            read_bz2_file_queued(line_queue, filepath, days_in_past)
-        else:
-            with open(filepath) as ripe_archive_filedesc, \
-                    mmap.mmap(ripe_archive_filedesc.fileno(), 0,
-                              access=mmap.ACCESS_READ) as ripe_archive_file:
+    logger.info('start reading %s', filepath)
+    if bz2_compressed:
+        read_bz2_file_queued(line_queue, filepath, days_in_past)
+    else:
+        with open(filepath) as ripe_archive_filedesc, \
+                mmap.mmap(ripe_archive_filedesc.fileno(), 0,
+                          access=mmap.ACCESS_READ) as ripe_archive_file:
+            line = ripe_archive_file.readline().decode('utf-8')
+
+            while len(line) > 0:
+                try:
+                    line_queue.put(line)
+                except queue.Full:
+                    time.sleep(0.5)
+                    continue
                 line = ripe_archive_file.readline().decode('utf-8')
 
-                while len(line) > 0:
-                    try:
-                        line_queue.put(line)
-                    except queue.Full:
-                        time.sleep(0.5)
-                        continue
-                    line = ripe_archive_file.readline().decode('utf-8')
-        logger.info('finished reading')
-
-    line_queue.close()
-    finished_reading_event.set()
+    new_parsed_files.put(filepath)
+    logger.info('finished reading %s', filepath)
 
 
 class MeasurementKey(enum.Enum):
@@ -260,14 +272,14 @@ def parse_ripe_data(line_queue: mp.Queue, finished_reading: mp.Event,
                 logger.debug('failed reading')
                 read_fails += 1
 
-    def save_measurement_results(m_results: collections.defaultdict, db_session):
+    def save_measurement_results(m_results: collections.defaultdict, db_sess):
         measurement_results = []
         for probe_measurement_dct in m_results.values():
             measurement_results.extend(probe_measurement_dct.values())
 
-        db_session.bulk_save_objects(measurement_results)
+        db_sess.bulk_save_objects(measurement_results)
         logger.info('parsed and saved %s measurements', len(measurement_results))
-        db_session.commit()
+        db_sess.commit()
 
         m_results.clear()
 
@@ -458,7 +470,7 @@ def parse_traceroute_results(measurement_result: typing.Dict[str, typing.Any]) \
     for result in measurement_result[MeasurementKey.result.value]:
         try:
             ip_addr = ipaddress.ip_address(result[MeasurementKey.source.value])
-        except ValueError as e:
+        except ValueError:
             logger.warn("could not parse IP %s", result[MeasurementKey.source.value], exc_info=True)
             continue
 
