@@ -92,8 +92,9 @@ def main():
     db_session.close()
     Session.remove()
 
-    new_parsed_files = mp.Queue()
-    probe_latency_queue = mp.Queue()
+    mp_manager = mp.Manager()
+    new_parsed_files = mp_manager.Queue()
+    probe_latency_queue = mp_manager.Queue()
     finish_event = threading.Event()
 
     probe_latency_thread = threading.Thread(target=update_second_hop_latency,
@@ -101,9 +102,9 @@ def main():
                                             name='update probe latency')
     probe_latency_thread.start()
 
-    finished_reading_event = mp.Event()
+    finished_reading_event = mp_manager.Event()
 
-    line_queue = mp.Queue(args.number_processes * buffer_lines_per_process)
+    line_queue = mp_manager.Queue(args.number_processes * buffer_lines_per_process)
 
     try:
         with concurrent.ThreadPoolExecutor(
