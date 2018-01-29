@@ -107,8 +107,7 @@ def main():
 
     try:
         with concurrent.ThreadPoolExecutor(
-                max_workers=args.number_processes // 4,
-                thread_name_prefix='ripe-archive-read-') as read_thread_executor:
+                max_workers=args.number_processes // 4) as read_thread_executor:
             read_thread_results = read_thread_executor.map(
                 functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
                                   new_parsed_files), filenames)
