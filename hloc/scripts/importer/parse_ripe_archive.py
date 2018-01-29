@@ -114,16 +114,16 @@ def main():
                                       new_parsed_files), filenames)
                 time.sleep(1)
 
-                with concurrent.ProcessPoolExecutor(
-                        max_workers=args.number_processes) as process_executor:
-                    process_results = []
+                processes = []
 
-                    for i in range(args.number_processes):
-                        process_results.append(
-                            process_executor.submit(parse_ripe_data, line_queue,
-                                                    finished_reading_event,
-                                                    probe_dct, probe_latency_queue))
+                for index in range(0, args.number_processes):
+                    process = mp.Process(parse_ripe_data, args=(
+                        line_queue, finished_reading_event, probe_dct, probe_latency_queue),
+                                         name='ripe-parsing-{}'.format(index))
+                    processes.append(process)
+                    process.start()
 
+                try:
                     for read_thread_result in read_thread_results:
                         if read_thread_result:
                             logger.exception('read thread returned with exception',
@@ -131,13 +131,16 @@ def main():
 
                     finished_reading_event.set()
 
-                    processes_finished = 0
-                    for index, process_future in enumerate(process_results):
-                        process_result = process_future.result()
-                        processes_finished += 1
-                        if process_result:
-                            logger.exception('process nr "%s" returned with exception', index,
-                                             process_result)
+                    for process in processes:
+                        process.join()
+                except KeyboardInterrupt:
+                    finished_reading_event.set()
+                    print(
+                        'trying to do a graceful shutdown press Ctrc+C another time to force '
+                        'shutdown')
+
+                    for process in processes:
+                        process.join()
 
         finally:
             with open(parsed_file_name, 'a') as parsed_files_histoy_file:
