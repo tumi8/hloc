@@ -92,66 +92,65 @@ def main():
     db_session.close()
     Session.remove()
 
-    with mp.Manager() as mp_manager:
-        new_parsed_files = mp_manager.Queue()
-        probe_latency_queue = mp_manager.Queue()
-        finish_event = threading.Event()
+    new_parsed_files = mp.Queue()
+    probe_latency_queue = mp.Queue()
+    finish_event = threading.Event()
 
-        probe_latency_thread = threading.Thread(target=update_second_hop_latency,
-                                                args=(probe_latency_queue, finish_event),
-                                                name='update probe latency')
-        probe_latency_thread.start()
+    probe_latency_thread = threading.Thread(target=update_second_hop_latency,
+                                            args=(probe_latency_queue, finish_event),
+                                            name='update probe latency')
+    probe_latency_thread.start()
 
-        finished_reading_event = mp_manager.Event()
+    finished_reading_event = mp.Event()
 
-        line_queue = mp_manager.Queue(args.number_processes * buffer_lines_per_process)
+    line_queue = mp.Queue(args.number_processes * buffer_lines_per_process)
 
-        try:
-            with concurrent.ThreadPoolExecutor(
-                    max_workers=args.number_processes // 4) as read_thread_executor:
-                read_thread_results = read_thread_executor.map(
-                    functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
-                                      new_parsed_files), filenames)
-                time.sleep(1)
+    try:
+        with concurrent.ThreadPoolExecutor(
+                max_workers=args.number_processes // 4) as read_thread_executor:
+            read_thread_results = read_thread_executor.map(
+                functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
+                                  new_parsed_files), filenames)
+            time.sleep(1)
 
-                processes = []
+            processes = []
 
-                for index in range(0, args.number_processes):
-                    process = mp.Process(target=parse_ripe_data, args=(
-                        line_queue, finished_reading_event, probe_dct, probe_latency_queue),
-                                         name='ripe-parsing-{}'.format(index))
-                    processes.append(process)
-                    process.start()
+            for index in range(0, args.number_processes):
+                process = mp.Process(target=parse_ripe_data, args=(
+                    line_queue, finished_reading_event, probe_dct, probe_latency_queue),
+                                     name='ripe-parsing-{}'.format(index))
+                processes.append(process)
+                process.start()
 
-                try:
-                    for read_thread_result in read_thread_results:
-                        if read_thread_result:
-                            logger.exception('read thread returned with exception',
-                                             read_thread_result)
+            try:
+                for read_thread_result in read_thread_results:
+                    if read_thread_result:
+                        logger.exception('read thread returned with exception',
+                                         read_thread_result)
 
-                    finished_reading_event.set()
+                finished_reading_event.set()
 
-                    for process in processes:
-                        process.join()
-                except KeyboardInterrupt:
-                    finished_reading_event.set()
-                    print(
-                        'trying to do a graceful shutdown press Ctrc+C another time to force '
-                        'shutdown')
+                for process in processes:
+                    process.join()
+            except KeyboardInterrupt:
+                finished_reading_event.set()
+                print(
+                    'trying to do a graceful shutdown press Ctrc+C another time to force '
+                    'shutdown')
 
-                    for process in processes:
-                        process.join()
+                for process in processes:
+                    process.join()
 
-        finally:
-            with open(parsed_file_name, 'a') as parsed_files_histoy_file:
-                while not new_parsed_files.empty():
-                    filename = new_parsed_files.get()
-                    parsed_files_histoy_file.write(filename + '\n')
+    finally:
+        with open(parsed_file_name, 'a') as parsed_files_histoy_file:
+            while not new_parsed_files.empty():
+                filename = new_parsed_files.get()
+                parsed_files_histoy_file.write(filename + '\n')
 
-        finish_event.set()
-        logger.debug('finish event set waiting for second hop latency thread')
+    finish_event.set()
+    logger.debug('finish event set waiting for second hop latency thread')
 
-        probe_latency_thread.join()
+    probe_latency_thread.join()
 
 
 def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str]) \
