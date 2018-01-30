@@ -117,7 +117,7 @@ def main():
                 processes = []
 
                 for index in range(0, args.number_processes):
-                    process = mp.Process(parse_ripe_data, args=(
+                    process = mp.Process(target=parse_ripe_data, args=(
                         line_queue, finished_reading_event, probe_dct, probe_latency_queue),
                                          name='ripe-parsing-{}'.format(index))
                     processes.append(process)
