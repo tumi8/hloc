@@ -75,7 +75,10 @@ The structure of the data is as follows:
 
  -  Input Files
     - Router rdns files:
-        - All router rdns entries: `rdns-sources/router.domains.rdns`
+        - All router rdns entries: `rdns-sources/router.domains.rdns`, format:  
+        `1.1.128.44,node-18.pool-1-1.dynamic.totbb.net`     
+         `1.1.243.2,node-mpu.pool-1-1.dynamic.totbb.net`  
+         `1.122.253.63,cpe-1-122-253-63.wwl9.wel.bigpond.net.au`  
         - DRoP domains: `rdns-sources/`
     - Location File: `location-codes.json`
     - Zmap measurement results:
