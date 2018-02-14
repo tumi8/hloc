@@ -71,6 +71,10 @@ python3 -m src.find_and_evaluate.check_domain_locations RDNS_DOMAIN_FOLDER/file_
 
 The data is hosted by the TUM library: [https://mediatum.ub.tum.de/1359182](https://mediatum.ub.tum.de/1359182)
 
+Please note that the `location-codes.json` in the data set unfortunately misses some locations that were rarely used. As the original data set is frozen, we supply the complete file here.
+
+
+
 The structure of the data is as follows: 
 
  -  Input Files
