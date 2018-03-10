@@ -9,9 +9,6 @@ import multiprocessing as mp
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_atlas_exceptions
 
-from hloc.db_utils import probe_for_id, location_for_coordinates
-
-from hloc.models import RipeAtlasProbe
 
 def get_ripe_measurement(measurement_id: int, max_retries: int = -1, logger: logging = None):
     """Call the RIPE measurement entry point to get the ripe measurement with measurement_id"""
