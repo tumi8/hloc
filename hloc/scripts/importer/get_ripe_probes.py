@@ -10,7 +10,7 @@ import threading
 
 from hloc.db_utils import create_session_for_process, create_engine
 from hloc.util import start_token_generating_thread, setup_logger
-from hloc.ripe_helper.basics_helper import get_probes
+from hloc.ripe_helper.probe_helper import get_probes
 from hloc.constants import PROBE_CACHING_PATH
 
 
