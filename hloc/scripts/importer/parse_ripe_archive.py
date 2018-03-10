@@ -26,7 +26,7 @@ from hloc import util
 from hloc.db_utils import create_session_for_process, create_engine
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementProtocol, \
     MeasurementError, MeasurementResult
-from hloc.ripe_helper.history_helper import get_archive_probes
+from hloc.ripe_helper.history_helper import load_probes_from_cache
 
 logger = None
 engine = None
@@ -83,7 +83,7 @@ def main():
 
     Session = create_session_for_process(engine)
     db_session = Session()
-    probe_dct = get_archive_probes(db_session)
+    probe_dct = load_probes_from_cache(db_session)
 
     for probe, _ in probe_dct.values():
         _ = probe.id
@@ -197,10 +197,10 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
 
 def read_file(bz2_compressed: bool, days_in_past: int, line_queue: mp.Queue,
               new_parsed_files: mp.Queue, filepath: str):
-    file_date_str = str(os.path.basename(filepath).split('.')[0][-10:])
-    modification_time = datetime.datetime.strptime(file_date_str, '%Y-%m-%d')
+    file_date_str = str(os.path.basename(filepath).split('.')[0][-15:])
+    archive_date = datetime.datetime.strptime(file_date_str, '%Y-%m-%dT%h%M')
 
-    if abs((modification_time - datetime.datetime.now()).days) >= days_in_past:
+    if abs((archive_date - datetime.datetime.now()).days) >= days_in_past:
         return
 
     logger.info('start reading %s', filepath)
@@ -363,7 +363,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, days_in_past: i
                 try:
                     line_queue.put(line)
                 except queue.Full:
-                    time.sleep(0.5)
+                    time.sleep(0.1)
                     failures += 1
                     if failures >= 10:
                         logger.exception('Queue full for too long stopping reading %s!', filename)

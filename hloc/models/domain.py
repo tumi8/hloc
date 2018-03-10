@@ -80,8 +80,8 @@ class Domain(Base):
 
     id = sqla.Column(sqla.Integer, primary_key=True)
     name = sqla.Column(sqla.String(200), nullable=False)
-    ipv4_address = sqla.Column(postgresql.INET)
-    ipv6_address = sqla.Column(postgresql.INET)
+    ipv4_address = sqla.Column(postgresql.INET, index=True)
+    ipv6_address = sqla.Column(postgresql.INET, index=True)
     classification_type = sqla.Column(postgresql.ENUM(DomainType), default=DomainType.valid)
 
     labels = sqlorm.relationship(DomainLabel,

@@ -91,6 +91,8 @@ class Probe(Base):
 class RipeAtlasProbe(Probe):
     """a representation of the ripe atlas probe"""
 
+    __RIPE_ATLAS_LOCATION_OBFUSCATION_RADIUS__ = 30
+
     second_hop_latency = sqla.Column(sqla.Float)
 
     __mapper_args__ = {'polymorphic_identity': 'ripe_atlas'}
@@ -347,10 +349,12 @@ class RipeAtlasProbe(Probe):
         if not self._probe_obj.geometry:
             return False
 
-        delta_dist = self.location.gps_distance_haversine_plain(
-            self._probe_obj.geometry['coordinates'][1], self._probe_obj.geometry['coordinates'][0])
+        return self.is_near(self._probe_obj.geometry['coordinates'][1],
+                            self._probe_obj.geometry['coordinates'][0])
 
-        return abs(delta_dist) < 10
+    def is_near(self, lat, lon):
+        distance = self.location.gps_distance_haversine_plain(lat, lon)
+        return abs(distance) < self.__RIPE_ATLAS_LOCATION_OBFUSCATION_RADIUS__
 
     def is_rfc_1918(self) -> bool:
         """Returns if the probe is behind a NAT according to RFC 1918"""

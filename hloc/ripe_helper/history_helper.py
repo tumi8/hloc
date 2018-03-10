@@ -2,21 +2,19 @@
 
 """
 
-import bz2
-import datetime
-import json
 import logging
 import multiprocessing as mp
 import random
+import json
 import time
 import typing
-import collections
+import os
 
-import requests
 import ripe.atlas.cousteau as ripe_atlas
 
-from hloc.db_utils import probe_for_id, location_for_coordinates
 from hloc.models import RipeMeasurementResult, RipeAtlasProbe, MeasurementResult
+from hloc.db_utils import probes_for_ids
+from hloc.constants import PROBE_CACHING_PATH
 
 
 def __get_measurements_for_nodes(measurement_ids: [int],
@@ -121,44 +119,20 @@ def check_measurements_for_nodes(measurement_ids: [int],
     return measurement_objs
 
 
-def get_archive_probes(db_session) -> typing.Dict[str, RipeAtlasProbe]:
-    yesterday = datetime.date.today() - datetime.timedelta(days=2)
-    probe_archive_url = "https://ftp.ripe.net/ripe/atlas/probes/archive/" + \
-                        yesterday.strftime('%Y/%m/%Y%m%d') + ".json.bz2"
+def load_probes_from_cache(db_session):
+    if not os.path.isfile(PROBE_CACHING_PATH):
+        logging.error('could not find probe caching file')
+        return ValueError('caching file (' + PROBE_CACHING_PATH + ') not found')
 
-    ripe_response = requests.get(probe_archive_url)
+    with open(PROBE_CACHING_PATH) as probe_caching_file:
+        probe_cache = json.load(probe_caching_file)
 
-    if ripe_response.status_code != 200:
-        ripe_response.raise_for_status()
+    probe_ids = probe_cache.keys()
 
-    probe_str = bz2.decompress(ripe_response.content)
-    probes_dct_list = json.loads(probe_str.decode())['objects']
-    return_dct = {}
+    probe_objs = probes_for_ids(probe_ids, db_session)
 
-    for probe_dct in probes_dct_list:
-        if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
-            probe = __parse_probe(probe_dct, db_session)
-            return_dct[str(probe.probe_id)] = (probe, 'system-ipv4-rfc1918' in probe_dct['tags'])
+    results = {}
+    for probe in probe_objs:
+        results[probe.id] = (probe, probe_cache[str(probe.id)])
 
-    db_session.add_all([probe for probe, _ in return_dct.values()])
-    db_session.commit()
-
-    return return_dct
-
-
-def __parse_probe(probe_dct: typing.Dict[str, typing.Any], db_session) -> RipeAtlasProbe:
-    probe_id = str(probe_dct['id'])
-    probe_db_obj = probe_for_id(probe_id, db_session)
-
-    if probe_db_obj and \
-            probe_db_obj.location.gps_distance_haversine_plain(
-                probe_dct['latitude'], probe_dct['longitude']) < 2:
-        return probe_db_obj
-
-    location = location_for_coordinates(probe_dct['latitude'],
-                                        probe_dct['longitude'],
-                                        db_session)
-
-    probe_db_obj = RipeAtlasProbe(probe_id=probe_id, location=location)
-
-    return probe_db_obj
+    return results

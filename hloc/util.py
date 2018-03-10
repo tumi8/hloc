@@ -11,6 +11,9 @@ import subprocess
 import ipaddress
 import cProfile
 import multiprocessing_logging
+import time
+import multiprocessing as mp
+import threading
 
 from hloc import constants
 
@@ -135,6 +138,31 @@ def cprofile(file_name):
                 profile.dump_stats(file_name)
         return profiled_func
     return cprofile_decorator
+
+
+def start_token_generating_thread(sema: mp.Semaphore,
+                                  tokens_per_second: int,
+                                  stop_event: threading.Event) -> threading.Thread:
+    generator_thread = threading.Thread(target=_start_token_generation,
+                                        args=(sema, tokens_per_second, stop_event))
+    generator_thread.start()
+
+    return generator_thread
+
+
+def _start_token_generation(sema: mp.Semaphore, tokens_per_second: int, stop_event: threading.Event):
+    """
+    Releases number of tokens_per_second tokens per second on the Semaphore
+    """
+    logging.debug('token generation thread started')
+    while not stop_event.is_set():
+        time.sleep(2 / tokens_per_second)
+        try:
+            sema.release()
+            sema.release()
+        except ValueError:
+            continue
+    logging.debug('token generation thread stoopped')
 
 
 __all__ = ['count_lines',

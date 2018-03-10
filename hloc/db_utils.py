@@ -113,6 +113,16 @@ def probe_for_id(probe_id: str, db_session) -> Probe:
     return db_session.query(Probe).filter_by(probe_id=probe_id).first()
 
 
+def probes_for_ids(probe_ids: [str], db_session) -> [Probe]:
+    """
+    searches for a probes with the probe id in probe_ids list
+    :param probe_ids: the ids of the probes which are searched
+    :param db_session: a data base session on which the queries are executed
+    :return ([Probe]): the list of probes with the corresponding ids
+    """
+    return db_session.query(Probe).filter(Probe.id.in_(probe_ids)).yield_per(5000)
+
+
 def domain_by_id(domain_id: int, db_session) -> Domain:
     """
     return the domain with the id
@@ -220,6 +230,13 @@ def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processe
 
         if not endless_mode:
             break
+
+
+def get_all_domain_labels(index: int, block_limit: int, nr_processes: int, db_session) -> typing.Generator[Domain, None, None]:
+    domain_labels_query = db_session.query(DomainLabel).filter(DomainLabel.id % nr_processes == index)
+
+    for domain in domain_labels_query.yield_per(block_limit):
+        yield domain
 
 
 def get_domains_for_ips(ip_filter_list: typing.List[str], db_session, block_limit: int,

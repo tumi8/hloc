@@ -25,7 +25,7 @@ from hloc.exceptions import ProbeError
 from hloc.models import *
 from hloc.models.location import probe_location_info_table
 from hloc.ripe_helper.basics_helper import get_measurement_ids
-from hloc.ripe_helper.history_helper import check_measurements_for_nodes, get_archive_probes
+from hloc.ripe_helper.history_helper import check_measurements_for_nodes, load_probes_from_cache
 
 logger = None
 engine = None
@@ -144,9 +144,9 @@ def main():
         MAX_THREADS = int(args.measurement_limit * 0.2)
 
     finish_event = threading.Event()
-    generator_thread = threading.Thread(target=generate_ripe_request_tokens,
-                                        args=(ripe_slow_down_sema, args.ripe_request_limit,
-                                              finish_event))
+    generator_thread = util.start_token_generating_thread(ripe_slow_down_sema,
+                                                          args.ripe_request_limit,
+                                                          finish_event)
 
     locations = db_session.query(LocationInfo)
 
@@ -156,7 +156,7 @@ def main():
         return 1
 
     if not args.disable_probe_fetching:
-        probe_distances = get_archive_probes(db_session).values()
+        probe_distances = load_probes_from_cache(db_session).values()
 
         location_to_probes_dct = assign_location_probes(locations,
                                                         [probe for probe, _ in probe_distances],
@@ -226,6 +226,8 @@ def main():
 
     if ips:
         ips_count = len(ips)
+
+    db_session.close()
 
     for pid in range(0, process_count):
 
@@ -420,6 +422,7 @@ def ripe_check_process(pid: int,
                 return None
 
         for _ in range(0, MAX_THREADS):
+            # TODO use ThreadPool
             thread = threading.Thread(target=domain_check_threading_manage,
                                       args=(next_domain_info,
                                             increment_domain_type_count,
@@ -813,7 +816,9 @@ def __get_available_probes(ip_versions: [str], probes: [RipeAtlasProbe]):
             if probe.available() in ip_versions_needed:
                 available_probes.append(probe)
         except ProbeError:
-            logger.exception('Probe Error while searching for aivailable Probes')
+            logger.exception('Probe Error on probe with id {} and ripe_atlas id', probe.id,
+                             probe.probe_id)
+            NON_WORKING_PROBE_IDS.add(probe.id)
 
     return available_probes
 
@@ -904,7 +909,7 @@ def filter_possible_matches(matches: [typing.Tuple[LocationHint, LocationInfo]],
     return True if matches else False
 
 
-NON_WORKING_PROBES = set()
+NON_WORKING_PROBE_IDS = set()
 
 
 def create_and_check_measurement(ip_addr: str, ip_version: str,
@@ -921,7 +926,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
     if number_of_probes <= 0:
         raise ValueError('number_of_probes must be larger than 0')
 
-    near_nodes_all = [node for node in nodes if node not in NON_WORKING_PROBES]
+    near_nodes_all = [node for node in nodes if node.id not in NON_WORKING_PROBE_IDS]
 
     near_nodes = near_nodes_all[:]
     if use_efficient_probes:
@@ -956,7 +961,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                 logger.warning('Probe error for probe id %s', near_nodes[0].id, exc_info=True)
 
                 for node in near_nodes:
-                    NON_WORKING_PROBES.add(node)
+                    NON_WORKING_PROBE_IDS.add(node.id)
                     near_nodes_all.remove(node)
 
                 near_nodes = near_nodes_all[:]
