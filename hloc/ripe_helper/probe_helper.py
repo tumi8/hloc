@@ -18,7 +18,9 @@ def get_probes(db_session, ripe_slow_down_sema) -> typing.Dict[str, RipeAtlasPro
     count = 0
     for probe_dct in probe_request:
         count += 1
-        if probe_dct['total_uptime'] > 0 and probe_dct['latitude'] and probe_dct['longitude']:
+        if probe_dct['total_uptime'] > 0 and 'geometry' in probe_dct and \
+                'coordinates' in probe_dct['geometry'] and \
+                probe_dct['geometry']['coordinates'][1] and probe_dct['geometry']['coordinates'][0]:
             probe = __parse_probe(probe_dct, db_session)
             return_dct[str(probe.probe_id)] = (probe, 'system-ipv4-rfc1918' in probe_dct['tags'])
         ripe_slow_down_sema.acquire()
