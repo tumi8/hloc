@@ -13,7 +13,10 @@ else
         mkdir ${logPath}
     fi
 
-    python3 -m hloc.scripts.importer.get_ripe_probes $2 --ripe-requests-per-second 40 -l ${logPath}/cron-probe-caching.log -ll DEBUG
+    if ! python3 -m hloc.scripts.importer.get_ripe_probes $2 --ripe-requests-per-second 40 -l ${logPath}/cron-probe-caching.log -ll DEBUG; then
+        echo "probe caching had an error"
+        return 1
+    fi
 
     echo "probe caching complete"
 fi

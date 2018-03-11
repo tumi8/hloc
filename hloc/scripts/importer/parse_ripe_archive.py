@@ -328,6 +328,7 @@ def parse_ripe_data(line_queue: mp.Queue, finished_reading: mp.Event,
 
     db_session.close()
     Session.remove()
+    line_queue.close()
 
     logger.info('finished parsing')
 

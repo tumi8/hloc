@@ -23,7 +23,7 @@ else
         mkdir ${logPath}
     fi
 
-    if [ ! -f "/var/cach/hloc/ripe_probes.cache" ]; then
+    if [ ! -f "/var/cache/hloc/ripe_probes.cache" ]; then
         ./hloc/cache_ripe_probes.sh $1 $2 $3
     fi
 
