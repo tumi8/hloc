@@ -35,7 +35,7 @@ def get_probes(db_session, ripe_slow_down_sema) -> typing.Dict[str, RipeAtlasPro
 def __parse_probe(probe_dct: typing.Dict[str, typing.Any], db_session) \
         -> typing.Optional[RipeAtlasProbe]:
     if probe_dct['total_uptime'] == 0 or 'geometry' not in probe_dct or \
-                    'coordinates' not in probe_dct['geometry']:
+                    not probe_dct['geometry'] or 'coordinates' not in probe_dct['geometry']:
         return None
 
     lon = probe_dct['geometry']['coordinates'][1]
