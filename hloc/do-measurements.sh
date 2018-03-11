@@ -12,7 +12,7 @@ allowedMeasurementAge=15552000
 
 if [ -z $1 ] || [ -z $2 ] || [ ! -d $3 ] || [ ! -d $4 ]; then
     echo "provide the database name, the RIPE Atlas API key, the hloc directory, and the python environment directory! Aborting!"
-    return 1
+    exit 1
 else
     source $4/bin/activate
 

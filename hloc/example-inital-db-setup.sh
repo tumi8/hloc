@@ -7,7 +7,7 @@
 
 if [ -z $1 ] || [ -z $2 ] || [ -z $3 ] || [ ! -d $4 ]; then
     echo "a databasename, the rdns file, the hloc directory, and the python environment directory is needed! Aborting!"
-    return 1
+    exit 1
 else
     echo "if asked to recreate the db answer with yes (y)"
     source $4/bin/activate
@@ -25,6 +25,6 @@ else
         python3 -m hloc.scripts.ipdns_parser $2 --database-name $1 --number-processes 8 -t /data/location-data/tlds.txt --isp-ip-filter -l ${logPath}/dns-parsing -ll DEBUG
     else
         echo "the file ", $2, " does not exist"
-        return 2
+        exit 2
     fi
 fi

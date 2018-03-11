@@ -12,7 +12,7 @@ oldestDateAllowed=`date --date "@${oldestDateAllowedUnix}" "+%Y-%m-%d %H:%M:%S"`
 
 if [ -z $1 ] || [ ! -d $2 ]; then
     echo "a database name and an export directory is needed!"
-    return 1
+    exit 1
 else
     curDir=`pwd`
     cd $2
