@@ -20,6 +20,6 @@ else
     cd ${curDir}
 
     filename="hloc-data-export-${filedate}.csv"
-    psql -c "COPY (SELECT * from domainsWithDistanceRTTs(TIMESTAMP '${oldestDateAllowed}', NULL, false, false) as temp_table) TO '${exportAbsolutDir}/${filename}' CSV HEADER ENCODING 'utf-8';" $1
+    psql -c "COPY (SELECT * from domainLocationHintsWithDistanceRTTs(TIMESTAMP '${oldestDateAllowed}', NULL, false, false) as temp_table) TO '${exportAbsolutDir}/${filename}' CSV HEADER ENCODING 'utf-8';" $1
     xz ${exportAbsolutDir}/${filename}
 fi

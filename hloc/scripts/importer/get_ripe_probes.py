@@ -56,7 +56,7 @@ def main():
     os.makedirs(os.path.dirname(PROBE_CACHING_PATH), exist_ok=True)
 
     with open(PROBE_CACHING_PATH, 'w') as ripe_temp_file:
-        probe_info_to_write = [{probe.id: is_in_nat} for probe, is_in_nat in probes.values()]
+        probe_info_to_write = { probe.id: is_in_nat for probe, is_in_nat in probes.values() }
         json.dump(probe_info_to_write, ripe_temp_file)
 
 
