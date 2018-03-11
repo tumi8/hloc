@@ -2,7 +2,7 @@
 
 archivepathripe="/mnt/alcatraz/ra-bulk-new/"
 
-archivepathcaida="/mnt/alcatraz/caida-itdk/prefix-probing"
+archivepathcaida="/mnt/alcatraz/caida-itdk/team-probing/list-7.allpref24/"
 
 # all measurements older then 100 days will be deleted
 nonDeletedPastDays=100
