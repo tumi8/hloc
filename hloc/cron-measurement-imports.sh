@@ -4,8 +4,8 @@ archivepathripe="/mnt/alcatraz/ra-bulk-new/"
 
 archivepathcaida="/mnt/alcatraz/caida-itdk/prefix-probing"
 
-# all measurements older then 90 days will be deleted
-nonDeletedPastDays=90
+# all measurements older then 100 days will be deleted
+nonDeletedPastDays=100
 
 # last 60 days will be imported
 importDays=5

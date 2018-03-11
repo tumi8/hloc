@@ -198,7 +198,7 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
 def read_file(bz2_compressed: bool, days_in_past: int, line_queue: mp.Queue,
               new_parsed_files: mp.Queue, filepath: str):
     file_date_str = str(os.path.basename(filepath).split('.')[0][-15:])
-    archive_date = datetime.datetime.strptime(file_date_str, '%Y-%m-%dT%h%M')
+    archive_date = datetime.datetime.strptime(file_date_str, '%Y-%m-%dT%H%M')
 
     if abs((archive_date - datetime.datetime.now()).days) >= days_in_past:
         return
