@@ -45,6 +45,7 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
     parser.add_argument('--days-in-past', type=int, default=30,
                         help='The number of days in the past for which parsing will be done')
     parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
+    parser.add_argument('-w', '--workers', type=int, default=2, help='Number of read workers')
     parser.add_argument('-l', '--logging-file', type=str, default='ripe-archive-import.log',
                         help='Specify a logging file where the log should be saved')
     parser.add_argument('-ll', '--log-level', type=str, default='INFO',
@@ -106,8 +107,7 @@ def main():
     line_queue = mp.Queue(args.number_processes * buffer_lines_per_process)
 
     try:
-        with concurrent.ThreadPoolExecutor(
-                max_workers=args.number_processes // 4) as read_thread_executor:
+        with concurrent.ThreadPoolExecutor(max_workers=args.workers) as read_thread_executor:
             read_thread_results = read_thread_executor.map(
                 functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
                                   new_parsed_files), filenames)
