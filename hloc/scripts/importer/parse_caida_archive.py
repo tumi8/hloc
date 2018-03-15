@@ -113,13 +113,13 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
 
             if file_regex_obj.match(filename) and \
                     os.path.join(dirname, filename) not in parsed_files:
-                date_str = str(basename.split('.')[1])
+                date_str = str(basename.split('.')[4])
                 date = datetime.datetime.strptime(date_str, '%Y%m%d')
 
                 if datetime.datetime.now() - date > datetime.timedelta(days=days_in_past):
                     continue
 
-                probe_id = str(basename.split('.')[0])
+                probe_id = str(basename.split('.')[6])
 
                 location = location_for_iata_code(probe_id[:3], db_session)
                 if not location:
