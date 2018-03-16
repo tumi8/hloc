@@ -141,7 +141,7 @@ def main():
     if args.debug:
         MAX_THREADS = 1
     else:
-        MAX_THREADS = int(args.measurement_limit * 0.2)
+        MAX_THREADS = (int)(args.measurement_limit / args.number_processes * 1.5)
 
     finish_event = threading.Event()
     generator_thread = util.start_token_generating_thread(ripe_slow_down_sema,
@@ -928,6 +928,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
 
     near_nodes_all = [node for node in nodes if node.id not in NON_WORKING_PROBE_IDS]
 
+    logger.debug('%s near nodes not blacklisted', len(near_nodes_all))
+
     near_nodes = near_nodes_all[:]
     if use_efficient_probes:
         near_nodes.sort(key=lambda x: x.second_hop_latency if x.second_hop_latency else 10000)
@@ -935,6 +937,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
 
     while len(near_nodes) > number_of_probes:
         del near_nodes[random.randint(0, len(near_nodes) - 1)]
+
+    logger.debug('%s nodes for selection of %s we would like to use', len(near_nodes))
 
     if not near_nodes:
         return None
