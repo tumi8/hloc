@@ -173,7 +173,7 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
 
                 logger.debug('parsing {}'.format(filename))
 
-                probe_id = str(os.path.basename(filename).split('.')[0])
+                probe_id = str(os.path.basename(filename).split('.')[6])
                 probe_db_id = probe_id_dct[probe_id]
 
                 modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
