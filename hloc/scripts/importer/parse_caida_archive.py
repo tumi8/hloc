@@ -256,6 +256,8 @@ def parse_caida_data(filenames: mp.Queue, bz2_compressed: bool, days_in_past: in
     db_session.close()
     Session.remove()
 
+    logger.info('parse thread finished')
+
 
 def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
     if archive_line.startswith('timestamp'):
