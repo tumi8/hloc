@@ -110,7 +110,7 @@ def probe_for_id(probe_id: str, db_session) -> Probe:
     :param db_session: a data base session on which the queries are executed
     :return (Probe): the Probe with the corresponding id or None
     """
-    return db_session.query(Probe).filter_by(probe_id=probe_id).first()
+    return db_session.query(Probe).filter_by(probe_id=probe_id).order_by(Probe.id.desc()).first()
 
 
 def probes_for_ids(probe_ids: [str], db_session) -> [Probe]:
