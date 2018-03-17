@@ -270,8 +270,6 @@ def main():
     for process in processes:
         process.start()
 
-    generator_thread.start()
-
     alive = len(processes)
     while alive > 0:
         try:
@@ -422,7 +420,7 @@ def ripe_check_process(pid: int,
                 return None
 
         for _ in range(0, MAX_THREADS):
-            # TODO use ThreadPool
+            # TODO use ThreadPoolExecutor
             thread = threading.Thread(target=domain_check_threading_manage,
                                       args=(next_domain_info,
                                             increment_domain_type_count,

@@ -88,8 +88,10 @@ def main():
 
         try:
             for process_result in processing_results:
-                if process_result:
-                    logger.exception('read thread returned with exception', process_result)
+                try:
+                    process_result.result()
+                except Exception:
+                    logger.exception('process threw exception')
         finally:
             with open(parsed_file_name, 'a') as parsed_files_histoy_file:
                 while not new_parsed_files.empty():

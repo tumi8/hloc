@@ -124,9 +124,10 @@ def main():
 
             try:
                 for read_thread_result in read_thread_results:
-                    if read_thread_result:
-                        logger.exception('read thread returned with exception',
-                                         read_thread_result)
+                    try:
+                        read_thread_result.result()
+                    except Exception:
+                        logger.exception('read thread returned with exception')
 
                 finished_reading_event.set()
 
