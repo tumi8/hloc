@@ -5,13 +5,13 @@
 """
 
 import datetime
+import enum
 import logging
+import multiprocessing as mp
+import operator
 import random
 import time
-import enum
-import operator
 import typing
-import multiprocessing as mp
 
 import ripe.atlas.cousteau as ripe_atlas
 import sqlalchemy as sqla
@@ -19,10 +19,10 @@ import sqlalchemy.orm as sqlorm
 
 import hloc.ripe_helper.basics_helper as ripe_helper
 from hloc import util, constants
-from .location import probe_location_info_table
+from hloc.constants import IPV6_IDENTIFIER, IPV4_IDENTIFIER
 from hloc.exceptions import ProbeError
 from hloc.models import Location, RipeMeasurementResult, AvailableType, Base
-from hloc.constants import IPV6_IDENTIFIER, IPV4_IDENTIFIER
+from .location import probe_location_info_table
 
 
 class Probe(Base):
@@ -347,10 +347,18 @@ class RipeAtlasProbe(Probe):
         self._last_update = datetime.datetime.now()
 
         if not self._probe_obj.geometry:
+            logging.debug('no geometry found for ripe atlas id %s', self.probe_id)
             return False
 
-        return self.is_near(self._probe_obj.geometry['coordinates'][1],
-                            self._probe_obj.geometry['coordinates'][0])
+        new_lat = self._probe_obj.geometry['coordinates'][1]
+        new_lon = self._probe_obj.geometry['coordinates'][0]
+
+        is_near = self.is_near(new_lat, new_lon)
+        if not is_near:
+            logging.debug('ripe atlas probe %s (db %s) is now at %s, %s', self.probe_id, self.id,
+                          new_lat, new_lon)
+
+        return is_near
 
     def is_near(self, lat, lon):
         distance = self.location.gps_distance_haversine_plain(lat, lon)

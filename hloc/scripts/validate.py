@@ -816,7 +816,7 @@ def __get_available_probes(ip_versions: [str], probes: [RipeAtlasProbe]):
             if probe.available() in ip_versions_needed:
                 available_probes.append(probe)
         except ProbeError:
-            logger.exception('Probe Error on probe with id %s and ripe_atlas id', probe.id,
+            logger.exception('Probe Error on probe with id %s and ripe_atlas id %s', probe.id,
                              probe.probe_id)
             NON_WORKING_PROBE_IDS.add(probe.id)
 
