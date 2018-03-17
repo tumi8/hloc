@@ -106,7 +106,7 @@ def main():
 
 def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
                   parsed_files: typing.Set[str], db_session) \
-        -> typing.Tuple[[str], typing.Dict[str, int]]:
+        -> typing.Tuple[typing.List[str], typing.Dict[str, int]]:
     files_to_parse = []
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
 
