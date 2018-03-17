@@ -938,7 +938,8 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
     while len(near_nodes) > number_of_probes:
         del near_nodes[random.randint(0, len(near_nodes) - 1)]
 
-    logger.debug('%s nodes for selection of %s we would like to use', len(near_nodes))
+    logger.debug('%s nodes for selection of %s we would like to use', len(near_nodes),
+                 number_of_probes)
 
     if not near_nodes:
         return None
