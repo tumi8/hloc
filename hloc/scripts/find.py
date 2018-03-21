@@ -159,7 +159,8 @@ def create_trie_obj(location_list: [Location], code_blacklist: {str}, word_black
 
     code_id_type_tuples = [code_tuple for code_tuple in code_id_type_tuples
                            if code_tuple[0] not in code_blacklist and
-                           code_tuple[0] not in word_blacklist]
+                           code_tuple[0] not in word_blacklist and
+                           len(code_tuple[0]) > 2]
 
     for code in word_blacklist:
         code_id_type_tuples.append((code, ('0'*32, -1)))
