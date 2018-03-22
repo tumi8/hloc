@@ -123,11 +123,15 @@ def main():
                 process.start()
 
             try:
-                for read_thread_result in read_thread_results:
-                    try:
-                        read_thread_result.result()
-                    except Exception:
-                        logger.exception('read thread returned with exception')
+                try:
+                    while True:
+                        try:
+                            read_thread_results.__next__()
+                        except Exception:
+                            logger.exception('read thread returned with exception')
+
+                except StopIteration:
+                    pass
 
                 finished_reading_event.set()
 
@@ -136,7 +140,7 @@ def main():
             except KeyboardInterrupt:
                 finished_reading_event.set()
                 print(
-                    'trying to do a graceful shutdown press Ctrc+C another time to force '
+                    'trying to do a graceful shutdown press Ctrl+C another time to force '
                     'shutdown')
 
                 for process in processes:

@@ -87,9 +87,11 @@ def main():
                               probe_dct, new_parsed_files))
 
         try:
-            for process_result in processing_results:
+            while True:
                 try:
-                    process_result.result()
+                    processing_results.__next__()
+                except StopIteration:
+                    pass
                 except Exception:
                     logger.exception('process threw exception')
         finally:
