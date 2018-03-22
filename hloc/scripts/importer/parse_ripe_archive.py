@@ -316,7 +316,7 @@ def parse_ripe_data(line_queue: mp.Queue, finished_reading: mp.Event,
                 min_rtt_results[measurement_result.destination_address][
                     measurement_result.probe_id] = measurement_result.min_rtt
 
-            if len(results) >= 10**6:
+            if len(results) >= 10**5:
                 save_measurement_results(results, db_session)
 
         except Exception:
@@ -329,6 +329,7 @@ def parse_ripe_data(line_queue: mp.Queue, finished_reading: mp.Event,
                 save_measurement_results(results, db_session)
                 break
 
+    save_measurement_results(results, db_session)
     db_session.close()
     Session.remove()
     line_queue.close()
