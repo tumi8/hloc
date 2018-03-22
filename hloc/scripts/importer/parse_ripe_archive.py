@@ -301,16 +301,16 @@ def parse_ripe_data(line_queue: mp.Queue, finished_reading: mp.Event,
             measurement_result = parse_measurement(measurement_result_dct, probe_dct,
                                                    probe_latency_queue)
 
-            current_min_result = min_rtt_results[measurement_result.destination_address].get(
-                measurement_result.probe_id, None)
+            if not measurement_result:
+                continue
 
-            if measurement_result and (
-                    current_min_result is None or
-                    current_min_result > measurement_result.min_rtt):
-                results[measurement_result.destination_address][
-                    measurement_result.probe_id] = measurement_result
-                min_rtt_results[measurement_result.destination_address][
-                    measurement_result.probe_id] = measurement_result.min_rtt
+            probe_id = measurement_result.probe_id
+            destination_address = measurement_result.destination_address
+            current_min_result = min_rtt_results[destination_address].get(probe_id, None)
+
+            if current_min_result is None or current_min_result > measurement_result.min_rtt:
+                results[destination_address][probe_id] = measurement_result
+                min_rtt_results[destination_address][probe_id] = measurement_result.min_rtt
 
             if len(results) >= 10**6:
                 save_measurement_results(results, db_session)
