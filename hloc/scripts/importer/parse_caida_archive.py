@@ -91,7 +91,7 @@ def main():
                 try:
                     processing_results.__next__()
                 except StopIteration:
-                    pass
+                    break
                 except Exception:
                     logger.exception('process threw exception')
         finally:

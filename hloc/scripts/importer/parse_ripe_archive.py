@@ -123,15 +123,13 @@ def main():
                 process.start()
 
             try:
-                try:
-                    while True:
-                        try:
-                            read_thread_results.__next__()
-                        except Exception:
-                            logger.exception('read thread returned with exception')
-
-                except StopIteration:
-                    pass
+                while True:
+                    try:
+                        read_thread_results.__next__()
+                    except StopIteration:
+                        break
+                    except Exception:
+                        logger.exception('read thread returned with exception')
 
                 finished_reading_event.set()
 
