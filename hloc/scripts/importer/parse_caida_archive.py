@@ -81,7 +81,7 @@ def main():
 
     new_parsed_files = mp.Queue()
 
-    with concurrent.ProcessPoolExecutor(max_workers=args.workers) as processing_executor:
+    with concurrent.ProcessPoolExecutor(max_workers=args.number_processes) as processing_executor:
         processing_results = processing_executor.map(
             functools.partial(parse_caida_data, not args.plaintext, args.days_in_past,
                               probe_dct, new_parsed_files))
