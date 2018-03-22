@@ -69,8 +69,7 @@ def main():
     parsed_files = set()
     
     if not os.path.exists(parsed_file_name):
-        logger.debug('Creating parsed files history file for database {}'.format(
-            args.database_name))
+        logger.debug('Creating parsed files history file for database %s', args.database_name)
     else:
         with open(parsed_file_name) as parsed_files_histoy_file:
             for line in parsed_files_histoy_file:
@@ -124,8 +123,8 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
 
                 location = location_for_iata_code(probe_id[:3], db_session)
                 if not location:
-                    logger.warning('couldn\'t find location for probe id {} filename {}'.format(
-                        probe_id, filename))
+                    logger.warning('couldn\'t find location for probe id %s filename %s',
+                                   probe_id, filename)
                     continue
 
                 probe = parse_caida_probe(probe_id, location, db_session)
@@ -166,7 +165,7 @@ def parse_caida_data(bz2_compressed: bool, days_in_past: int, probe_id_dct: typi
     db_session = Session()
 
     try:
-        logger.debug('parsing {}'.format(filename))
+        logger.debug('parsing %s', filename)
 
         probe_id = str(os.path.basename(filename).split('.')[6])
         probe_db_id = probe_id_dct[probe_id]
@@ -217,7 +216,7 @@ def parse_caida_data(bz2_compressed: bool, days_in_past: int, probe_id_dct: typi
             measurement_results.extend(probe_measurement_dct.values())
 
         db_session.bulk_save_objects(measurement_results)
-        logger.info('parsed and saved {} measurements'.format(len(measurement_results)))
+        logger.info('parsed and saved %s measurements', len(measurement_results))
         db_session.commit()
 
     except Exception:
@@ -230,7 +229,7 @@ def parse_caida_data(bz2_compressed: bool, days_in_past: int, probe_id_dct: typi
     db_session.close()
     Session.remove()
 
-    logger.info('parse process finished')
+    logger.info('parse process for file %s finished', filename)
 
 
 def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
