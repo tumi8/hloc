@@ -82,6 +82,10 @@ def main():
 
     filenames = get_filenames(args.archive_path, args.file_regex, parsed_files)
 
+    if not filenames:
+        logger.info('No files found')
+        return
+
     Session = create_session_for_process(engine)
     db_session = Session()
     probe_dct = load_probes_from_cache(db_session)
