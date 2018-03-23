@@ -133,6 +133,6 @@ def load_probes_from_cache(db_session):
 
     results = {}
     for probe in probe_objs:
-        results[probe.id] = (probe, probe_cache[str(probe.id)])
+        results[probe.probe_id] = (probe, probe_cache[str(probe.id)])
 
     return results
