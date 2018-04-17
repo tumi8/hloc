@@ -119,13 +119,12 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
 
             if file_regex_obj.match(filename) and \
                     os.path.join(dirname, filename) not in parsed_files:
-                date_str = str(basename.split('.')[4])
-                date = datetime.datetime.strptime(date_str, '%Y%m%d')
+                date = get_date_from_path(filename)
 
                 if datetime.datetime.now() - date > datetime.timedelta(days=days_in_past):
                     continue
 
-                probe_id = str(basename.split('.')[6])
+                probe_id = get_probe_id_from_path(filename)
 
                 location = location_for_iata_code(probe_id[:3], db_session)
                 if not location:
@@ -173,7 +172,7 @@ def parse_caida_data(bz2_compressed: bool, days_in_past: int, probe_id_dct: typi
     try:
         logger.debug('parsing %s', filename)
 
-        probe_id = str(os.path.basename(filename).split('.')[6])
+        probe_id = get_probe_id_from_path(filename)
         probe_db_id = probe_id_dct[probe_id]
 
         modification_time = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
@@ -247,6 +246,25 @@ def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
 
     if (datetime.datetime.now() - measurement.timestamp).days < days_in_past:
         return measurement
+
+
+def get_date_from_path(file_path: str) -> datetime.datetime:
+    date_index = 4
+    if 'ipv6' in file_path:
+        date_index = 2
+
+    basename = os.path.basename(file_path)
+    date_str = str(basename.split('.')[date_index])
+    return datetime.datetime.strptime(date_str, '%Y%m%d')
+
+
+def get_probe_id_from_path(file_path: str) -> str:
+    probe_id_index = 5
+    if 'ipv6' in file_path:
+        probe_id_index = 4
+
+    basename = os.path.basename(file_path)
+    return str(basename.split('.')[probe_id_index])
 
 
 if __name__ == '__main__':
