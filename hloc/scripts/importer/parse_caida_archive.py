@@ -55,6 +55,8 @@ def main():
     global logger
     logger = util.setup_logger(args.logging_file, 'parse_ripe_archive', args.log_level)
 
+    logger.info('starting caida parsing for archivepath %s', args.archive_path)
+
     if not os.path.isdir(args.archive_path):
         print('Archive path does not lead to a directory', file=sys.stderr)
         return 1
@@ -77,6 +79,10 @@ def main():
 
     filenames, probe_dct = get_filenames(args.archive_path, args.file_regex, args.days_in_past,
                                          parsed_files, db_session)
+
+    if not filenames:
+        logger.info('found no files to parse')
+        return 0
 
     new_parsed_files = mp.Queue()
 

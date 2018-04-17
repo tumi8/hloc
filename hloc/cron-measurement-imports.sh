@@ -2,7 +2,7 @@
 
 archivepathripe="/mnt/alcatraz/ra-bulk-new/"
 
-archivepathcaida="/mnt/alcatraz/caida-itdk/team-probing/list-7.allpref24/"
+archivepathcaida="/mnt/alcatraz/caida-itdk-new/datasets/topology/ark/ipv?/probe-data"
 
 # all measurements older then 100 days will be deleted
 nonDeletedPastDays=100
@@ -33,9 +33,11 @@ else
     if ! python3 -m hloc.scripts.importer.parse_ripe_archive ${archivepathripe} --number-processes 4 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-ripe-import.log -ll DEBUG; then
         exit 1
     fi
-    if ! python3 -m hloc.scripts.importer.parse_caida_archive ${archivepathcaida} --number-processes 4 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-caida-import.log -ll DEBUG; then
-        exit 1
-    fi
+    for archivePath in ${archivepathcaida}; do
+        if ! python3 -m hloc.scripts.importer.parse_caida_archive ${archivePath} --number-processes 4 --days-in-past ${importDays} --database-name $2 -l ${logPath}/cron-caida-import.log -ll DEBUG; then
+            exit 1
+        fi
+    done
 
     echo "import complete"
 fi
