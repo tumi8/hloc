@@ -84,7 +84,8 @@ def main():
         logger.info('found no files to parse')
         return 0
 
-    new_parsed_files = mp.Queue()
+    mp_manager = mp.Manager()
+    new_parsed_files = mp_manager.Queue()
 
     with concurrent.ProcessPoolExecutor(max_workers=args.number_processes) as processing_executor:
         processing_results = processing_executor.map(
