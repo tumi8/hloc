@@ -667,7 +667,7 @@ def parse_metropolitan_codes(metropolitan_filepath: str, db_session) -> [Locatio
             code, lat, lon = line.strip().split(',')
             location = LocationInfo(lat=float(lat), lon=float(lon))
             location.add_airport_info()
-            location.airport_info.iata_codes.append(code)
+            location.airport_info.iata_codes.append(code.lower())
             metropolitan_locations.append(location)
             # db_session.add(location)
 

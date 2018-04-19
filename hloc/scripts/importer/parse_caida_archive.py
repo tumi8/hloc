@@ -89,7 +89,7 @@ def main():
     with concurrent.ProcessPoolExecutor(max_workers=args.number_processes) as processing_executor:
         processing_results = processing_executor.map(
             functools.partial(parse_caida_data, not args.plaintext, args.days_in_past,
-                              probe_dct, new_parsed_files))
+                              probe_dct, new_parsed_files), filenames)
 
         try:
             while True:
