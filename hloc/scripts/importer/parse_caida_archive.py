@@ -115,16 +115,14 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
 
     for dirname, _, filenames in os.walk(archive_path):
         for filename in filenames:
-            basename = os.path.basename(filename)
-
-            if file_regex_obj.match(filename) and \
-                    os.path.join(dirname, filename) not in parsed_files:
-                date = get_date_from_path(filename)
+            fullpath = os.path.join(dirname, filename)
+            if file_regex_obj.match(filename) and fullpath not in parsed_files:
+                date = get_date_from_path(fullpath)
 
                 if datetime.datetime.now() - date > datetime.timedelta(days=days_in_past):
                     continue
 
-                probe_id = get_probe_id_from_path(filename)
+                probe_id = get_probe_id_from_path(fullpath)
 
                 location = location_for_iata_code(probe_id[:3], db_session)
                 if not location:
@@ -134,7 +132,7 @@ def get_filenames(archive_path: str, file_regex: str, days_in_past: int,
 
                 probe = parse_caida_probe(probe_id, location, db_session)
                 probes.add(probe)
-                files_to_parse.append(os.path.join(dirname, filename))
+                files_to_parse.append(fullpath)
 
     probe_dct = {}
     for probe in probes:
@@ -249,7 +247,7 @@ def parse_measurement(archive_line: str, probe_id: int, days_in_past: int):
 
 
 def get_date_from_path(file_path: str) -> datetime.datetime:
-    date_index = 4
+    date_index = 1
     if 'ipv6' in file_path:
         date_index = 2
 
@@ -259,7 +257,7 @@ def get_date_from_path(file_path: str) -> datetime.datetime:
 
 
 def get_probe_id_from_path(file_path: str) -> str:
-    probe_id_index = 5
+    probe_id_index = 0
     if 'ipv6' in file_path:
         probe_id_index = 4
 
