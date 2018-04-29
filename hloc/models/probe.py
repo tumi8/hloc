@@ -109,6 +109,7 @@ class RipeAtlasProbe(Probe):
         api_key = 'api_key'
         bill_to_address = 'bill_to_address'
         ripe_slowdown_sema = 'ripe_slowdown_sema'
+        tags = 'tags'
 
         additional_probes = 'additional_probes'
 
@@ -212,9 +213,10 @@ class RipeAtlasProbe(Probe):
 
         packets = kwargs[RipeAtlasProbe.MeasurementKeys.num_packets.value]
         measurement_description = kwargs[RipeAtlasProbe.MeasurementKeys.measurement_name.value]
+        tags = kwargs.get(RipeAtlasProbe.MeasurementKeys.tags.value, [])
 
         ping = ripe_atlas.Ping(af=af, packets=packets, target=dest_address,
-                               description=measurement_description)
+                               description=measurement_description, tags=tags)
 
         if RipeAtlasProbe.MeasurementKeys.additional_probes.value in kwargs:
             probe_ids = [str(self.probe_id)]

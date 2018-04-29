@@ -18,3 +18,5 @@ EARTH_RADIUS = 6371
 DEFAULT_BUFFER_TIME = 9
 
 PROBE_CACHING_PATH = '/var/cache/hloc/ripe_probes.cache'
+
+HLOC_RIPE_TAG = 'HLOC-geolocation'
