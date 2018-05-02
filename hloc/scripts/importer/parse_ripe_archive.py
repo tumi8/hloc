@@ -80,11 +80,13 @@ def main():
             for line in parsed_files_histoy_file:
                 parsed_files.add(line.strip())
 
-    filenames = get_filenames(args.archive_path, args.file_regex, parsed_files)
+    file_names = get_filenames(args.archive_path, args.file_regex, parsed_files)
 
-    if not filenames:
+    if not file_names:
         logger.info('No files found')
         return
+
+    logger.info('%s files to parse', len(file_names))
 
     Session = create_session_for_process(engine)
     db_session = Session()
@@ -114,7 +116,7 @@ def main():
         with concurrent.ThreadPoolExecutor(max_workers=args.workers) as read_thread_executor:
             read_thread_results = read_thread_executor.map(
                 functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
-                                  new_parsed_files), filenames)
+                                  new_parsed_files), file_names)
             time.sleep(1)
 
             processes = []
