@@ -80,7 +80,7 @@ def main():
             for line in parsed_files_histoy_file:
                 parsed_files.add(line.strip())
 
-    file_names = get_filenames(args.archive_path, args.file_regex, parsed_files)
+    file_names = get_filenames(args.archive_path, args.file_regex, parsed_files, args.days_in_past)
 
     if not file_names:
         logger.info('No files found')
@@ -116,7 +116,8 @@ def main():
         with concurrent.ThreadPoolExecutor(max_workers=args.workers) as read_thread_executor:
             read_thread_results = read_thread_executor.map(
                 functools.partial(read_file, not args.plaintext, args.days_in_past, line_queue,
-                                  new_parsed_files), file_names)
+                                  new_parsed_files),
+                file_names)
             time.sleep(1)
 
             processes = []
@@ -162,8 +163,8 @@ def main():
     probe_latency_thread.join()
 
 
-def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str]) \
-        -> [str]:
+def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typing.Set[str],
+                  days_in_past: int) -> [str]:
     filepaths = []
     file_regex_obj = re.compile(file_regex, flags=re.MULTILINE)
 
@@ -171,7 +172,11 @@ def get_filenames(archive_path: str, file_regex: str, already_parsed_files: typi
         for filename in filenames:
             if file_regex_obj.match(filename) and \
                     os.path.join(dirname, filename) not in already_parsed_files:
-                filepaths.append(os.path.join(dirname, filename))
+                file_date_str = str(filename.split('.')[0][-15:])
+                archive_date = datetime.datetime.strptime(file_date_str, '%Y-%m-%dT%H%M')
+
+                if abs((archive_date - datetime.datetime.now()).days) < days_in_past:
+                    filepaths.append(os.path.join(dirname, filename))
 
     return filepaths
 
@@ -206,12 +211,6 @@ def update_second_hop_latency(probe_latency_queue: mp.Queue, finish_event: threa
 
 def read_file(bz2_compressed: bool, days_in_past: int, line_queue: mp.Queue,
               new_parsed_files: mp.Queue, filepath: str):
-    file_date_str = str(os.path.basename(filepath).split('.')[0][-15:])
-    archive_date = datetime.datetime.strptime(file_date_str, '%Y-%m-%dT%H%M')
-
-    if abs((archive_date - datetime.datetime.now()).days) >= days_in_past:
-        return
-
     logger.info('start reading %s', filepath)
     if bz2_compressed:
         read_bz2_file_queued(line_queue, filepath, days_in_past)
