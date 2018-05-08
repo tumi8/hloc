@@ -340,11 +340,13 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
                                                      db_session=db_session):
         loc_found = False
 
-        for i, domain_label in enumerate(domain.labels):
-            if i == 0:
+        labels_ordered = domain.name.split('.')[::-1]
+        for domain_label in domain.labels:
+            index = labels_ordered.index(domain_label.name)
+            if index == 0:
                 # if tld skip
                 continue
-            if exclude_sld and i == 1:
+            if exclude_sld and index == 1:
                 # test for skipping the second level domain
                 continue
 

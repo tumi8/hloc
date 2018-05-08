@@ -383,7 +383,7 @@ def read_bz2_file_queued(line_queue: queue.Queue, filename: str, days_in_past: i
 def parse_measurement(measurement_result: dict, probe_dct: [int, RipeAtlasProbe],
                       probe_latency_queue: mp.Queue) \
         -> typing.Optional[MeasurementResult]:
-    timestamp = datetime.datetime.fromtimestamp(measurement_result[MeasurementKey.timestamp.value])
+    timestamp = datetime.datetime.utcfromtimestamp(measurement_result[MeasurementKey.timestamp.value])
 
     probe_id = str(measurement_result[MeasurementKey.probe_id.value])
 

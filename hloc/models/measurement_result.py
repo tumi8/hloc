@@ -97,7 +97,7 @@ class RipeMeasurementResult(MeasurementResult):
         else:
             measurement_result.rtt = min(rtts)
 
-        measurement_result.timestamp = datetime.datetime.fromtimestamp(
+        measurement_result.timestamp = datetime.datetime.utcfromtimestamp(
             ripe_result_dict[RipeMeasurementResult.RipeMeasurementResultKey.timestamp.value])
 
         return measurement_result

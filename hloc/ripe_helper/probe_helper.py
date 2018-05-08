@@ -10,7 +10,8 @@ from hloc.models import RipeAtlasProbe
 from hloc.db_utils import probe_for_id, location_for_coordinates
 
 
-def get_probes(db_session, ripe_slow_down_sema) -> typing.Dict[str, RipeAtlasProbe]:
+def get_probes(db_session, ripe_slow_down_sema) \
+        -> typing.Dict[str, typing.Tuple[RipeAtlasProbe, bool]]:
     probe_request = ripe_atlas.ProbeRequest()
     return_dct = {}
 
