@@ -5,23 +5,23 @@
  * Can use 3 types of blacklist to exclude unlikely matches
 """
 
+import marisa_trie
+
 import collections
+import configargparse
+import datetime
 import json
 import multiprocessing as mp
-import threading
-import datetime
-import typing
-import marisa_trie
 import queue
-
-import configargparse
+import threading
+import typing
 
 from hloc import util
+from hloc.db_utils import get_all_domain_labels, create_session_for_process, \
+    create_engine
 from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, \
     DomainType, LocationInfo
 from hloc.models.location import location_hint_label_table
-from hloc.db_utils import get_all_domains_splitted_efficient, create_session_for_process, \
-    create_engine
 
 logger = None
 engine = None
@@ -38,8 +38,6 @@ def __create_parser_arguments(parser):
     parser.add_argument('-a', '--amount', type=int, default=0,
                         help='Specify the amount of dns entries which should be searched'
                              ' per Process. Default is 0 which means all dns entries')
-    parser.add_argument('-e', '--exclude-sld', help='Exclude sld from search',
-                        dest='exclude_sld', action='store_true')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=1000,
                         help='The number of domains taken per block to process them')
     parser.add_argument('--include-ip-encoded', action='store_true',
@@ -92,7 +90,7 @@ def main():
     processes = []
     for index in range(0, args.number_processes):
         process = mp.Process(target=search_process,
-                             args=(index, trie, code_to_location_blacklist, args.exclude_sld,
+                             args=(index, trie, code_to_location_blacklist,
                                    args.domain_block_limit, args.number_processes,
                                    args.include_ip_encoded, location_match_queue,
                                    update_label_queue),
@@ -308,7 +306,7 @@ def update_labels(label_queue: mp.Queue, stop_event: threading.Event):
     label_queue.close()
 
 
-def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, nr_processes,
+def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
                    include_ip_encoded, location_match_queue, update_label_queue,
                    amount=1000, debug: bool=False):
     """
@@ -333,54 +331,33 @@ def search_process(index, trie, code_to_location_blacklist, exclude_sld, limit, 
     else:
         last_search = datetime.datetime.now() - datetime.timedelta(days=7)
 
-    for domain in get_all_domains_splitted_efficient(index,
-                                                     block_limit=limit,
-                                                     nr_processes=nr_processes,
-                                                     domain_types=domain_types,
-                                                     db_session=db_session):
-        loc_found = False
+    for domain_label in get_all_domain_labels(index,
+                                              block_limit=limit,
+                                              nr_processes=nr_processes,
+                                              db_session=db_session):
+        label_count += 1
+        label_length += len(domain_label.name)
 
-        labels_ordered = domain.name.split('.')[::-1]
-        for domain_label in domain.labels:
-            index = labels_ordered.index(domain_label.name)
-            if index == 0:
-                # if tld skip
+        if domain_label.last_searched:
+            if domain_label.last_searched > last_search:
+                if domain_label.hints:
+                    label_wl_count += 1
+
                 continue
-            if exclude_sld and index == 1:
-                # test for skipping the second level domain
-                continue
+            else:
+                location_match_queue.put(domain_label.id)
 
-            label_count += 1
-            label_loc_found = False
-            label_length += len(domain_label.name)
+        pm_count = collections.defaultdict(int)
 
-            if domain_label.last_searched:
-                if domain_label.last_searched > last_search:
-                    if domain_label.hints:
-                        label_wl_count += 1
+        temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
+                                        location_match_queue, update_label_queue)
 
-                    continue
-                else:
-                    location_match_queue.put(domain_label.id)
+        for key, value in temp_gr_count.items():
+            match_count[key] += value
+            pm_count[key] += value
 
-            pm_count = collections.defaultdict(int)
-
-            temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
-                                            location_match_queue, update_label_queue)
-
-            for key, value in temp_gr_count.items():
-                match_count[key] += value
-                pm_count[key] += value
-
-            if temp_gr_count:
-                label_loc_found = True
-                loc_found = True
-
-            if label_loc_found:
-                label_wl_count += 1
-
-        if loc_found:
-            entries_wl_count += 1
+        if temp_gr_count:
+            label_wl_count += 1
 
         entries_count += 1
 

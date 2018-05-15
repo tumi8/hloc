@@ -330,4 +330,5 @@ __all__ = ['AirportInfo',
            'State',
            'Location',
            'LocationInfo',
+           'location_hint_label_table',
            ]
