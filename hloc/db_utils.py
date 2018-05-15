@@ -232,11 +232,11 @@ def get_all_domains_splitted_efficient(index: int, block_limit: int, nr_processe
             break
 
 
-def get_all_domain_labels(index: int, block_limit: int, nr_processes: int, db_session) -> typing.Generator[Domain, None, None]:
+def get_all_domain_labels(index: int, block_limit: int, nr_processes: int, db_session) -> typing.Generator[DomainLabel, None, None]:
     domain_labels_query = db_session.query(DomainLabel).filter(DomainLabel.id % nr_processes == index)
 
-    for domain in domain_labels_query.yield_per(block_limit):
-        yield domain
+    for domain_label in domain_labels_query.yield_per(block_limit):
+        yield domain_label
 
 
 def get_domains_for_ips(ip_filter_list: typing.List[str], db_session, block_limit: int,

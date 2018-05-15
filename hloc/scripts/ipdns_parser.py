@@ -289,7 +289,7 @@ def preprocess_file_part(filepath: str, pnr: int, line_queue: mp.Queue,
                 logger.info('Warning found empty domain for IP {} skipping'.format(ip))
                 continue
 
-            if ':' in domain:
+            if ':' in ip:
                 ip_version = constants.IPV6_IDENTIFIER
             else:
                 ip_version = constants.IPV4_IDENTIFIER
@@ -392,7 +392,7 @@ def classify_domain(ip: str, domain: str, ip_version: str, ip_encoding_filter: b
 
 def get_domain_label_tuples(domain: Domain):
     domain_labels = set()
-    for label in domain.name.split('.')[::-1]:
+    for label in domain.name.split('.')[:-2]:
         domain_labels.add((label, domain.id))
     return domain_labels
 
