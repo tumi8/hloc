@@ -79,17 +79,12 @@ def main():
                                                       args=(location_match_queue, stop_event))
     handle_location_matches_thread.start()
 
-    update_label_queue = mp.Queue()
-    update_label_thread = threading.Thread(target=update_labels, name='update-label-search-date',
-                                           args=(update_label_queue, stop_event))
-    update_label_thread.start()
-
     processes = []
     for index in range(0, args.number_processes):
         process = mp.Process(target=search_process,
                              args=(index, trie, code_to_location_blacklist,
                                    args.domain_block_limit, args.number_processes,
-                                   location_match_queue, update_label_queue),
+                                   location_match_queue),
                              kwargs={'amount': args.amount, 'debug': args.log_level == 'DEBUG'},
                              name='find_locations_{}'.format(index))
         process.start()
@@ -99,8 +94,6 @@ def main():
         process.join()
 
     stop_event.set()
-    update_label_thread.join()
-    update_label_queue.join_thread()
     handle_location_matches_thread.join()
     location_match_queue.join_thread()
 
@@ -274,36 +267,8 @@ def handle_location_matches(location_match_queue: mp.Queue, stop_event: threadin
     logger.info('stopped')
 
 
-def update_labels(label_queue: mp.Queue, stop_event: threading.Event):
-    Session = create_session_for_process(engine)
-    db_session = Session()
-    deleted_ids = set()
-
-    while not (stop_event.is_set() and label_queue.empty()):
-        try:
-            label_id = label_queue.get(timeout=1)
-
-            if label_id in deleted_ids:
-                continue
-
-            deleted_ids.add(label_id)
-            label = db_session.query(DomainLabel).filter_by(id=label_id).first()
-            if label:
-                label.last_searched = datetime.datetime.now()
-                db_session.commit()
-            else:
-                logger.error('label id {} received but could not be found in database'.format(
-                    label_id))
-        except queue.Empty:
-            pass
-
-    db_session.close()
-    Session.remove()
-    label_queue.close()
-
-
 def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
-                   location_match_queue, update_label_queue, amount=1000, debug: bool=False):
+                   location_match_queue, amount=1000, debug: bool=False):
     """
     for all amount=0
     """
@@ -338,10 +303,11 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
             else:
                 location_match_queue.put(domain_label.id)
 
+        domain_label.last_searched = datetime.datetime.now()
         pm_count = collections.defaultdict(int)
 
         temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
-                                        location_match_queue, update_label_queue)
+                                        location_match_queue)
 
         for key, value in temp_gr_count.items():
             match_count[key] += value
@@ -352,11 +318,16 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
 
         entries_count += 1
 
+        if entries_count % 25000 == 0:
+            db_session.commit()
+
         if entries_count == amount:
             break
 
         if entries_count == amount:
             break
+
+    db_session.commit()
 
     def build_stat_string_for_logger():
         """
@@ -377,12 +348,11 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
 
     db_session.close()
     Session.remove()
-    update_label_queue.close()
     location_match_queue.close()
 
 
 def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, special_filter,
-                    location_match_queue: mp.Queue, update_label_queue: mp.Queue) \
+                    location_match_queue: mp.Queue) \
         -> typing.DefaultDict[LocationCodeType, int]:
     """returns all matches for this label"""
     ids = set()
@@ -424,7 +394,6 @@ def search_in_label(label_obj: DomainLabel, trie: marisa_trie.RecordTrie, specia
             label = label[1:]
 
     location_match_queue.put(location_hint_tuples)
-    update_label_queue.put(label_obj.id)
 
     return type_count
 
