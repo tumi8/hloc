@@ -19,8 +19,7 @@ import typing
 from hloc import util
 from hloc.db_utils import get_all_domain_labels, create_session_for_process, \
     create_engine
-from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, \
-    DomainType, LocationInfo
+from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, LocationInfo
 from hloc.models.location import location_hint_label_table
 
 logger = None
@@ -40,8 +39,6 @@ def __create_parser_arguments(parser):
                              ' per Process. Default is 0 which means all dns entries')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=1000,
                         help='The number of domains taken per block to process them')
-    parser.add_argument('--include-ip-encoded', action='store_true',
-                        help='Search also domains of type IP encoded')
     parser.add_argument('-dbn', '--database-name', type=str, default='hloc-measurements')
     parser.add_argument('-l', '--logging-file', type=str, default='find_trie.log',
                         help='Specify a logging file where the log should be saved')
@@ -92,8 +89,7 @@ def main():
         process = mp.Process(target=search_process,
                              args=(index, trie, code_to_location_blacklist,
                                    args.domain_block_limit, args.number_processes,
-                                   args.include_ip_encoded, location_match_queue,
-                                   update_label_queue),
+                                   location_match_queue, update_label_queue),
                              kwargs={'amount': args.amount, 'debug': args.log_level == 'DEBUG'},
                              name='find_locations_{}'.format(index))
         process.start()
@@ -307,8 +303,7 @@ def update_labels(label_queue: mp.Queue, stop_event: threading.Event):
 
 
 def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
-                   include_ip_encoded, location_match_queue, update_label_queue,
-                   amount=1000, debug: bool=False):
+                   location_match_queue, update_label_queue, amount=1000, debug: bool=False):
     """
     for all amount=0
     """
@@ -321,10 +316,6 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
     entries_wl_count = 0
     label_wl_count = 0
     label_length = 0
-
-    domain_types = [DomainType.valid]
-    if include_ip_encoded:
-        domain_types.append(DomainType.ip_encoded)
 
     if debug:
         last_search = datetime.datetime.now() - datetime.timedelta(minutes=1)
