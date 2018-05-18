@@ -97,7 +97,7 @@ def main():
 
     Session = create_session_for_process(engine)
     db_session = Session()
-    update_query = update(DomainLabel).values(DomainLabel.last_searched=datetime.datetime.now())
+    update_query = update(DomainLabel).values(last_searched=datetime.datetime.now())
     db_session.execute(update_query)
     db_session.close()
 
