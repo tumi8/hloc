@@ -22,6 +22,8 @@ from hloc.db_utils import get_all_domain_labels, create_session_for_process, \
 from hloc.models import CodeMatch, Location, LocationCodeType, DomainLabel, LocationInfo
 from hloc.models.location import location_hint_label_table
 
+from sqlalchemy import update
+
 logger = None
 engine = None
 
@@ -92,6 +94,12 @@ def main():
 
     for process in processes:
         process.join()
+
+    Session = create_session_for_process(engine)
+    db_session = Session()
+    update_query = update(DomainLabel).values(DomainLabel.last_searched=datetime.datetime.now())
+    db_session.execute(update_query)
+    db_session.close()
 
     stop_event.set()
     handle_location_matches_thread.join()
@@ -303,7 +311,6 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
             else:
                 location_match_queue.put(domain_label.id)
 
-        domain_label.last_searched = datetime.datetime.now()
         pm_count = collections.defaultdict(int)
 
         temp_gr_count = search_in_label(domain_label, trie, code_to_location_blacklist,
@@ -326,8 +333,6 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
 
         if entries_count == amount:
             break
-
-    db_session.commit()
 
     def build_stat_string_for_logger():
         """
