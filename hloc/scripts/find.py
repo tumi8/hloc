@@ -325,9 +325,6 @@ def search_process(index, trie, code_to_location_blacklist, limit, nr_processes,
 
         entries_count += 1
 
-        if entries_count % 25000 == 0:
-            db_session.commit()
-
         if entries_count == amount:
             break
 
