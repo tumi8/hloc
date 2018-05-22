@@ -252,7 +252,8 @@ class RipeAtlasProbe(Probe):
         return ripe_atlas.AtlasCreateRequest(**atlas_request_args)
 
     def _get_measurement_response(self, measurement_id: int, ripe_slowdown_sema: mp.Semaphore,
-                                  additional_probes: ['RipeAtlasProbe']) -> RipeMeasurementResult:
+                                  additional_probes: ['RipeAtlasProbe']) \
+            -> typing.Optional[RipeMeasurementResult]:
         def sleep_time(amount: float = 10):
             """Sleep for ten seconds"""
             time.sleep(amount)
@@ -280,6 +281,9 @@ class RipeAtlasProbe(Probe):
             ripe_slowdown_sema.acquire()
             success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
+
+        if not m_results:
+            return None
 
         min_result = min(m_results, key=operator.itemgetter('min'))
         measurement_result = RipeMeasurementResult.create_from_dict(min_result)
