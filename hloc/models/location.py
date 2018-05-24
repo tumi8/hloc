@@ -2,16 +2,16 @@
 """The basic location object and all related inherited objects"""
 
 import math
-import hashlib
-import string
 
+import hashlib
 import sqlalchemy as sqla
 import sqlalchemy.orm as sqlorm
+import string
 from sqlalchemy.dialects import postgresql
 
 from hloc import constants
-from .sql_alchemy_base import Base
 from .enums import LocationCodeType, AvailableType
+from .sql_alchemy_base import Base
 
 
 class AirportInfo(Base):
@@ -257,7 +257,8 @@ class LocationInfo(Location):
         #     print(self.dict_representation(), 'has no id')
         #     raise ValueError('id is not int')
         ret_list = []
-        if self.city_name and not set(self.city_name).difference(set(string.ascii_letters + string.digits)):
+        if self.city_name \
+                and not set(self.city_name).difference(set(string.ascii_letters + string.digits)):
             ret_list.append((self.city_name.lower(), (self.id, LocationCodeType.geonames.value)))
         for code in self.clli:
             ret_list.append((code.lower(), (self.id, LocationCodeType.clli.value)))
@@ -331,4 +332,5 @@ __all__ = ['AirportInfo',
            'Location',
            'LocationInfo',
            'location_hint_label_table',
+           'probe_location_info_table',
            ]

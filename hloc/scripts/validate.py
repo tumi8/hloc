@@ -3,6 +3,8 @@
 Verify obtained location hints with rtt measurements using a predefined threshold
 """
 
+import time
+
 import argparse
 import collections
 import datetime
@@ -11,11 +13,9 @@ import multiprocessing as mp
 import operator
 import queue
 import random
-import threading
-import time
-import typing
-
 import ripe.atlas.cousteau.exceptions as ripe_exceptions
+import threading
+import typing
 from sqlalchemy.exc import InvalidRequestError
 
 from hloc import util, constants
@@ -141,7 +141,7 @@ def main():
     if args.debug:
         MAX_THREADS = 1
     else:
-        MAX_THREADS = (int)(args.measurement_limit / args.number_processes * 1.5)
+        MAX_THREADS = int(args.measurement_limit / args.number_processes * 1.5)
 
     finish_event = threading.Event()
     generator_thread = util.start_token_generating_thread(ripe_slow_down_sema,
@@ -224,14 +224,12 @@ def main():
     else:
         ips = None
 
-    if ips:
-        ips_count = len(ips)
-
     db_session.close()
 
     for pid in range(0, process_count):
 
         if ips:
+            ips_count = len(ips)
             ips_start_index = int(pid * (ips_count / process_count))
             ips_end_index = int((pid + 1) * (ips_count / process_count))
 
@@ -675,6 +673,8 @@ def check_domain_location_ripe(domain: Domain,
                                                                probes,
                                                                ripe_slow_down_sema,
                                                                allowed_age)
+
+            measurement_result = None
             make_measurement = True
             if measurement_results:
                 make_measurement = False
@@ -712,7 +712,7 @@ def check_domain_location_ripe(domain: Domain,
                         no_verification_matches.append((next_match, location))
                         continue
 
-                    measurement_results = create_and_check_measurement(
+                    measurement_result = create_and_check_measurement(
                         str(domain.ip_for_version(ip_version)), ip_version, location,
                         available_nodes[:3*number_of_probes_per_measurement],
                         ripe_create_sema,
@@ -724,20 +724,16 @@ def check_domain_location_ripe(domain: Domain,
                         use_efficient_probes=use_efficient_probes
                     )
 
-                    if not measurement_results:
+                    if not measurement_result:
                         logger.debug('not results')
                         continue
 
-                    if not measurement_results[0].min_rtt:
+                    if not measurement_result.min_rtt:
                         increment_domain_type_count(DomainLocationType.not_reachable)
                         logger.debug('not reachable')
                         return
 
-                    measurement_result = min(measurement_results, key=lambda result: result.min_rtt)
-
-                    for res in measurement_results:
-                        if res.min_rtt:
-                            measurement_results_queue.put(res)
+                    measurement_results_queue.put(measurement_result)
 
                     used_probe, node_location_dist, used_probe_loc = \
                         [(probe, dst, probe_loc) for probe, dst, probe_loc in near_node_distances
@@ -745,12 +741,7 @@ def check_domain_location_ripe(domain: Domain,
 
                     logger.debug('finished measurement')
 
-                    if measurement_result.min_rtt is None:
-                        increment_domain_type_count(DomainLocationType.not_reachable)
-                        logger.debug('not reachable')
-                        return
-                    elif measurement_result.min_rtt < (buffer_time +
-                                                       node_location_dist / 100):
+                    if measurement_result.min_rtt < (buffer_time + node_location_dist / 100):
                         increment_count_for_type(next_match.code_type)
                         matched = True
                         increment_domain_type_count(DomainLocationType.verified)
@@ -759,7 +750,7 @@ def check_domain_location_ripe(domain: Domain,
                     else:
                         add_new_result((measurement_result, used_probe_loc))
 
-            elif measurement_result.min_rtt is None:
+            elif not measurement_result or measurement_result.min_rtt is None:
                 increment_domain_type_count(DomainLocationType.not_reachable)
                 logger.debug('not reachable')
                 return
@@ -919,7 +910,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                                  number_of_probes: int=1,
                                  number_of_packets: int=1,
                                  use_efficient_probes: bool=False) \
-        -> typing.Optional[typing.List[RipeMeasurementResult]]:
+        -> typing.Optional[RipeMeasurementResult]:
     """creates a measurement for the parameters and checks for the created measurement"""
     if number_of_probes <= 0:
         raise ValueError('number_of_probes must be larger than 0')
@@ -958,9 +949,9 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                 if bill_to_address:
                     params[RipeAtlasProbe.MeasurementKeys.bill_to_address.value] = bill_to_address
 
-                measurement_results = [near_nodes[0].measure_rtt(ip_addr, **params)]
+                measurement_result = near_nodes[0].measure_rtt(ip_addr, **params)
 
-                return measurement_results
+                return measurement_result
             except ProbeError:
                 logger.warning('Probe error for probe id %s', near_nodes[0].id, exc_info=True)
 
