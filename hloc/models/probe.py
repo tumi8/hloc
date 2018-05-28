@@ -282,7 +282,7 @@ class RipeAtlasProbe(Probe):
             success, m_results = ripe_atlas.AtlasResultsRequest(
                 **{'msm_id': measurement_id}).create()
 
-        if not m_results:
+        if not m_results or not isinstance(m_results, list):
             return None
 
         min_result = min(m_results, key=operator.itemgetter('min'))
