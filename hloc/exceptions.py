@@ -9,3 +9,6 @@ class ProbeError(Exception):
 
 class MeasurementError(Exception):
     pass
+
+class ServerError(Exception):
+    pass

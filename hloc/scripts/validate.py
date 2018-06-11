@@ -21,7 +21,7 @@ from sqlalchemy.exc import InvalidRequestError
 from hloc import util, constants
 from hloc.db_utils import get_measurements_for_domain, get_all_domains_splitted_efficient, \
     create_session_for_process, create_engine, get_domains_for_ips
-from hloc.exceptions import ProbeError
+from hloc.exceptions import ProbeError, ServerError
 from hloc.models import *
 from hloc.models.location import probe_location_info_table
 from hloc.ripe_helper.basics_helper import get_measurement_ids
@@ -965,6 +965,12 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
 
                 if not near_nodes:
                     return None
+            except ServerError:
+                # RA server returned status >= 500
+                # solution is trying to sleep for 5 - 10 minutes and then try again
+                logger.exception('RA has server issues')
+                print('RA has Server issues')
+                time.sleep(300 + random.randrange(0, 300))
 
 
 def update_probes(probes: [RipeAtlasProbe]):

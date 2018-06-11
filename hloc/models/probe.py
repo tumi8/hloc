@@ -20,7 +20,7 @@ import sqlalchemy.orm as sqlorm
 import hloc.ripe_helper.basics_helper as ripe_helper
 from hloc import util, constants
 from hloc.constants import IPV6_IDENTIFIER, IPV4_IDENTIFIER
-from hloc.exceptions import ProbeError, MeasurementError
+from hloc.exceptions import ProbeError, MeasurementError, ServerError
 from hloc.models import Location, RipeMeasurementResult, AvailableType, Base
 from .location import probe_location_info_table
 
@@ -188,6 +188,9 @@ class RipeAtlasProbe(Probe):
             if success:
                 break
 
+            if response.get('status', 500) >= 500:
+                raise ServerError(response)
+
             if isinstance(response, dict):
                 if response.get('status', 0) >= 400 and \
                         'start time in future' not in \
@@ -196,7 +199,7 @@ class RipeAtlasProbe(Probe):
                     # RA problem as we do not send a start time.
                     raise MeasurementError(response)
             retries += 1
-            time.sleep(10 + (random.randrange(0, 500) / 100) * retries)
+            time.sleep(10 + (random.randrange(250, 750) / 10) * retries)
 
             if retries % 5 == 0:
                 logging.error('Create error {}'.format(response))
@@ -261,7 +264,7 @@ class RipeAtlasProbe(Probe):
         sleep_time(amount=360)
         while True:
             ripe_slowdown_sema.acquire()
-            res = ripe_helper.get_ripe_measurement(measurement_id)
+            res = ripe_helper.get_ripe_measurement(measurement_id, ripe_slowdown_sema)
             if res is not None:
                 if res.status_id == 4:
                     break

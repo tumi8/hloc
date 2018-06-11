@@ -5,25 +5,29 @@ Functions that will help with the ripe requests
 import logging
 import time
 import multiprocessing as mp
+import random
 
 import ripe.atlas.cousteau as ripe_atlas
 import ripe.atlas.cousteau.exceptions as ripe_atlas_exceptions
 
 
-def get_ripe_measurement(measurement_id: int, max_retries: int = -1, logger: logging = None):
+def get_ripe_measurement(measurement_id: int, ripe_slow_down_sema: mp.Semaphore,
+                         max_retries: int = -1):
     """Call the RIPE measurement entry point to get the ripe measurement with measurement_id"""
     retries = 0
     while True:
         try:
+            ripe_slow_down_sema.acquire()
             return ripe_atlas.Measurement(id=measurement_id)
         except ripe_atlas_exceptions.APIResponseError:
             if retries >= max_retries >= 0:
                 raise
 
+            logging.exception('Ripe get Measurement (id {}) error!'.format(measurement_id))
+
             retries += 1
-            time.sleep(5)
-            if logger and retries % 25 == 0:
-                logger.exception('Ripe get Measurement (id {}) error!'.format(measurement_id))
+            time.sleep(5 + (random.randrange(0, 500) / 100) * retries)
+
             if retries % 5 == 0:
                 time.sleep(30)
 
