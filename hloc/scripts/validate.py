@@ -969,7 +969,7 @@ def create_and_check_measurement(ip_addr: str, ip_version: str,
                 # RA server returned status >= 500
                 # solution is trying to sleep for 5 - 10 minutes and then try again
                 logger.exception('RA has server issues')
-                print('RA has Server issues')
+                print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'RA has Server issues')
                 time.sleep(300 + random.randrange(0, 300))
 
 
