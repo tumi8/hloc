@@ -20,7 +20,7 @@ class MeasurementResult(Base):
 
     __tablename__ = 'measurement_results'
 
-    id = sqla.Column(sqla.Integer, primary_key=True)
+    id = sqla.Column(sqla.BigInteger, primary_key=True)
     probe_id = sqla.Column(sqla.Integer, sqla.ForeignKey('probes.id'), nullable=False)
     timestamp = sqla.Column(sqla.DateTime, nullable=False)
     destination_address = sqla.Column(postgresql.INET, nullable=False, index=True)
