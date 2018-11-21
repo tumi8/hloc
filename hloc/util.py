@@ -116,7 +116,7 @@ def int_to_alphanumeric(num: int):
 
 
 def is_ipv6_address_encoded(ipv6_address, domain):
-    ip_address_exploded = ipaddress.ip_address('ffff::1').exploded.split(':')
+    ip_address_exploded = ipaddress.ip_address(ipv6_address).exploded.split(':')
     return '.'.join(ip_address_exploded) in domain or '.'.join(ip_address_exploded[::-1])
 
 
@@ -172,8 +172,6 @@ __all__ = ['count_lines',
            'get_path_filename',
            'remove_file_ending',
            'setup_logger',
-           'parse_zmap_results',
-           'parse_zmap_line',
            'ip_to_int',
            'int_to_alphanumeric',
            'get_class_properties']
