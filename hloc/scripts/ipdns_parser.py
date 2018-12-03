@@ -126,7 +126,6 @@ def main():
         process.start()
 
     line_thread.join()
-    line_queue.join_thread()
 
     alive = len(processes)
     while alive > 0:
@@ -143,6 +142,9 @@ def main():
     stop_event.set()
     domain_label_handle_thread.join()
     domain_label_queue.join_thread()
+
+    line_queue.close()
+    line_queue.join_thread()
 
     whitelisted_not_parsed_as_correct = set(parsed_ips) - parsed_ips
 
@@ -162,7 +164,6 @@ def read_file(filepath: str, line_queue: mp.Queue, finished_reading_event: mp.Ev
             except queue.Full:
                 time.sleep(0.5)
 
-    line_queue.close()
     finished_reading_event.set()
 
 
