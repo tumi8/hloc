@@ -270,10 +270,13 @@ def parse_airport_specific_page(page_text: str, db_session):
     parser.db_session = db_session
     parser.feed(page_text[body_start:])
 
-    if parser.airportInfo.city_name is not None and \
-            (parser.airportInfo.airport_info.iata_codes or
-             parser.airportInfo.airport_info.icao_codes or
-             parser.airportInfo.airport_info.faa_codes):
+    code_exists = (parser.airportInfo.airport_info.iata_codes or
+                   parser.airportInfo.airport_info.icao_codes or
+                   parser.airportInfo.airport_info.faa_codes)
+    coordinates_valid = parser.airportInfo.lat <= 90 and parser.airportInfo.lat >= -90 and \
+                        parser.airportInfo.lon <= 180 and parser.airportInfo.lon >= -180
+
+    if parser.airportInfo.city_name is not None and code_exists and coordinates_valid:
         parser.airportInfo.state = parser.state
         parser.airportInfo.idfy_location()
         # db_session.add(parser.airportInfo)
