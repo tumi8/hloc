@@ -7,8 +7,8 @@ CREATE OR REPLACE FUNCTION gpsDistanceRadiansHaversine(lat1 float, lon1 float, l
     AS '
     SELECT
       2 * atan2(
-      sqrt(    pow(sin((lat2 - lat1) / 2), 2) * cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2)),
-      sqrt(1 - pow(sin((lat2 - lat1) / 2), 2) * cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2))
+      sqrt(    pow(sin((lat2 - lat1) / 2), 2) + cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2)),
+      sqrt(1 - pow(sin((lat2 - lat1) / 2), 2) + cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2))
       )
       * earthRadius()'
     LANGUAGE SQL
