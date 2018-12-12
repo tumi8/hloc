@@ -660,6 +660,7 @@ def check_domain_location_ripe(domain: Domain,
             near_node_distances = location_to_probes_dct.get(location.id)
 
             if not near_node_distances:
+                logger.debug('could not find nodes near location id "{}"'.format(location.id))
                 no_verification_matches.append((next_match, location))
                 continue
 
@@ -709,6 +710,8 @@ def check_domain_location_ripe(domain: Domain,
                     available_nodes = __get_available_probes([ip_version], probes)
 
                     if not available_nodes:
+                        logger.debug(
+                            'could not find nodes near location id "{}"'.format(location.id))
                         no_verification_matches.append((next_match, location))
                         continue
 
@@ -725,7 +728,7 @@ def check_domain_location_ripe(domain: Domain,
                     )
 
                     if not measurement_result:
-                        logger.debug('not results')
+                        logger.debug('creating and gettign measurement result failed')
                         continue
 
                     if not measurement_result.min_rtt:
@@ -749,6 +752,8 @@ def check_domain_location_ripe(domain: Domain,
                         break
                     else:
                         add_new_result((measurement_result, used_probe_loc))
+                else:
+                    logger.debug('skipping active measurement as it is deactivated')
 
             elif not measurement_result or measurement_result.min_rtt is None:
                 increment_domain_type_count(DomainLocationType.not_reachable)
@@ -766,6 +771,7 @@ def check_domain_location_ripe(domain: Domain,
                     logger.debug('success')
                     break
                 else:
+                    logger.debug('adding new non verification result')
                     add_new_result(measurement_result)
 
             no_verification_matches.append((next_match, location))
