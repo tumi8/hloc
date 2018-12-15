@@ -23,7 +23,7 @@ else
         mkdir ${logPath}
     fi
 
-    if [ ! -f "/var/cache/hloc/ripe_probes.cache" ] || [ `psql -d $1 -tc "SELECT count(*) from probes"` -eq 0 ]; then
+    if [ ! -f "/var/cache/hloc/ripe_probes.cache" ] || [ `psql -d $1 -U hloc -tc "SELECT count(*) from probes"` -eq 0 ]; then
         ./hloc/cache_ripe_probes.sh $3 $1 $4
     fi
 
