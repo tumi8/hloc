@@ -62,6 +62,8 @@ The file contains the following columns (the csv column title is in brackets):
 ### Prerequisites
 
 - Postgres v10.0 or newer: HLOC 2.0 uses a Postgres database to store the collected information
+    - Our current code often assumes a user named "hloc" with the password "hloc2017". Most scripts have parameters to set these but our current recomandation is to use the hloc user.
+    - To use parallel queries (these improve data export significantly) execute `ALTER SYSTEM set max_parallel_workers_per_gather TO #numCPUs;` in your Postgres console
 - Python v3.4.2: We tested everything on 3.4.2 but also newer versions should work
 - Install all Python dependencies using `pip install -r requirements.txt`
 - All shell scripts were only tested on a standard Debian bash
@@ -96,6 +98,10 @@ This is due to a drawback in our current implementation.
 
 The second command executed in `example-initial-db-setup` shows how to preprocess the domains.
     
+When this two steps are finished you need to load our SQL functions in `db-functions.sql` with:
+
+`psql -d <database-name> -f db-functions.sql`    
+
 ### Searching for location hints
 
 - No additional sources are needed here. Our balcklist can be found in the `blacklists` directory
@@ -110,4 +116,4 @@ If you want to perform active measurements on the [RIPE Atlas](https://atlas.rip
 Use option `-o` to validate against the current available measurements for the IP address.
 
 The `example-validation.sh` script provides an easier access to the script with usefull prefilled parameters.
-Check and adopt these accordingly
+Check and adopt these accordingly.
