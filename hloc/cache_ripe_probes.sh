@@ -1,10 +1,12 @@
 #!/bin/bash
 
-if [ -z $1 ] || [ -z $2 ] || [ ! -d $3 ]; then
+if [ -z $1 ] || [ -z $2 ]; then
     echo "provide path to hloc directory, the database name, and the python environment! Aborting!"
     return 1
 else
-    source $3/bin/activate
+    if [ -d $3 ]; then
+        source $3/bin/activate
+    fi
 
     cd $1
 
