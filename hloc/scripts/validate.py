@@ -60,8 +60,13 @@ def __create_parser_arguments(parser: argparse.ArgumentParser):
                                  MeasurementStrategy.anticipated.aliases() +
                                  MeasurementStrategy.aggressive.aliases() +
                                  MeasurementStrategy.forced.aliases()),
-                        help='The used measurement strategy. '
-                             'See IDP Documentation for further explanation')
+                        help='''
+The measurement strategy:
+
+- anticipated and aggressive: are basically the same and perform measurements even though a measurement resulting in a not reachable target exists
+- classic: does not perform a measurement in the above case
+- forced: always perform a measurement
+                        ''')
     parser.add_argument('-n', '--domain-block-limit', type=int, default=1000,
                         help='The number of domains taken per block to process them')
     parser.add_argument('-q', '--ripe-request-limit', type=int,
@@ -703,7 +708,7 @@ def check_domain_location_ripe(domain: Domain,
                         make_measurement = measurement_result.min_rtt >= (
                             buffer_time + node_location_dist / 100)
 
-            if make_measurement:
+            if make_measurement or measurement_strategy == MeasurementStrategy.forced:
                 if not wo_measurements:
                     # only if no old measurement exists
                     logger.debug('creating measurement')
