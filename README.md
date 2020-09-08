@@ -20,7 +20,7 @@ We cannot deliver the IP/DNS files due to its size.
 The find step does:
 
 * Create a trie out of all location information
-* Match the domain labbel stored in the pre-processing step against this trie
+* Match the domain label stored in the pre-processing step against this trie
 * Store the resulting location hints in the database
 
 ## Measure
@@ -62,7 +62,7 @@ The file contains the following columns (the csv column title is in brackets):
 ### Prerequisites
 
 - Postgres v10.0 or newer: HLOC 2.0 uses a Postgres database to store the collected information
-    - Our current code often assumes a user named "hloc" with the password "hloc2017". Most scripts have parameters to set these but our current recomandation is to use the hloc user.
+    - Our current code often assumes a user named "hloc" with the password "hloc2017". Most scripts have parameters to set these but our current recommendation is to use the hloc user.
     - To use parallel queries (these improve data export significantly) execute `ALTER SYSTEM set max_parallel_workers_per_gather TO #numCPUs;` in your Postgres console
 - Python v3.4.2: We tested everything on 3.4.2 but also newer versions should work
 - Install all Python dependencies using `pip install -r requirements.txt`
@@ -70,41 +70,41 @@ The file contains the following columns (the csv column title is in brackets):
 
 ### Import location codes
 
-- First you need download several loaction code sources (we used the `location-data` directory as collection point for these):
+- First you need download several location code sources (we used the `location-data` directory as collection point for these):
     - `location-data` already contains our self created list of IATA metropolitan codes
-    - unpack the `offline-pages.tar.xz` archive. It contains a scraped list of pages from [www.world-airport-codes.com](www.world-airport-codes.com). 
+    - unpack the `offline-pages.tar.xz` archive. It contains a scraped list of pages from [www.world-airport-codes.com](www.world-airport-codes.com).
     Our HTML parser is outdated for their current data format. Therefore, we use this stored version.
     - Get the locode files from [UNECE](https://www.unece.org/cefact/codesfortrade/codes_index.html) we only need the three *CodeListPart* files
     - Unfortunately we could not find a public available CLLI list. If you still have one it should match the following format (without header):
-    
+
     ```
     CLLI code<tab (\t)>latitude<tab (\t)>longitude
     ```
 
 Finally you can execute the codes parsing script. An example of how this could look like can be seen in the shell script `example-initial-db-setup`.
 For more information on the different parameters please read the help output of the script.
-    
+
 ### Preprocessing of domain names
 
 - To preprocess the list of domains to geolocate you only need two file:
     - The valid TLDs file (get if from [IANA](http://data.iana.org/TLD/tlds-alpha-by-domain.txt))
     - The domain list file in the format:
-    IP,DOMAIN - without a space inbetween
-    
+    IP,DOMAIN - without a space in between
+
 *ATTENTION*
 
-This script assumes the tables domains and domain_labels are empty! 
+This script assumes the tables domains and domain_labels are empty!
 This is due to a drawback in our current implementation.
 
 The second command executed in `example-initial-db-setup` shows how to preprocess the domains.
-    
+
 When this two steps are finished you need to load our SQL functions in `db-functions.sql` with:
 
-`psql -d <database-name> -f db-functions.sql`    
+`psql -d <database-name> -f db-functions.sql`
 
 ### Searching for location hints
 
-- No additional sources are needed here. Our balcklist can be found in the `blacklists` directory
+- No additional sources are needed here. Our blacklist can be found in the `blacklists` directory
 
 Try to execute `python -m hloc.scripts.find -p <nr_cores> -c blacklists/code.blacklist.txt -f blacklists/word.blacklist.txt -s blacklists/special.blacklist.txt -dbn <database_name> -l <log_file_name>`
 
