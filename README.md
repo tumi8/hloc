@@ -75,7 +75,7 @@ The file contains the following columns (the csv column title is in brackets):
     - unpack the `offline-pages.tar.xz` archive. It contains a scraped list of pages from [www.world-airport-codes.com](www.world-airport-codes.com).
     Our HTML parser is outdated for their current data format. Therefore, we use this stored version.
     - Get the locode files from [UNECE](https://www.unece.org/cefact/codesfortrade/codes_index.html) we only need the three *CodeListPart* files
-    - Unfortunately we could not find a public available CLLI list. If you still have one it should match the following format (without header):
+    - ~~Unfortunately we could not find a public available CLLI list.~~ Thanks to [@WesWrench](https://github.com/WesWrench) [#7](https://github.com/tumi8/hloc/issues/7) there is now a [source](http://wedophones.com/Manuals/TelcoData/clli-lat-lon.txt) available which needs some tweeking. This list contains the full CLLI codes. Our framework needs only the location part, i.e the first 6 characters. Therefore you first need to preprocess this list and to convert it to the following format:
 
     ```
     CLLI code<tab (\t)>latitude<tab (\t)>longitude
